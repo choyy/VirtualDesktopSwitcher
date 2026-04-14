@@ -174,54 +174,122 @@ public:
     }
 };
 
-int                                   g_desktopIndexToSwitch = -1;
-HHOOK                                 g_hHook                = nullptr;
-std::unique_ptr<VirtualDesktopHelper> g_pVDeskHelper;
+class VirtualDesktopSwitcher {
+private:
+    int                                   m_desktopIndexToSwitch = -1;
+    HHOOK                                 m_hHook                = nullptr;
+    std::unique_ptr<VirtualDesktopHelper> m_pVDeskHelper;
+    HWND                                  m_hwnd = nullptr;
 
-// 键盘钩子回调函数
-LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    if (nCode == HC_ACTION) {
-        const auto *pKeyboard = reinterpret_cast<const KBDLLHOOKSTRUCT *>(lParam);
+    // 键盘钩子回调函数
+    static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+        VirtualDesktopSwitcher *pInstance = VirtualDesktopSwitcher::GetInstance();
+        if (pInstance == nullptr) {
+            return CallNextHookEx(nullptr, nCode, wParam, lParam);
+        }
 
-        // 检查是否按下了 Alt + 数字键
-        if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
-            const bool isAltPressed = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+        if (nCode == HC_ACTION) {
+            const auto *pKeyboard = reinterpret_cast<const KBDLLHOOKSTRUCT *>(lParam);
 
-            if (isAltPressed && pKeyboard->vkCode >= '1' && pKeyboard->vkCode <= '9') {
-                const int desktopIndex = static_cast<int>(pKeyboard->vkCode - '1'); // 将字符转换为索引(0-8)
+            // 检查是否按下了 Alt + 数字键
+            if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
+                const bool isAltPressed = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
 
-                // 使用消息队列延迟执行桌面切换
-                g_desktopIndexToSwitch = desktopIndex;
-                PostThreadMessage(GetCurrentThreadId(), WM_SWITCH_DESKTOP, 0, 0);
+                if (isAltPressed && pKeyboard->vkCode >= '1' && pKeyboard->vkCode <= '9') {
+                    const int desktopIndex = static_cast<int>(pKeyboard->vkCode - '1'); // 将字符转换为索引(0-8)
 
-                // 阻止原始按键事件传递
-                return 1;
+                    // 使用消息队列延迟执行桌面切换
+                    pInstance->SetDesktopIndexToSwitch(desktopIndex);
+                    PostMessage(pInstance->GetWindowHandle(), WM_SWITCH_DESKTOP, 0, 0);
+
+                    // 阻止原始按键事件传递
+                    return 1;
+                }
+
+                // ESC键退出
+                if (pKeyboard->vkCode == VK_ESCAPE) {
+                    PostQuitMessage(0);
+                    return 1;
+                }
             }
+        }
 
-            // ESC键退出
-            if (pKeyboard->vkCode == VK_ESCAPE) {
-                PostQuitMessage(0);
-                return 1;
-            }
+        return CallNextHookEx(pInstance->GetHook(), nCode, wParam, lParam);
+    }
+
+public:
+    // 删除拷贝和移动操作，防止意外复制或移动导致资源管理混乱
+    VirtualDesktopSwitcher(const VirtualDesktopSwitcher &)            = delete;
+    VirtualDesktopSwitcher &operator=(const VirtualDesktopSwitcher &) = delete;
+    VirtualDesktopSwitcher(VirtualDesktopSwitcher &&)                 = delete;
+    VirtualDesktopSwitcher &operator=(VirtualDesktopSwitcher &&)      = delete;
+
+    VirtualDesktopSwitcher() {
+        m_pVDeskHelper = std::make_unique<VirtualDesktopHelper>();
+    }
+
+    ~VirtualDesktopSwitcher() {
+        UninstallHook();
+    }
+
+    // 获取单例实例
+    static VirtualDesktopSwitcher *GetInstance() {
+        static VirtualDesktopSwitcher instance;
+        return &instance;
+    }
+
+    // 安装键盘钩子
+    bool InstallHook() {
+        m_hHook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, GetModuleHandle(nullptr), 0);
+        return m_hHook != nullptr;
+    }
+
+    // 卸载键盘钩子
+    void UninstallHook() {
+        if (m_hHook != nullptr) {
+            UnhookWindowsHookEx(m_hHook);
+            m_hHook = nullptr;
         }
     }
 
-    return CallNextHookEx(g_hHook, nCode, wParam, lParam);
-}
-
-// 安装键盘钩子
-bool InstallHook() {
-    g_hHook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, GetModuleHandle(nullptr), 0);
-    return g_hHook != nullptr;
-}
-
-// 卸载键盘钩子
-void UninstallHook() {
-    if (g_hHook != nullptr) {
-        UnhookWindowsHookEx(g_hHook);
-        g_hHook = nullptr;
+    // 设置窗口句柄
+    void SetWindowHandle(HWND hwnd) {
+        m_hwnd = hwnd;
     }
-}
+
+    // 获取窗口句柄
+    [[nodiscard]] HWND GetWindowHandle() const {
+        return m_hwnd;
+    }
+
+    // 获取钩子句柄
+    [[nodiscard]] HHOOK GetHook() const {
+        return m_hHook;
+    }
+
+    // 设置要切换的桌面索引
+    void SetDesktopIndexToSwitch(int index) {
+        m_desktopIndexToSwitch = index;
+    }
+
+    // 切换到指定的桌面
+    void SwitchToDesktop() {
+        if (m_desktopIndexToSwitch >= 0 && m_pVDeskHelper != nullptr) {
+            m_pVDeskHelper->SwitchToDesktop(m_desktopIndexToSwitch);
+            m_desktopIndexToSwitch = -1;
+        }
+    }
+
+    // 获取桌面数量
+    [[nodiscard]] int GetDesktopCount() const {
+        return m_pVDeskHelper ? m_pVDeskHelper->GetDesktopCount() : 0;
+    }
+
+    // 获取当前桌面索引
+    [[nodiscard]] int GetCurrentDesktopIndex() const {
+        return m_pVDeskHelper ? m_pVDeskHelper->GetCurrentDesktopIndex() : -1;
+    }
+};
 } // namespace
 
 int main() {
@@ -229,18 +297,26 @@ int main() {
     std::cout << "Press Alt + [1-9] to switch to corresponding virtual desktop.\n";
     std::cout << "Press ESC to exit.\n";
 
-    // 初始化虚拟桌面帮助器
-    g_pVDeskHelper = std::make_unique<VirtualDesktopHelper>();
+    // 获取VirtualDesktopSwitcher单例实例
+    VirtualDesktopSwitcher *pSwitcher = VirtualDesktopSwitcher::GetInstance();
+
+    // 创建一个隐藏窗口用于接收消息
+    HWND hwnd = CreateWindowEx(0, "STATIC", "VirtualDesktopSwitcher", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandle(nullptr), nullptr);
+    if (hwnd == nullptr) {
+        std::cerr << "Failed to create message window!\n";
+        return -1;
+    }
+    pSwitcher->SetWindowHandle(hwnd);
 
     // 显示当前虚拟桌面信息
-    const int desktopCount   = g_pVDeskHelper->GetDesktopCount();
-    const int currentDesktop = g_pVDeskHelper->GetCurrentDesktopIndex();
+    const int desktopCount   = pSwitcher->GetDesktopCount();
+    const int currentDesktop = pSwitcher->GetCurrentDesktopIndex();
     std::cout << "Total desktops: " << desktopCount << ", Current desktop: " << (currentDesktop + 1) << "\n";
 
     // 安装键盘钩子
-    if (!InstallHook()) {
+    if (!pSwitcher->InstallHook()) {
         std::cerr << "Failed to install keyboard hook!\n";
-        g_pVDeskHelper.reset();
+        DestroyWindow(hwnd);
         return -1;
     }
 
@@ -256,10 +332,7 @@ int main() {
 
         // 处理自定义消息：切换桌面
         if (msg.message == WM_SWITCH_DESKTOP) {
-            if (g_desktopIndexToSwitch >= 0 && g_pVDeskHelper != nullptr) {
-                g_pVDeskHelper->SwitchToDesktop(g_desktopIndexToSwitch);
-                g_desktopIndexToSwitch = -1;
-            }
+            pSwitcher->SwitchToDesktop();
             continue;
         }
 
@@ -268,8 +341,7 @@ int main() {
     }
 
     // 清理资源
-    UninstallHook();
-    g_pVDeskHelper.reset();
+    DestroyWindow(hwnd);
 
     return 0;
 }
