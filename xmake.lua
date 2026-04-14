@@ -5,6 +5,5 @@ set_languages("c++17")
 
 target("VirtualDesktopSwitcher")
     set_kind("binary")
-    add_files("src/VirtualDesktopSwitcher.cpp")
+    add_files("src/*.cpp")
     
-    add_syslinks("comctl32", "ole32", "oleaut32", "uuid", "shell32")
