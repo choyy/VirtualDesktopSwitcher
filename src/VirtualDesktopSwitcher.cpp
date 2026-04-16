@@ -6,7 +6,7 @@ VirtualDesktopSwitcher *VirtualDesktopSwitcher::GetInstance() {
 }
 
 LRESULT CALLBACK VirtualDesktopSwitcher::LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    VirtualDesktopSwitcher *pInstance = VirtualDesktopSwitcher::GetInstance();
+    const VirtualDesktopSwitcher *pInstance = VirtualDesktopSwitcher::GetInstance();
     if (pInstance == nullptr) {
         return CallNextHookEx(nullptr, nCode, wParam, lParam);
     }
@@ -25,12 +25,6 @@ LRESULT CALLBACK VirtualDesktopSwitcher::LowLevelKeyboardProc(int nCode, WPARAM 
                 PostMessage(pInstance->GetWindowHandle(), WM_SWITCH_DESKTOP, desktopIndex, 0);
 
                 // 阻止原始按键事件传递
-                return 1;
-            }
-
-            // ESC键退出
-            if (pKeyboard->vkCode == VK_ESCAPE) {
-                PostQuitMessage(0);
                 return 1;
             }
         }

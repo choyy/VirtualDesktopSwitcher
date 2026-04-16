@@ -5,5 +5,6 @@ set_languages("c++17")
 
 target("VirtualDesktopSwitcher")
     set_kind("binary")
-    add_files("src/*.cpp")
-    
+    add_files("src/*.cpp", "src/icon.rc")
+    add_syslinks("shell32", "shlwapi", "user32", "gdi32", "advapi32")
+    add_ldflags("/SUBSYSTEM:WINDOWS")

@@ -110,8 +110,11 @@ void VirtualDesktopHelper::SwitchToDesktop(int index) const {
     UINT                                    count = 0;
 
     HRESULT hr = virtualDesktopManagerInternal->GetDesktops(&desktops);
-    hr         = desktops->GetCount(&count);
-    hr         = desktops->GetAt(index, __uuidof(IVirtualDesktop),
-                                 reinterpret_cast<void **>(targetDesktop.ReleaseAndGetAddressOf())); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    hr         = virtualDesktopManagerInternal->SwitchDesktop(targetDesktop.Get());
+    if (FAILED(hr)) { return; }
+    hr = desktops->GetCount(&count);
+    if (FAILED(hr)) { return; }
+    hr = desktops->GetAt(index, __uuidof(IVirtualDesktop),
+                         reinterpret_cast<void **>(targetDesktop.ReleaseAndGetAddressOf())); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    if (FAILED(hr)) { return; }
+    virtualDesktopManagerInternal->SwitchDesktop(targetDesktop.Get());
 }
