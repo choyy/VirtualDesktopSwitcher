@@ -40,9 +40,33 @@ public:
     virtual HRESULT STDMETHODCALLTYPE UnregisterForVirtualDesktopChanges(DWORD dwCookie)                                                  = 0;
 };
 
+// IVirtualDesktopManager接口定义（标准Windows API）
+MIDL_INTERFACE("a5cd92ff-29be-454c-9d8f-460b89c60332")
+IVirtualDesktopManager : public IUnknown { // NOLINT(cppcoreguidelines-virtual-class-destructor)
+public:
+    virtual HRESULT STDMETHODCALLTYPE IsWindowOnCurrentVirtualDesktop(HWND topLevelHwnd, BOOL * pfOnCurrentDesktop) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetWindowDesktopId(HWND topLevelHwnd, GUID * pDesktopId)                      = 0;
+    virtual HRESULT STDMETHODCALLTYPE MoveWindowToDesktop(HWND topLevelHwnd, REFGUID desktopId)                     = 0;
+};
+
+// IApplicationViewCollection接口定义
+MIDL_INTERFACE("1841C6D7-4F9D-42C0-AF41-8747538F10E5")
+IApplicationViewCollection : public IUnknown { // NOLINT(cppcoreguidelines-virtual-class-destructor)
+public:
+    virtual HRESULT STDMETHODCALLTYPE GetViews(IObjectArray * *ppViews)                             = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetViewsByZOrder(IObjectArray * *ppViews)                     = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetViewsByAppUserModelId(LPCWSTR id, IObjectArray * *ppViews) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetViewForHwnd(HWND hwnd, IUnknown * *ppView)                 = 0;
+};
+
 class VirtualDesktopHelper {
 private:
     Microsoft::WRL::ComPtr<IVirtualDesktopManagerInternal> virtualDesktopManagerInternal;
+    Microsoft::WRL::ComPtr<IVirtualDesktopManager>         virtualDesktopManager;
+    Microsoft::WRL::ComPtr<IApplicationViewCollection>     viewCollection;
+
+    [[nodiscard]] bool CheckViaViewCollection(HWND hwnd) const;
+    [[nodiscard]] bool CheckViaDesktopManager(HWND hwnd) const;
 
 public:
     VirtualDesktopHelper(const VirtualDesktopHelper &)            = delete;
@@ -53,9 +77,10 @@ public:
     VirtualDesktopHelper();
     ~VirtualDesktopHelper() { CoUninitialize(); }
 
-    [[nodiscard]] int GetDesktopCount() const;
-    [[nodiscard]] int GetCurrentDesktopIndex() const;
-    void              SwitchToDesktop(int index) const;
+    [[nodiscard]] int  GetDesktopCount() const;
+    [[nodiscard]] int  GetCurrentDesktopIndex() const;
+    [[nodiscard]] bool IsWindowOnCurrentDesktop(HWND hwnd) const;
+    void               SwitchToDesktop(int index) const;
 };
 
 #endif // VIRTUAL_DESKTOP_HELPER_H

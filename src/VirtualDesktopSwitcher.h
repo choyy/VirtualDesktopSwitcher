@@ -1,9 +1,12 @@
 #ifndef VIRTUAL_DESKTOP_SWITCHER_H
 #define VIRTUAL_DESKTOP_SWITCHER_H
 
+#include <array>
 #include <memory>
 
 #include "VirtualDesktopHelper.h"
+
+static constexpr size_t kMaxDesktops = 9;
 
 // 自定义消息用于延迟执行桌面切换
 #define WM_SWITCH_DESKTOP (WM_USER + 1)
@@ -13,9 +16,14 @@ private:
     std::unique_ptr<VirtualDesktopHelper> m_pVDeskHelper;
     HHOOK                                 m_hHook = nullptr;
     HWND                                  m_hwnd  = nullptr;
+    std::array<HWND, kMaxDesktops>        m_desktopLastForeground{};
 
     // 键盘钩子回调函数
     static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
+
+    void               RecordForeground(int desktopIndex);
+    [[nodiscard]] bool TryActivatePreviousWindow(int desktopIndex);
+    void               ActivateFallbackWindow(int desktopIndex);
 
 public:
     VirtualDesktopSwitcher(const VirtualDesktopSwitcher &)            = delete;
