@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "AboutDialog.h"
 #include "ColorState.h"
 #include "SettingsDialog.h"
 
@@ -161,6 +162,49 @@ bool Application::Initialize() {
             m_pOverlay->SetCharSpacing(cur.charSpacing);
         }
     });
+    m_pTrayIcon->SetAboutCallback([this]() {
+        if (!m_pOverlay) return;
+        auto res = AboutDialog::Show(m_hwnd, m_pOverlay->IsAutoCheckUpdates());
+        if (res.accepted && res.autoCheckUpdates != m_pOverlay->IsAutoCheckUpdates()) {
+            m_pOverlay->SetAutoCheckUpdates(res.autoCheckUpdates);
+        }
+    });
+
+    // 启动时检查更新
+    if (m_pOverlay && m_pOverlay->IsAutoCheckUpdates()) {
+        auto checkResult = AboutDialog::CheckForNewerVersion();
+        if (checkResult.hasUpdate) {
+            int ret = MessageBoxW(m_hwnd, L"A new version is available. Download now?",
+                                  L"Update Available", MB_YESNO | MB_ICONQUESTION);
+            if (ret == IDYES && !checkResult.downloadUrl.empty()) {
+                wchar_t userProfile[MAX_PATH];
+                if (GetEnvironmentVariableW(L"USERPROFILE", userProfile, MAX_PATH) > 0) {
+                    std::wstring dest = std::wstring(userProfile) + L"\\Desktop\\VirtualDesktopSwitcher.exe";
+
+                    typedef HRESULT (WINAPI *URLDownloadToFileW_t)(LPUNKNOWN, LPCWSTR, LPCWSTR, DWORD, LPUNKNOWN);
+                    HMODULE hUrlmon = LoadLibraryW(L"urlmon.dll");
+                    if (hUrlmon) {
+                        auto pDownload = (URLDownloadToFileW_t)GetProcAddress(hUrlmon, "URLDownloadToFileW");
+                        if (pDownload) {
+                            std::wstring url;
+                            int len = MultiByteToWideChar(CP_UTF8, 0, checkResult.downloadUrl.c_str(), -1, nullptr, 0);
+                            if (len > 0) {
+                                url.resize(len);
+                                MultiByteToWideChar(CP_UTF8, 0, checkResult.downloadUrl.c_str(), -1, url.data(), len);
+                            }
+                            if (SUCCEEDED(pDownload(nullptr, url.c_str(), dest.c_str(), 0, nullptr))) {
+                                std::wstring msg = L"Downloaded to:\n" + dest;
+                                MessageBoxW(m_hwnd, msg.c_str(), L"Download Complete", MB_OK | MB_ICONINFORMATION);
+                            } else {
+                                MessageBoxW(m_hwnd, L"Download failed.", L"Error", MB_OK | MB_ICONERROR);
+                            }
+                        }
+                        FreeLibrary(hUrlmon);
+                    }
+                }
+            }
+        }
+    }
 
     // 安装键盘钩子
     if (!m_pSwitcher->InstallHook()) {

@@ -46,6 +46,8 @@ void TrayIcon::BuildMenu() {
     AppendMenuW(m_hMenu, MF_STRING | (m_autoStartEnabled ? MF_CHECKED : MF_UNCHECKED),
                 WM_TRAY_TOGGLE_AUTOSTART, L"Auto Start");
     AppendMenuW(m_hMenu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_ABOUT, L"About...");
+    AppendMenuW(m_hMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_EXIT, L"Exit");
 }
 
@@ -104,6 +106,8 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             if (m_editModeCb) m_editModeCb();
         } else if (LOWORD(wParam) == WM_TRAY_SETTINGS) {
             if (m_settingsCb) m_settingsCb();
+        } else if (LOWORD(wParam) == WM_TRAY_ABOUT) {
+            if (m_aboutCb) m_aboutCb();
         } else if (LOWORD(wParam) >= CMD_COLOR_OPTIONS_BASE &&
                    LOWORD(wParam) < CMD_COLOR_OPTIONS_BASE + (UINT)GetPredefinedColors().size()) {
             int index = LOWORD(wParam) - CMD_COLOR_OPTIONS_BASE;

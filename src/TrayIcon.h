@@ -12,6 +12,7 @@
 #define WM_TRAY_TOGGLE_AUTOSTART (WM_USER + 4)
 #define WM_TRAY_EDIT_MODE (WM_USER + 5)
 #define WM_TRAY_SETTINGS (WM_USER + 6)
+#define WM_TRAY_ABOUT (WM_USER + 7)
 #define CMD_COLOR_OPTIONS_BASE (WM_USER + 100)
 
 class TrayIcon {
@@ -24,6 +25,7 @@ private:
     std::function<void()>                    m_editModeCb;
     std::function<void(const std::wstring&)> m_colorCb;
     std::function<void()>                    m_settingsCb;
+    std::function<void()>                    m_aboutCb;
 
     static bool IsAutoStartEnabled();
     static void SetAutoStart(bool enable);
@@ -47,6 +49,7 @@ public:
     void SetEditModeCallback(std::function<void()> cb) { m_editModeCb = cb; }
     void SetColorCallback(std::function<void(const std::wstring&)> cb) { m_colorCb = cb; }
     void SetSettingsCallback(std::function<void()> cb) { m_settingsCb = cb; }
+    void SetAboutCallback(std::function<void()> cb) { m_aboutCb = cb; }
 };
 
 #endif

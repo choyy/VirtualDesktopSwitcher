@@ -38,6 +38,8 @@ public:
     const std::wstring& GetEmptySymbol() const { return m_emptySymbol; }
     const std::wstring& GetFontName() const { return m_fontName; }
     int GetCharSpacing() const { return m_charSpacing; }
+    bool IsAutoCheckUpdates() const { return m_autoCheckUpdates; }
+    void SetAutoCheckUpdates(bool v);
 
 private:
     HWND m_hwnd = nullptr;
@@ -55,6 +57,7 @@ private:
     std::wstring m_emptySymbol = L"\u25CB";
     std::vector<bool> m_emptyDesktops;
     bool m_editMode = false;
+    bool m_autoCheckUpdates = true;
     bool m_dragging = false;
     POINT m_windowPos = {0, 0};
     POINT m_dragOffset = {0, 0};

@@ -47,6 +47,8 @@ void DesktopIndicator::LoadConfig() {
 
     std::wstring fn = ReadIniString(L"Display", L"FontName", L"Segoe UI Symbol");
     if (!fn.empty()) m_fontName = fn;
+
+    m_autoCheckUpdates = ReadIniInt(L"General", L"AutoCheckUpdates", 0) != 0;
 }
 
 void DesktopIndicator::SaveConfig() {
@@ -59,12 +61,18 @@ void DesktopIndicator::SaveConfig() {
     WriteIniString(L"Display", L"EmptySymbol", EncodeSymbol(m_emptySymbol));
     WriteIniInt(L"Display", L"CharSpacing", m_charSpacing);
     WriteIniString(L"Display", L"FontName", m_fontName);
+    WriteIniInt(L"General", L"AutoCheckUpdates", m_autoCheckUpdates ? 1 : 0);
 }
 
 void DesktopIndicator::SetEmptySymbol(const std::wstring& sym) {
     m_emptySymbol = sym;
     SaveConfig();
     if (m_desktopCount > 0) RebuildText();
+}
+
+void DesktopIndicator::SetAutoCheckUpdates(bool v) {
+    m_autoCheckUpdates = v;
+    SaveConfig();
 }
 
 static int GetDpiScale() {
