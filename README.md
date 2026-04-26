@@ -1,63 +1,40 @@
-# Windows 11 虚拟桌面切换工具
+# Virtual Desktop Switcher
 
-这是一个用C++开发的Windows 11虚拟桌面切换工具，可以通过快捷键快速切换虚拟桌面。
+Windows 11 虚拟桌面快速切换工具，使用 `Alt + 1~9` 快捷键一键切换虚拟桌面，带有桌面状态指示器和丰富的自定义选项。
 
 ## 功能特性
 
 - 使用 `Alt + 1` 切换到桌面1
 - 使用 `Alt + 2` 切换到桌面2
 - 使用 `Alt + 3` 切换到桌面3
-- ...以此类推，支持 Alt + 1 到 Alt + 9
-- 系统托盘图标显示程序运行状态
-- 通过托盘图标右键菜单可以：
-  - 退出程序
-  - 设置/取消开机自启动
+- ...以此类推，支持 `Alt + 1` 到 `Alt + 9`
+- 显示桌面状态指示器，可自定义位置、大小和样式
 
 ## 编译方法
 
-### 使用xmake编译
+### 环境要求
+- Windows 11
+- Visual Studio 2022+（含 MSVC C++ 工具链）
+- [xmake](https://xmake.io/) 构建工具
 
-1. 确保已安装xmake构建工具
-2. 在项目目录下执行以下命令：
+### 编译
 
 ```bash
-# 编译
 xmake
-```
 
-3. 编译后的可执行文件位于 `build/windows/x64/debug` 或 `build/windows/x64/release` 目录下
-
-### 使用Visual Studio编译
-
-1. 使用xmake生成Visual Studio项目文件：
-
-```bash
+# 生成 Visual Studio 项目
 xmake project -k vsxmake
 ```
 
-2. 使用Visual Studio打开生成的 `.sln` 文件进行编译
-
 ## 使用方法
 
-1. 运行编译后的 `VirtualDesktopSwitcher.exe`
-2. 程序会在Windows右下角显示托盘图标
-3. 托盘图标提示信息会显示当前虚拟桌面数量和当前桌面编号
-4. 使用 `Alt + 数字键` 切换到对应的虚拟桌面
-5. 右键点击托盘图标可以：
-   - 选择"退出"菜单项退出程序
-   - 选择"开机自启"或"关闭开机自启"来管理开机启动
-6. 双击托盘图标可以快速切换开机自启动状态
+1. 运行 `VirtualDesktopSwitcher.exe`
+2. 系统托盘出现图标，屏幕中显示桌面状态指示器，可在托盘图标设置指示器的位置和样式
+3. 使用 `Alt + 1~9` 切换虚拟桌面
+4. 右键托盘图标进行设置和管理
+5. 双击托盘图标切换开机自启动
 
-## 技术实现
-
-- 使用Windows COM接口与虚拟桌面管理器交互
-- 通过全局键盘钩子捕获快捷键
-- 使用Windows 11的虚拟桌面API实现桌面切换
-
-## 系统要求
-
-- Windows 11
-- 支持虚拟桌面的系统配置
+所有设置自动保存到 `%APPDATA%\VirtualDesktopSwitcher\settings.ini`。
 
 ## 常见问题
 

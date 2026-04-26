@@ -3,16 +3,17 @@
 
 #include <memory>
 
-#include "TrayIcon.h"
-#include "DesktopIndicator.h"
 #include "VirtualDesktopSwitcher.h"
+#include "ui/DesktopIndicator.h"
+#include "ui/TrayIcon.h"
 
 class Application {
 private:
-    HWND                      m_hwnd      = nullptr;
-    VirtualDesktopSwitcher   *m_pSwitcher = nullptr;
-    std::unique_ptr<TrayIcon> m_pTrayIcon;
-    std::unique_ptr<DesktopIndicator> m_pOverlay;
+    HWND                                    m_hwnd = nullptr;
+    std::unique_ptr<VirtualDesktopSwitcher> m_switcher;
+    std::unique_ptr<TrayIcon>               m_pTrayIcon;
+    std::unique_ptr<DesktopIndicator>       m_pOverlay;
+    int                                     m_lastDesktopIndex = -1;
 
     // 窗口过程函数
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -30,7 +31,7 @@ public:
     bool Initialize();
 
     // 运行消息循环
-    int Run();
+    static int Run();
 };
 
 #endif // APPLICATION_H
