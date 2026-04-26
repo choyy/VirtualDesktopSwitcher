@@ -3,6 +3,7 @@
 
 #include <ObjectArray.h>
 #include <wrl/client.h>
+#include <vector>
 
 // IVirtualDesktop接口定义
 MIDL_INTERFACE("3F07F4BE-B107-441A-AF0F-39D82529072C")
@@ -80,6 +81,7 @@ public:
     [[nodiscard]] int  GetDesktopCount() const;
     [[nodiscard]] int  GetCurrentDesktopIndex() const;
     [[nodiscard]] bool IsWindowOnCurrentDesktop(HWND hwnd) const;
+    [[nodiscard]] std::vector<bool> GetDesktopEmptyMask() const;
     void               SwitchToDesktop(int index) const;
 };
 

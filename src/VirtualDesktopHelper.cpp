@@ -1,6 +1,7 @@
 #include "VirtualDesktopHelper.h"
 
 #include <iostream>
+#include <vector>
 // COM组件
 #include <ObjectArray.h>
 #include <comdef.h>
@@ -210,4 +211,48 @@ bool VirtualDesktopHelper::CheckViaDesktopManager(HWND hwnd) const {
     GUID currentDesktopId = {};
     hr                    = currentDesktop->GetID(&currentDesktopId);
     return SUCCEEDED(hr) && IsEqualGUID(windowDesktopId, currentDesktopId) != 0;
+}
+
+std::vector<bool> VirtualDesktopHelper::GetDesktopEmptyMask() const {
+    if (virtualDesktopManagerInternal.Get() == nullptr || viewCollection.Get() == nullptr)
+        return {};
+
+    Microsoft::WRL::ComPtr<IObjectArray> desktops;
+    if (FAILED(virtualDesktopManagerInternal->GetDesktops(&desktops))) return {};
+    UINT desktopCount = 0;
+    if (FAILED(desktops->GetCount(&desktopCount)) || desktopCount == 0) return {};
+
+    Microsoft::WRL::ComPtr<IObjectArray> views;
+    if (FAILED(viewCollection->GetViews(&views))) return {};
+    UINT viewCount = 0;
+    if (FAILED(views->GetCount(&viewCount))) return {};
+
+    std::vector<int> counts(desktopCount, 0);
+    for (UINT v = 0; v < viewCount; ++v) {
+        Microsoft::WRL::ComPtr<IUnknown> view;
+        if (FAILED(views->GetAt(v, IID_IUnknown,
+            reinterpret_cast<void**>(view.ReleaseAndGetAddressOf()))))
+            continue;
+
+        int visibleOn = 0;
+        int visibleDesktop = -1;
+        for (UINT d = 0; d < desktopCount; ++d) {
+            Microsoft::WRL::ComPtr<IVirtualDesktop> desktop;
+            if (FAILED(desktops->GetAt(d, __uuidof(IVirtualDesktop),
+                reinterpret_cast<void**>(desktop.ReleaseAndGetAddressOf()))))
+                continue;
+            BOOL visible = FALSE;
+            if (SUCCEEDED(desktop->IsViewVisible(view.Get(), &visible)) && visible) {
+                visibleOn++;
+                visibleDesktop = (int)d;
+            }
+        }
+        if (visibleOn == 1 && visibleDesktop >= 0)
+            counts[visibleDesktop]++;
+    }
+
+    std::vector<bool> emptyMask(desktopCount);
+    for (UINT i = 0; i < desktopCount; ++i)
+        emptyMask[i] = (counts[i] == 0);
+    return emptyMask;
 }

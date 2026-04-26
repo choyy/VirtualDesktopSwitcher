@@ -51,7 +51,8 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
         pApp->m_pTrayIcon->UpdateTooltip(oss.str());
 
         if (pApp->m_pOverlay) {
-            pApp->m_pOverlay->SetDesktopState(desktopCount, newCurrentDesktop);
+            auto emptyMask = pApp->m_pSwitcher->GetDesktopEmptyMask();
+            pApp->m_pOverlay->SetDesktopState(desktopCount, newCurrentDesktop, emptyMask);
         }
         return 0;
     }
@@ -114,7 +115,8 @@ bool Application::Initialize() {
     if (!m_pOverlay->Initialize(GetModuleHandle(nullptr))) {
         std::cerr << "Failed to initialize desktop indicator!\n";
     } else {
-        m_pOverlay->SetDesktopState(desktopCount, currentDesktop);
+        auto emptyMask = m_pSwitcher->GetDesktopEmptyMask();
+        m_pOverlay->SetDesktopState(desktopCount, currentDesktop, emptyMask);
         m_pOverlay->Show();
     }
 
@@ -130,6 +132,7 @@ bool Application::Initialize() {
         SettingsDialog::Result cur;
         cur.currentSymbol = m_pOverlay->GetCurrentSymbol();
         cur.otherSymbol   = m_pOverlay->GetOtherSymbol();
+        cur.emptySymbol   = m_pOverlay->GetEmptySymbol();
         cur.fontName      = m_pOverlay->GetFontName();
         cur.charSpacing   = m_pOverlay->GetCharSpacing();
 
@@ -138,6 +141,7 @@ bool Application::Initialize() {
                 if (m_pOverlay) {
                     m_pOverlay->SetCurrentSymbol(preview.currentSymbol);
                     m_pOverlay->SetOtherSymbol(preview.otherSymbol);
+                    m_pOverlay->SetEmptySymbol(preview.emptySymbol);
                     m_pOverlay->SetFontName(preview.fontName);
                     m_pOverlay->SetCharSpacing(preview.charSpacing);
                 }
@@ -145,12 +149,14 @@ bool Application::Initialize() {
         if (res.accepted) {
             m_pOverlay->SetCurrentSymbol(res.currentSymbol);
             m_pOverlay->SetOtherSymbol(res.otherSymbol);
+            m_pOverlay->SetEmptySymbol(res.emptySymbol);
             m_pOverlay->SetFontName(res.fontName);
             m_pOverlay->SetCharSpacing(res.charSpacing);
         } else {
             // Restore original values on cancel
             m_pOverlay->SetCurrentSymbol(cur.currentSymbol);
             m_pOverlay->SetOtherSymbol(cur.otherSymbol);
+            m_pOverlay->SetEmptySymbol(cur.emptySymbol);
             m_pOverlay->SetFontName(cur.fontName);
             m_pOverlay->SetCharSpacing(cur.charSpacing);
         }

@@ -7,13 +7,14 @@
 
 class SettingsDialog {
 public:
-    struct Result {
-        std::wstring currentSymbol;
-        std::wstring otherSymbol;
-        std::wstring fontName;
-        int          charSpacing = 0;
-        bool         accepted = false;
-    };
+struct Result {
+    std::wstring currentSymbol;
+    std::wstring otherSymbol;
+    std::wstring emptySymbol;
+    std::wstring fontName;
+    int          charSpacing = 0;
+    bool         accepted = false;
+};
 
     using PreviewCallback = std::function<void(const Result&)>;
 

@@ -3,6 +3,7 @@
 
 #include <array>
 #include <memory>
+#include <vector>
 
 #include "VirtualDesktopHelper.h"
 
@@ -60,6 +61,9 @@ public:
 
     // 获取当前桌面索引
     [[nodiscard]] int GetCurrentDesktopIndex() const { return m_pVDeskHelper ? m_pVDeskHelper->GetCurrentDesktopIndex() : -1; }
+
+    // 获取空桌面掩码 (每个桌面是否有窗口)
+    [[nodiscard]] std::vector<bool> GetDesktopEmptyMask() const { return m_pVDeskHelper ? m_pVDeskHelper->GetDesktopEmptyMask() : std::vector<bool>{}; }
 };
 
 #endif // VIRTUAL_DESKTOP_SWITCHER_H

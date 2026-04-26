@@ -38,6 +38,10 @@ void DesktopIndicator::LoadConfig() {
     std::wstring oth = DecodeSymbol(othRaw);
     m_otherSymbol = (oth == L"?" ? L"\u25CB" : oth);
 
+    std::wstring empRaw = ReadIniString(L"Display", L"EmptySymbol", EncodeSymbol(L"\u25CB"));
+    std::wstring emp = DecodeSymbol(empRaw);
+    m_emptySymbol = (emp == L"?" ? L"\u25CB" : emp);
+
     int sp = ReadIniInt(L"Display", L"CharSpacing", 0);
     if (sp >= 0) m_charSpacing = sp;
 
@@ -52,8 +56,15 @@ void DesktopIndicator::SaveConfig() {
     WriteIniInt(L"Display", L"FontSize", m_fontSize);
     WriteIniString(L"Display", L"CurrentSymbol", EncodeSymbol(m_currentSymbol));
     WriteIniString(L"Display", L"OtherSymbol", EncodeSymbol(m_otherSymbol));
+    WriteIniString(L"Display", L"EmptySymbol", EncodeSymbol(m_emptySymbol));
     WriteIniInt(L"Display", L"CharSpacing", m_charSpacing);
     WriteIniString(L"Display", L"FontName", m_fontName);
+}
+
+void DesktopIndicator::SetEmptySymbol(const std::wstring& sym) {
+    m_emptySymbol = sym;
+    SaveConfig();
+    if (m_desktopCount > 0) RebuildText();
 }
 
 static int GetDpiScale() {
@@ -100,9 +111,10 @@ void DesktopIndicator::Show() {
     Render();
 }
 
-void DesktopIndicator::SetDesktopState(int count, int currentIndex) {
+void DesktopIndicator::SetDesktopState(int count, int currentIndex, const std::vector<bool>& emptyDesktops) {
     m_desktopCount = count;
     m_currentDesktop = currentIndex;
+    m_emptyDesktops = emptyDesktops;
     RebuildText();
 }
 
@@ -112,6 +124,8 @@ void DesktopIndicator::RebuildText() {
     for (int i = 0; i < m_desktopCount; ++i) {
         if (i == m_currentDesktop)
             text += m_currentSymbol;
+        else if (i < (int)m_emptyDesktops.size() && m_emptyDesktops[i])
+            text += m_emptySymbol;
         else
             text += m_otherSymbol;
     }

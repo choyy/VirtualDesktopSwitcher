@@ -114,7 +114,8 @@ static LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         };
 
         makeCombo(L"Current Desktop Symbol:", 101, GetSymbolList(), data->result.currentSymbol, false, true);
-        makeCombo(L"Other Desktop Symbol:", 102, GetSymbolList(), data->result.otherSymbol, false, true);
+        makeCombo(L"Non-empty Desktop Symbol:", 102, GetSymbolList(), data->result.otherSymbol, false, true);
+        makeCombo(L"Empty Desktop Symbol:", 106, GetSymbolList(), data->result.emptySymbol, false, true);
         makeCombo(L"Font:", 103, GetFontList(), data->result.fontName, true);
 
         // Spacing
@@ -162,17 +163,18 @@ static LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         int id = LOWORD(wp);
         int code = HIWORD(wp);
 
-        if (id >= 101 && id <= 103 && code == CBN_SELCHANGE) {
+        if (id >= 101 && id <= 106 && code == CBN_SELCHANGE) {
             HWND hCmb = (HWND)lp;
             int sel = (int)SendMessageW(hCmb, CB_GETCURSEL, 0, 0);
             if (sel == CB_ERR) return 0;
 
-            if (id == 101) {
-                if (sel >= 0 && sel < (int)GetSymbolList().size())
-                    data->result.currentSymbol = GetSymbolList()[sel];
-            } else if (id == 102) {
-                if (sel >= 0 && sel < (int)GetSymbolList().size())
-                    data->result.otherSymbol = GetSymbolList()[sel];
+            if (id == 101 || id == 102 || id == 106) {
+                if (sel >= 0 && sel < (int)GetSymbolList().size()) {
+                    auto& target = id == 101 ? data->result.currentSymbol :
+                                   id == 102 ? data->result.otherSymbol :
+                                               data->result.emptySymbol;
+                    target = GetSymbolList()[sel];
+                }
             } else if (id == 103) {
                 auto fonts = GetFontList();
                 if (sel >= 0 && sel < (int)fonts.size()) {
@@ -193,11 +195,11 @@ static LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             return 0;
         }
 
-        if ((id == 101 || id == 102) && code == CBN_EDITCHANGE) {
+        if ((id == 101 || id == 102 || id == 106) && code == CBN_EDITCHANGE) {
             wchar_t buf[8];
             GetDlgItemTextW(hwnd, id, buf, 8);
             if (buf[0] != 0) {
-                (id == 101 ? data->result.currentSymbol : data->result.otherSymbol) = buf;
+                (id == 101 ? data->result.currentSymbol : id == 102 ? data->result.otherSymbol : data->result.emptySymbol) = buf;
                 if (data->preview) data->preview(data->result);
             }
             return 0;
@@ -263,19 +265,23 @@ SettingsDialog::Result SettingsDialog::Show(HWND parent, const Result& current, 
     // Override with INI values if Application didn't pass the right ones
     std::wstring iniCur = DecodeSymbol(ReadIniString(L"Display", L"CurrentSymbol", EncodeSymbol(current.currentSymbol)));
     std::wstring iniOth = DecodeSymbol(ReadIniString(L"Display", L"OtherSymbol", EncodeSymbol(current.otherSymbol)));
+    std::wstring iniEmp = DecodeSymbol(ReadIniString(L"Display", L"EmptySymbol", EncodeSymbol(current.emptySymbol)));
     if (!iniCur.empty()) data.result.currentSymbol = iniCur;
     if (!iniOth.empty()) data.result.otherSymbol = iniOth;
-    // Validate both symbols are in the symbol list; fall back to defaults if not
+    if (!iniEmp.empty()) data.result.emptySymbol = iniEmp;
+    // Validate symbols are in the symbol list; fall back to defaults if not
     const auto& syms = GetSymbolList();
     if (std::find(syms.begin(), syms.end(), data.result.currentSymbol) == syms.end())
         data.result.currentSymbol = L"\u2609";
     if (std::find(syms.begin(), syms.end(), data.result.otherSymbol) == syms.end())
         data.result.otherSymbol = L"\u25CB";
+    if (std::find(syms.begin(), syms.end(), data.result.emptySymbol) == syms.end())
+        data.result.emptySymbol = L"\u25CB";
     data.preview = preview;
 
     HWND hDlg = CreateWindowExW(WS_EX_DLGMODALFRAME, L"SettingsDialogClass", L"Desktop Indicator Settings",
                                 WS_POPUP | WS_CAPTION | WS_SYSMENU,
-                                0, 0, S(460), S(270), parent, nullptr, hInst, &data);
+                                0, 0, S(460), S(300), parent, nullptr, hInst, &data);
     if (!hDlg) return current;
 
     int sw = GetSystemMetrics(SM_CXSCREEN), sh = GetSystemMetrics(SM_CYSCREEN);
