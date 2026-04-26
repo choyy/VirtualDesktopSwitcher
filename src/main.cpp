@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <commctrl.h>
 #include "Application.h"
 
 int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR /*lpCmdLine*/, int /*nCmdShow*/) {
@@ -6,6 +7,9 @@ int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR /
     if (FAILED(hr)) {
         SetProcessDPIAware();
     }
+
+    INITCOMMONCONTROLSEX icc = {sizeof(icc), ICC_STANDARD_CLASSES};
+    InitCommonControlsEx(&icc);
 
     Application app;
     if (!app.Initialize()) {

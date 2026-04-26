@@ -1,5 +1,6 @@
 #include "Application.h"
 #include "ColorState.h"
+#include "SettingsDialog.h"
 
 #include <iostream>
 #include <sstream>
@@ -50,10 +51,7 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
         pApp->m_pTrayIcon->UpdateTooltip(oss.str());
 
         if (pApp->m_pOverlay) {
-            std::wstring overlayText(desktopCount, L'0');
-            if (newCurrentDesktop >= 0 && newCurrentDesktop < desktopCount)
-                overlayText[newCurrentDesktop] = L'*';
-            pApp->m_pOverlay->SetText(overlayText);
+            pApp->m_pOverlay->SetDesktopState(desktopCount, newCurrentDesktop);
         }
         return 0;
     }
@@ -114,22 +112,48 @@ bool Application::Initialize() {
     // 初始化桌面覆盖层
     m_pOverlay = std::make_unique<DesktopIndicator>();
     if (!m_pOverlay->Initialize(GetModuleHandle(nullptr))) {
-        std::cerr << "Failed to initialize desktop overlay!\n";
+        std::cerr << "Failed to initialize desktop indicator!\n";
     } else {
-        std::wstring overlayText(desktopCount, L'0');
-        if (currentDesktop >= 0 && currentDesktop < desktopCount) {
-            overlayText[currentDesktop] = L'*';
-        }
-        m_pOverlay->SetText(overlayText);
+        m_pOverlay->SetDesktopState(desktopCount, currentDesktop);
         m_pOverlay->Show();
     }
 
-    // 设置颜色和编辑模式回调
+    // 设置回调
     m_pTrayIcon->SetColorCallback([this](const std::wstring& hex) {
         if (m_pOverlay) m_pOverlay->SetColor(hex);
     });
     m_pTrayIcon->SetEditModeCallback([this]() {
         if (m_pOverlay) m_pOverlay->ToggleEditMode();
+    });
+    m_pTrayIcon->SetSettingsCallback([this]() {
+        if (!m_pOverlay) return;
+        SettingsDialog::Result cur;
+        cur.currentSymbol = m_pOverlay->GetCurrentSymbol();
+        cur.otherSymbol   = m_pOverlay->GetOtherSymbol();
+        cur.fontName      = m_pOverlay->GetFontName();
+        cur.charSpacing   = m_pOverlay->GetCharSpacing();
+
+        SettingsDialog::Result res = SettingsDialog::Show(m_hwnd, cur,
+            [this](const SettingsDialog::Result& preview) {
+                if (m_pOverlay) {
+                    m_pOverlay->SetCurrentSymbol(preview.currentSymbol);
+                    m_pOverlay->SetOtherSymbol(preview.otherSymbol);
+                    m_pOverlay->SetFontName(preview.fontName);
+                    m_pOverlay->SetCharSpacing(preview.charSpacing);
+                }
+            });
+        if (res.accepted) {
+            m_pOverlay->SetCurrentSymbol(res.currentSymbol);
+            m_pOverlay->SetOtherSymbol(res.otherSymbol);
+            m_pOverlay->SetFontName(res.fontName);
+            m_pOverlay->SetCharSpacing(res.charSpacing);
+        } else {
+            // Restore original values on cancel
+            m_pOverlay->SetCurrentSymbol(cur.currentSymbol);
+            m_pOverlay->SetOtherSymbol(cur.otherSymbol);
+            m_pOverlay->SetFontName(cur.fontName);
+            m_pOverlay->SetCharSpacing(cur.charSpacing);
+        }
     });
 
     // 安装键盘钩子

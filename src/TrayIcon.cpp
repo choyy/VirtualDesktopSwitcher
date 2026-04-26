@@ -30,19 +30,19 @@ void TrayIcon::BuildMenu() {
     for (size_t i = 0; i < colors.size(); i++) {
         wchar_t numStr[8];
         swprintf_s(numStr, L"%zu", i + 1);
-
         MENUITEMINFOW mii = {};
         mii.cbSize = sizeof(mii);
         mii.fMask = MIIM_STRING | MIIM_ID | MIIM_FTYPE;
         mii.fType = MFT_STRING | MFT_OWNERDRAW;
         mii.wID = CMD_COLOR_OPTIONS_BASE + (UINT)i;
         mii.dwTypeData = numStr;
-
         InsertMenuItemW(hColorMenu, (UINT)i, TRUE, &mii);
     }
-
     AppendMenuW(m_hMenu, MF_POPUP, (UINT_PTR)hColorMenu, L"Color");
+
+    AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_SETTINGS, L"Settings...");
     AppendMenuW(m_hMenu, MF_SEPARATOR, 0, nullptr);
+
     AppendMenuW(m_hMenu, MF_STRING | (m_autoStartEnabled ? MF_CHECKED : MF_UNCHECKED),
                 WM_TRAY_TOGGLE_AUTOSTART, L"Auto Start");
     AppendMenuW(m_hMenu, MF_SEPARATOR, 0, nullptr);
@@ -50,18 +50,14 @@ void TrayIcon::BuildMenu() {
 }
 
 bool TrayIcon::Initialize(HWND hwnd, HINSTANCE hInstance) {
-    // 获取当前可执行文件路径
     std::array<wchar_t, MAX_PATH> exePath{};
     GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
 
-    // 获取图标
     HICON hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(101));
     if (hIcon == nullptr) {
-        // 如果没有资源图标，使用系统图标
         hIcon = LoadIcon(nullptr, IDI_APPLICATION);
     }
 
-    // 初始化NOTIFYICONDATA结构
     m_nid.cbSize           = sizeof(NOTIFYICONDATAW);
     m_nid.hWnd             = hwnd;
     m_nid.uID              = 1;
@@ -69,15 +65,12 @@ bool TrayIcon::Initialize(HWND hwnd, HINSTANCE hInstance) {
     m_nid.uCallbackMessage = WM_TRAYICON;
     m_nid.hIcon            = hIcon;
 
-    // 设置提示文本
     UpdateTooltip(L"Virtual Desktop Switcher");
 
-    // 添加托盘图标
     if (Shell_NotifyIconW(NIM_ADD, &m_nid) == FALSE) {
         return false;
     }
 
-    // 获取当前自动启动状态
     m_autoStartEnabled = IsAutoStartEnabled();
 
     BuildMenu();
@@ -88,7 +81,6 @@ bool TrayIcon::Initialize(HWND hwnd, HINSTANCE hInstance) {
 void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_TRAYICON) {
         if (lParam == WM_RBUTTONUP) {
-            // 显示右键菜单
             POINT pt;
             GetCursorPos(&pt);
             SetForegroundWindow(hwnd);
@@ -99,21 +91,19 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             TrackPopupMenu(m_hMenu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, nullptr);
             PostMessage(hwnd, WM_NULL, 0, 0);
         } else if (lParam == WM_LBUTTONDBLCLK) {
-            // 双击托盘图标切换开机自启
             PostMessage(hwnd, WM_COMMAND, WM_TRAY_TOGGLE_AUTOSTART, 0);
         }
     } else if (msg == WM_COMMAND) {
         if (LOWORD(wParam) == WM_TRAY_EXIT) {
             PostQuitMessage(0);
         } else if (LOWORD(wParam) == WM_TRAY_TOGGLE_AUTOSTART) {
-            // 切换自启动状态
             SetAutoStart(!IsAutoStartEnabled());
-
-            // 重新读取实际状态
             m_autoStartEnabled = IsAutoStartEnabled();
         } else if (LOWORD(wParam) == WM_TRAY_EDIT_MODE) {
             m_editModeChecked = !m_editModeChecked;
             if (m_editModeCb) m_editModeCb();
+        } else if (LOWORD(wParam) == WM_TRAY_SETTINGS) {
+            if (m_settingsCb) m_settingsCb();
         } else if (LOWORD(wParam) >= CMD_COLOR_OPTIONS_BASE &&
                    LOWORD(wParam) < CMD_COLOR_OPTIONS_BASE + (UINT)GetPredefinedColors().size()) {
             int index = LOWORD(wParam) - CMD_COLOR_OPTIONS_BASE;
@@ -228,7 +218,7 @@ bool TrayIcon::IsAutoStartEnabled() {
     std::array<wchar_t, MAX_PATH> value{};
     auto                          valueSize = static_cast<DWORD>(sizeof(value));
     result                                  = RegQueryValueExW(hKey, L"VirtualDesktopSwitcher", nullptr, nullptr,
-                                                               reinterpret_cast<LPBYTE>(value.data()), &valueSize); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                                                               reinterpret_cast<LPBYTE>(value.data()), &valueSize);
 
     RegCloseKey(hKey);
 
@@ -236,11 +226,9 @@ bool TrayIcon::IsAutoStartEnabled() {
         return false;
     }
 
-    // 处理注册表中可能包含双引号的路径
     std::wstring registryPath(value.data());
     std::wstring currentPath(exePath.data());
 
-    // 如果注册表路径以双引号开头和结尾，去除它们
     if (registryPath.length() >= 2 &&
         registryPath.front() == L'"' &&
         registryPath.back() == L'"') {
@@ -262,10 +250,9 @@ void TrayIcon::SetAutoStart(bool enable) {
     if (enable) {
         std::array<wchar_t, MAX_PATH> exePath{};
         GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
-        // 标准化路径并用引号包裹（处理含空格的路径）
         std::wstring quotedPath = L"\"" + std::wstring(exePath.data()) + L"\"";
         RegSetValueExW(hKey, L"VirtualDesktopSwitcher", 0, REG_SZ,
-                       reinterpret_cast<const BYTE *>(quotedPath.c_str()), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                       reinterpret_cast<const BYTE *>(quotedPath.c_str()),
                        static_cast<DWORD>((quotedPath.length() + 1) * sizeof(wchar_t)));
     } else {
         RegDeleteValueW(hKey, L"VirtualDesktopSwitcher");

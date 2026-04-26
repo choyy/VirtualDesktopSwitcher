@@ -11,5 +11,7 @@ std::wstring ReadIniString(const std::wstring& section, const std::wstring& key,
 int ReadIniInt(const std::wstring& section, const std::wstring& key, int defaultVal);
 void WriteIniString(const std::wstring& section, const std::wstring& key, const std::wstring& value);
 void WriteIniInt(const std::wstring& section, const std::wstring& key, int value);
+std::wstring EncodeSymbol(const std::wstring& sym);
+std::wstring DecodeSymbol(const std::wstring& str);
 
 #endif

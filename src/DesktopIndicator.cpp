@@ -29,6 +29,20 @@ void DesktopIndicator::LoadConfig() {
 
     int fs = ReadIniInt(L"Display", L"FontSize", 60);
     if (fs > 0) m_fontSize = fs;
+
+    std::wstring curRaw = ReadIniString(L"Display", L"CurrentSymbol", EncodeSymbol(L"\u2609"));
+    std::wstring cur = DecodeSymbol(curRaw);
+    m_currentSymbol = (cur == L"?" ? L"\u2609" : cur);
+
+    std::wstring othRaw = ReadIniString(L"Display", L"OtherSymbol", EncodeSymbol(L"\u25CB"));
+    std::wstring oth = DecodeSymbol(othRaw);
+    m_otherSymbol = (oth == L"?" ? L"\u25CB" : oth);
+
+    int sp = ReadIniInt(L"Display", L"CharSpacing", 0);
+    if (sp >= 0) m_charSpacing = sp;
+
+    std::wstring fn = ReadIniString(L"Display", L"FontName", L"Segoe UI Symbol");
+    if (!fn.empty()) m_fontName = fn;
 }
 
 void DesktopIndicator::SaveConfig() {
@@ -36,6 +50,10 @@ void DesktopIndicator::SaveConfig() {
     WriteIniInt(L"Display", L"WindowPosX", m_windowPos.x);
     WriteIniInt(L"Display", L"WindowPosY", m_windowPos.y);
     WriteIniInt(L"Display", L"FontSize", m_fontSize);
+    WriteIniString(L"Display", L"CurrentSymbol", EncodeSymbol(m_currentSymbol));
+    WriteIniString(L"Display", L"OtherSymbol", EncodeSymbol(m_otherSymbol));
+    WriteIniInt(L"Display", L"CharSpacing", m_charSpacing);
+    WriteIniString(L"Display", L"FontName", m_fontName);
 }
 
 static int GetDpiScale() {
@@ -64,14 +82,16 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
     SetWindowLongPtrW(m_hwnd, GWLP_USERDATA, (LONG_PTR)this);
     SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 
-    int dpiScale = GetDpiScale();
-    m_fontSize = m_fontSize * dpiScale / 100;
-
     if (!InitFontSTB(m_fontName)) {
-        InitFontSTB(L"Segoe UI");
-        m_fontName = L"Segoe UI";
+        if (!InitFontSTB(L"Segoe UI")) {
+            InitFontSTB(L"Segoe UI Symbol");
+            m_fontName = L"Segoe UI Symbol";
+        } else {
+            m_fontName = L"Segoe UI";
+        }
     }
 
+    RebuildText();
     return true;
 }
 
@@ -80,8 +100,21 @@ void DesktopIndicator::Show() {
     Render();
 }
 
-void DesktopIndicator::SetText(const std::wstring& text) {
-    if (m_text == text) return;
+void DesktopIndicator::SetDesktopState(int count, int currentIndex) {
+    m_desktopCount = count;
+    m_currentDesktop = currentIndex;
+    RebuildText();
+}
+
+void DesktopIndicator::RebuildText() {
+    if (m_desktopCount <= 0) return;
+    std::wstring text;
+    for (int i = 0; i < m_desktopCount; ++i) {
+        if (i == m_currentDesktop)
+            text += m_currentSymbol;
+        else
+            text += m_otherSymbol;
+    }
     m_text = text;
     Render();
 }
@@ -104,6 +137,33 @@ void DesktopIndicator::CancelPreview() {
         m_hasPreview = false;
         Render();
     }
+}
+
+void DesktopIndicator::SetCurrentSymbol(const std::wstring& sym) {
+    m_currentSymbol = sym;
+    SaveConfig();
+    if (m_desktopCount > 0) RebuildText();
+}
+
+void DesktopIndicator::SetOtherSymbol(const std::wstring& sym) {
+    m_otherSymbol = sym;
+    SaveConfig();
+    if (m_desktopCount > 0) RebuildText();
+}
+
+void DesktopIndicator::SetFontName(const std::wstring& name) {
+    m_fontName = name;
+    if (InitFontSTB(m_fontName)) {
+        SaveConfig();
+        if (m_desktopCount > 0) RebuildText();
+    }
+}
+
+void DesktopIndicator::SetCharSpacing(int spacing) {
+    if (spacing < 0) spacing = 0;
+    m_charSpacing = spacing;
+    SaveConfig();
+    if (m_desktopCount > 0) RebuildText();
 }
 
 void DesktopIndicator::ToggleEditMode() {
@@ -135,8 +195,22 @@ void DesktopIndicator::MoveByDelta(int dx, int dy) {
 void DesktopIndicator::Render() {
     if (!m_hwnd) return;
 
+    // Build spaced text
+    std::wstring spacedText;
+    if (m_charSpacing > 0 && !m_text.empty()) {
+        for (size_t i = 0; i < m_text.size(); ++i) {
+            spacedText += m_text[i];
+            if (i < m_text.size() - 1) {
+                spacedText.append(m_charSpacing, L' ');
+            }
+        }
+    } else {
+        spacedText = m_text;
+    }
+
     int textWidth = 0, textHeight = 0;
-    MeasureTextSTB(m_text.c_str(), m_fontSize, &textWidth, &textHeight);
+    int effectiveFontSize = m_fontSize * GetDpiScale() / 100;
+    MeasureTextSTB(spacedText.c_str(), effectiveFontSize, &textWidth, &textHeight);
 
     int padding = 8;
     int width = (std::max)(textWidth + padding * 2, 50);
@@ -182,7 +256,7 @@ void DesktopIndicator::Render() {
     int textAreaW = width - padding * 2;
     int textAreaH = height - padding * 2;
     RenderTextSTB(bits, width, height, padding, padding, textAreaW, textAreaH,
-                  m_text.c_str(), renderColors, m_fontSize);
+                  spacedText.c_str(), renderColors, effectiveFontSize);
 
     if (m_windowPos.x == 0 && m_windowPos.y == 0) {
         int sw = GetSystemMetrics(SM_CXSCREEN);
@@ -277,7 +351,10 @@ LRESULT DesktopIndicator::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             int oldSize = m_fontSize;
             m_fontSize += (delta > 0) ? 4 : -4;
             m_fontSize = (std::max)(12, (std::min)(300, m_fontSize));
-            if (m_fontSize != oldSize) Render();
+            if (m_fontSize != oldSize) {
+                SaveConfig();
+                if (m_desktopCount > 0) RebuildText();
+            }
             return 0;
         }
         return 0;

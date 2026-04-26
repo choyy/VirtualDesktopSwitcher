@@ -7,11 +7,11 @@
 #include <string>
 #include <functional>
 
-// 自定义消息定义
 #define WM_TRAYICON (WM_USER + 2)
 #define WM_TRAY_EXIT (WM_USER + 3)
 #define WM_TRAY_TOGGLE_AUTOSTART (WM_USER + 4)
 #define WM_TRAY_EDIT_MODE (WM_USER + 5)
+#define WM_TRAY_SETTINGS (WM_USER + 6)
 #define CMD_COLOR_OPTIONS_BASE (WM_USER + 100)
 
 class TrayIcon {
@@ -21,12 +21,12 @@ private:
     bool            m_autoStartEnabled = false;
     bool            m_editModeChecked  = false;
 
-    std::function<void()>                 m_editModeCb;
+    std::function<void()>                    m_editModeCb;
     std::function<void(const std::wstring&)> m_colorCb;
+    std::function<void()>                    m_settingsCb;
 
-    // 注册表相关函数
-    [[nodiscard]] static bool IsAutoStartEnabled();
-    static void               SetAutoStart(bool enable);
+    static bool IsAutoStartEnabled();
+    static void SetAutoStart(bool enable);
 
     void BuildMenu();
 
@@ -39,20 +39,14 @@ public:
     TrayIcon() = default;
     ~TrayIcon();
 
-    // 初始化托盘图标
     bool Initialize(HWND hwnd, HINSTANCE hInstance);
-
-    // 处理托盘消息
     void HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-    // 更新托盘图标提示信息
     void UpdateTooltip(const std::wstring &tooltip);
-
-    // 获取自动启动状态
-    [[nodiscard]] bool GetAutoStartStatus() const { return m_autoStartEnabled; }
+    bool GetAutoStartStatus() const { return m_autoStartEnabled; }
 
     void SetEditModeCallback(std::function<void()> cb) { m_editModeCb = cb; }
     void SetColorCallback(std::function<void(const std::wstring&)> cb) { m_colorCb = cb; }
+    void SetSettingsCallback(std::function<void()> cb) { m_settingsCb = cb; }
 };
 
-#endif // TRAY_ICON_H
+#endif
