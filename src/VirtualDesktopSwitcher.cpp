@@ -103,7 +103,11 @@ void VirtualDesktopSwitcher::RecordForeground(int desktopIndex) {
     }
     HWND foreground = GetForegroundWindow();
     if (foreground != nullptr && IsWindow(foreground) != FALSE) {
-        m_desktopLastForeground[desktopIndex] = foreground;
+        if (m_pVDeskHelper->IsWindowOnCurrentDesktop(foreground)) {
+            m_desktopLastForeground[desktopIndex] = foreground;
+        } else {
+            m_desktopLastForeground[desktopIndex] = nullptr;
+        }
     }
 }
 
@@ -120,13 +124,41 @@ bool VirtualDesktopSwitcher::TryActivatePreviousWindow(int desktopIndex) {
     if (IsWindow(targetHwnd) == FALSE) {
         std::cout << "Previous foreground window on desktop " << desktopIndex << " is no longer valid: "
                   << GetWindowTitleUtf8(targetHwnd) << " (" << targetHwnd << ")\n";
+        m_desktopLastForeground[desktopIndex] = nullptr;
+        return false;
+    }
+
+    if (!m_pVDeskHelper->IsWindowOnCurrentDesktop(targetHwnd)) {
+        std::cout << "Previous foreground window on desktop " << desktopIndex << " is not on current desktop: "
+                  << GetWindowTitleUtf8(targetHwnd) << " (" << targetHwnd << ")\n";
+        m_desktopLastForeground[desktopIndex] = nullptr;
         return false;
     }
 
     if (IsIconic(targetHwnd) != FALSE) {
         ShowWindow(targetHwnd, SW_RESTORE);
     }
+
+    HWND foreHwnd = GetForegroundWindow();
+    DWORD foreThreadId = 0;
+    DWORD curThreadId = GetCurrentThreadId();
+    BOOL attached = FALSE;
+
+    if (foreHwnd != nullptr) {
+        foreThreadId = GetWindowThreadProcessId(foreHwnd, nullptr);
+        if (foreThreadId != 0 && foreThreadId != curThreadId) {
+            AttachThreadInput(curThreadId, foreThreadId, TRUE);
+            attached = TRUE;
+        }
+    }
+
+    BringWindowToTop(targetHwnd);
     SetForegroundWindow(targetHwnd);
+
+    if (attached) {
+        AttachThreadInput(curThreadId, foreThreadId, FALSE);
+    }
+
     Sleep(100);
 
     if (GetForegroundWindow() == targetHwnd) {
@@ -135,7 +167,7 @@ bool VirtualDesktopSwitcher::TryActivatePreviousWindow(int desktopIndex) {
         return true;
     }
 
-    std::cout << "Previous foreground window on desktop " << desktopIndex << " is not on current desktop: "
+    std::cout << "Failed to activate previous foreground window on desktop " << desktopIndex << ": "
               << GetWindowTitleUtf8(targetHwnd) << " (" << targetHwnd << ")\n";
     return false;
 }
@@ -145,7 +177,26 @@ void VirtualDesktopSwitcher::ActivateFallbackWindow(int desktopIndex) {
     if (hwnd != nullptr) {
         std::cout << "Activating fallback window on desktop " << desktopIndex << ": "
                   << GetWindowTitleUtf8(hwnd) << " (" << hwnd << ")\n";
+
+        HWND foreHwnd = GetForegroundWindow();
+        DWORD foreThreadId = 0;
+        DWORD curThreadId = GetCurrentThreadId();
+        BOOL attached = FALSE;
+
+        if (foreHwnd != nullptr) {
+            foreThreadId = GetWindowThreadProcessId(foreHwnd, nullptr);
+            if (foreThreadId != 0 && foreThreadId != curThreadId) {
+                AttachThreadInput(curThreadId, foreThreadId, TRUE);
+                attached = TRUE;
+            }
+        }
+
+        BringWindowToTop(hwnd);
         SetForegroundWindow(hwnd);
+
+        if (attached) {
+            AttachThreadInput(curThreadId, foreThreadId, FALSE);
+        }
     } else {
         std::cout << "No window to activate on desktop " << desktopIndex << '\n';
     }
