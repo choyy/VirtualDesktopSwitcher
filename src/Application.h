@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "TrayIcon.h"
+#include "DesktopIndicator.h"
 #include "VirtualDesktopSwitcher.h"
 
 class Application {
@@ -11,6 +12,7 @@ private:
     HWND                      m_hwnd      = nullptr;
     VirtualDesktopSwitcher   *m_pSwitcher = nullptr;
     std::unique_ptr<TrayIcon> m_pTrayIcon;
+    std::unique_ptr<DesktopIndicator> m_pOverlay;
 
     // 窗口过程函数
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);

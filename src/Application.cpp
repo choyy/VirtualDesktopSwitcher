@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "ColorState.h"
 
 #include <iostream>
 #include <sstream>
@@ -10,9 +11,51 @@ Application::~Application() {
 }
 
 LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    auto *pApp = reinterpret_cast<Application *>(GetWindowLongPtrW(hwnd, GWLP_USERDATA)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
-    if (pApp != nullptr && pApp->m_pTrayIcon != nullptr) {
+    auto *pApp = reinterpret_cast<Application *>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (pApp == nullptr) return DefWindowProc(hwnd, uMsg, wParam, lParam);
+
+    if (uMsg == WM_MEASUREITEM || uMsg == WM_DRAWITEM) {
         pApp->m_pTrayIcon->HandleMessage(hwnd, uMsg, wParam, lParam);
+        return (uMsg == WM_MEASUREITEM) ? TRUE : 0;
+    }
+
+    if (uMsg == WM_TRAYICON || uMsg == WM_COMMAND) {
+        pApp->m_pTrayIcon->HandleMessage(hwnd, uMsg, wParam, lParam);
+        return 0;
+    }
+
+    if (uMsg == WM_MENUSELECT) {
+        UINT item = LOWORD(wParam);
+        UINT flags = HIWORD(wParam);
+        if (flags == 0xFFFF) {
+            if (pApp->m_pOverlay) pApp->m_pOverlay->CancelPreview();
+        } else if (!(flags & MF_POPUP)) {
+            int colorIdx = (int)item - CMD_COLOR_OPTIONS_BASE;
+            const auto& colors = GetPredefinedColors();
+            if (colorIdx >= 0 && colorIdx < (int)colors.size()) {
+                if (pApp->m_pOverlay) pApp->m_pOverlay->SetColorPreview(colors[colorIdx].hexColor);
+            }
+        }
+        return 0;
+    }
+
+    if (uMsg == WM_SWITCH_DESKTOP) {
+        pApp->m_pSwitcher->SwitchToDesktop(static_cast<int>(wParam));
+        const int           desktopCount = pApp->m_pSwitcher->GetDesktopCount();
+        const int           newCurrentDesktop = pApp->m_pSwitcher->GetCurrentDesktopIndex();
+
+        std::wostringstream oss;
+        oss << L"Virtual Desktop Switcher\n"
+            << L"Desktops: " << desktopCount << L" | Current: " << (newCurrentDesktop + 1);
+        pApp->m_pTrayIcon->UpdateTooltip(oss.str());
+
+        if (pApp->m_pOverlay) {
+            std::wstring overlayText(desktopCount, L'0');
+            if (newCurrentDesktop >= 0 && newCurrentDesktop < desktopCount)
+                overlayText[newCurrentDesktop] = L'*';
+            pApp->m_pOverlay->SetText(overlayText);
+        }
+        return 0;
     }
 
     if (uMsg == WM_DESTROY) {
@@ -38,17 +81,18 @@ bool Application::Initialize() {
         return false;
     }
 
-    // 创建一个隐藏窗口用于接收消息
-    m_hwnd = CreateWindowExW(0, L"VirtualDesktopSwitcherClass", L"VirtualDesktopSwitcher",
-                             0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandle(nullptr), nullptr);
+    m_hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED,
+                             L"VirtualDesktopSwitcherClass", L"VirtualDesktopSwitcher",
+                             WS_POPUP,
+                             0, 0, 0, 0, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
     if (m_hwnd == nullptr) {
-        std::cerr << "Failed to create message window!\n";
+        std::cerr << "Failed to create window!\n";
         return false;
     }
     m_pSwitcher->SetWindowHandle(m_hwnd);
 
     // 设置窗口用户数据，用于在窗口过程中访问Application实例
-    SetWindowLongPtrW(m_hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    SetWindowLongPtrW(m_hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
 
     // 初始化托盘图标
     m_pTrayIcon = std::make_unique<TrayIcon>();
@@ -67,6 +111,27 @@ bool Application::Initialize() {
         << L"Desktops: " << desktopCount << L" | Current: " << (currentDesktop + 1);
     m_pTrayIcon->UpdateTooltip(oss.str());
 
+    // 初始化桌面覆盖层
+    m_pOverlay = std::make_unique<DesktopIndicator>();
+    if (!m_pOverlay->Initialize(GetModuleHandle(nullptr))) {
+        std::cerr << "Failed to initialize desktop overlay!\n";
+    } else {
+        std::wstring overlayText(desktopCount, L'0');
+        if (currentDesktop >= 0 && currentDesktop < desktopCount) {
+            overlayText[currentDesktop] = L'*';
+        }
+        m_pOverlay->SetText(overlayText);
+        m_pOverlay->Show();
+    }
+
+    // 设置颜色和编辑模式回调
+    m_pTrayIcon->SetColorCallback([this](const std::wstring& hex) {
+        if (m_pOverlay) m_pOverlay->SetColor(hex);
+    });
+    m_pTrayIcon->SetEditModeCallback([this]() {
+        if (m_pOverlay) m_pOverlay->ToggleEditMode();
+    });
+
     // 安装键盘钩子
     if (!m_pSwitcher->InstallHook()) {
         std::cerr << "Failed to install keyboard hook!\n";
@@ -81,24 +146,9 @@ int Application::Run() {
     std::cout << "Use Alt + [1-9] to switch desktops\n";
     std::cout << "Use tray icon to exit or manage autostart\n";
 
-    const int desktopCount = m_pSwitcher->GetDesktopCount();
-
     // 消息循环
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {
-        // 处理自定义消息：切换桌面
-        if (msg.message == WM_SWITCH_DESKTOP) {
-            m_pSwitcher->SwitchToDesktop(static_cast<int>(msg.wParam));
-
-            // 更新托盘提示信息
-            const int           newCurrentDesktop = m_pSwitcher->GetCurrentDesktopIndex();
-            std::wostringstream oss;
-            oss << L"Virtual Desktop Switcher\n"
-                << L"Desktops: " << desktopCount << L" | Current: " << (newCurrentDesktop + 1);
-            m_pTrayIcon->UpdateTooltip(oss.str());
-            continue;
-        }
-
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }

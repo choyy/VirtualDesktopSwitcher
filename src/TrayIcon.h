@@ -5,21 +5,30 @@
 
 #include <shellapi.h>
 #include <string>
+#include <functional>
 
 // 自定义消息定义
 #define WM_TRAYICON (WM_USER + 2)
 #define WM_TRAY_EXIT (WM_USER + 3)
 #define WM_TRAY_TOGGLE_AUTOSTART (WM_USER + 4)
+#define WM_TRAY_EDIT_MODE (WM_USER + 5)
+#define CMD_COLOR_OPTIONS_BASE (WM_USER + 100)
 
 class TrayIcon {
 private:
     NOTIFYICONDATAW m_nid{};
     HMENU           m_hMenu            = nullptr;
     bool            m_autoStartEnabled = false;
+    bool            m_editModeChecked  = false;
+
+    std::function<void()>                 m_editModeCb;
+    std::function<void(const std::wstring&)> m_colorCb;
 
     // 注册表相关函数
     [[nodiscard]] static bool IsAutoStartEnabled();
     static void               SetAutoStart(bool enable);
+
+    void BuildMenu();
 
 public:
     TrayIcon(const TrayIcon &)            = delete;
@@ -41,6 +50,9 @@ public:
 
     // 获取自动启动状态
     [[nodiscard]] bool GetAutoStartStatus() const { return m_autoStartEnabled; }
+
+    void SetEditModeCallback(std::function<void()> cb) { m_editModeCb = cb; }
+    void SetColorCallback(std::function<void(const std::wstring&)> cb) { m_colorCb = cb; }
 };
 
 #endif // TRAY_ICON_H
