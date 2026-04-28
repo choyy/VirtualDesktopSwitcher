@@ -27,19 +27,6 @@ public:
     virtual HRESULT STDMETHODCALLTYPE GetDesktops(IObjectArray * *ppDesktops)                                                             = 0;
     virtual HRESULT STDMETHODCALLTYPE GetAdjacentDesktop(IVirtualDesktop * pDesktopReference, int direction, IVirtualDesktop **ppDesktop) = 0;
     virtual HRESULT STDMETHODCALLTYPE SwitchDesktop(IVirtualDesktop * pDesktop)                                                           = 0;
-    virtual HRESULT STDMETHODCALLTYPE CreateDesktop(IVirtualDesktop * *ppNewDesktop)                                                      = 0;
-    virtual HRESULT STDMETHODCALLTYPE RemoveDesktop(IVirtualDesktop * pRemove, IVirtualDesktop * pFallbackDesktop)                        = 0;
-    virtual HRESULT STDMETHODCALLTYPE FindDesktop(GUID * desktopId, IVirtualDesktop * *ppDesktop)                                         = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetDesktopByID(GUID desktopId, IVirtualDesktop * *ppDesktop)                                        = 0;
-    virtual HRESULT STDMETHODCALLTYPE SetDesktopName(IVirtualDesktop * pDesktop, LPCWSTR wszName)                                         = 0;
-    virtual HRESULT STDMETHODCALLTYPE SetDesktopWallpaper(IVirtualDesktop * pDesktop, LPCWSTR wszWallpaper)                               = 0;
-    virtual HRESULT STDMETHODCALLTYPE MoveViewToZone(IUnknown * pView, GUID zoneId)                                                       = 0;
-    virtual HRESULT STDMETHODCALLTYPE CanViewMoveToZone(IUnknown * pView, GUID zoneId, BOOL * pfCanMove)                                  = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetWindowZone(IUnknown * pView, GUID * pZoneId)                                                     = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetZoneRectsFromVirtualDesktop(IVirtualDesktop * pDesktop, IUnknown * *ppRects)                     = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetZoneCount(IUnknown * pMonitor, UINT * pCount)                                                    = 0;
-    virtual HRESULT STDMETHODCALLTYPE RegisterForVirtualDesktopChanges(IUnknown * pObserver, DWORD * pdwCookie)                           = 0;
-    virtual HRESULT STDMETHODCALLTYPE UnregisterForVirtualDesktopChanges(DWORD dwCookie)                                                  = 0;
 };
 
 // IVirtualDesktopManager接口定义（标准Windows API）
@@ -66,6 +53,7 @@ private:
     Microsoft::WRL::ComPtr<IVirtualDesktopManagerInternal> virtualDesktopManagerInternal;
     Microsoft::WRL::ComPtr<IVirtualDesktopManager>         virtualDesktopManager;
     Microsoft::WRL::ComPtr<IApplicationViewCollection>     viewCollection;
+    IID                                                    m_iidVirtualDesktop = __uuidof(IVirtualDesktop);
 
     [[nodiscard]] bool CheckViaViewCollection(HWND hwnd) const;
     [[nodiscard]] bool CheckViaDesktopManager(HWND hwnd) const;
