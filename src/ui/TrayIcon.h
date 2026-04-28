@@ -35,6 +35,7 @@ public:
     ~TrayIcon();
 
     bool               Initialize(HWND hwnd, HINSTANCE hInstance);
+    bool               Reinitialize();
     void               HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
     void               UpdateTooltip(const std::wstring &tooltip);
     [[nodiscard]] bool GetAutoStartStatus() const { return m_autoStartEnabled; }

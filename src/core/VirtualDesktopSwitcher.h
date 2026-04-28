@@ -22,6 +22,7 @@ public:
 
     bool InstallHook();
     void UninstallHook();
+    bool ReinstallHook();
     void SwitchToDesktop(int index);
 
     void                            SetWindowHandle(HWND hwnd) { m_hwnd = hwnd; }

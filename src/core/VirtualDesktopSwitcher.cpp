@@ -117,6 +117,11 @@ void VirtualDesktopSwitcher::UninstallHook() {
     }
 }
 
+bool VirtualDesktopSwitcher::ReinstallHook() {
+    UninstallHook();
+    return InstallHook();
+}
+
 void VirtualDesktopSwitcher::RecordForeground(int desktopIndex) {
     if (desktopIndex < 0 || desktopIndex >= kMaxDesktops) {
         return;

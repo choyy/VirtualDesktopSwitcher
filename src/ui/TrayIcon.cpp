@@ -245,6 +245,13 @@ void TrayIcon::DrawColorSwatch(LPDRAWITEMSTRUCT dis) {
     DrawTextW(dis->hDC, numStr.data(), -1, &nr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
 }
 
+bool TrayIcon::Reinitialize() {
+    if (m_nid.hWnd != nullptr) {
+        Shell_NotifyIconW(NIM_DELETE, &m_nid);
+    }
+    return Shell_NotifyIconW(NIM_ADD, &m_nid) != 0;
+}
+
 void TrayIcon::UpdateTooltip(const std::wstring &tooltip) {
     wcsncpy_s(m_nid.szTip, tooltip.c_str(), _TRUNCATE);
     Shell_NotifyIconW(NIM_MODIFY, &m_nid);

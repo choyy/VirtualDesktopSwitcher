@@ -91,6 +91,12 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
         return 0;
     }
 
+    case WM_POWERBROADCAST:
+        if (wParam == PBT_APMRESUMEAUTOMATIC || wParam == PBT_APMRESUMESUSPEND) {
+            pApp->OnSystemResume();
+        }
+        return TRUE;
+
     case WM_DESTROY:
         KillTimer(hwnd, 1);
         PostQuitMessage(0);
@@ -98,6 +104,12 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
     default:
         break;
     }
+
+    if (uMsg == pApp->m_uTaskbarCreated) {
+        pApp->OnSystemResume();
+        return 0;
+    }
+
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
@@ -203,6 +215,9 @@ bool Application::Initialize() {
         }
     });
 
+    // Register taskbar creation message (for Explorer restart / wake from sleep)
+    m_uTaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
+
     // Check for updates on startup
     if (m_pOverlay != nullptr && m_pOverlay->IsAutoCheckUpdates()) {
         auto checkResult = AboutDialog::CheckForNewerVersion();
@@ -225,6 +240,21 @@ bool Application::Initialize() {
     SetTimer(m_hwnd, 1, 300, nullptr);
 
     return true;
+}
+
+void Application::OnSystemResume() {
+    m_switcher->ReinstallHook();
+    m_pTrayIcon->Reinitialize();
+
+    int desktopCount   = m_switcher->GetDesktopCount();
+    int currentDesktop = m_switcher->GetCurrentDesktopIndex();
+    m_lastDesktopIndex = currentDesktop;
+    m_pTrayIcon->UpdateTooltip(BuildTooltipText(desktopCount, currentDesktop));
+
+    if (m_pOverlay) {
+        auto emptyMask = m_switcher->GetDesktopEmptyMask();
+        m_pOverlay->SetDesktopState(desktopCount, currentDesktop, emptyMask);
+    }
 }
 
 int Application::Run() {

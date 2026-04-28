@@ -14,9 +14,11 @@ private:
     std::unique_ptr<TrayIcon>               m_pTrayIcon;
     std::unique_ptr<DesktopIndicator>       m_pOverlay;
     int                                     m_lastDesktopIndex = -1;
+    UINT                                    m_uTaskbarCreated  = 0;
 
     // 窗口过程函数
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+    void                    OnSystemResume();
 
 public:
     Application(const Application &)            = delete;
