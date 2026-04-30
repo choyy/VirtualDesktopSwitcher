@@ -30,7 +30,7 @@
    - 管理开机自启
 5. 双击托盘图标快速切换开机自启状态
 
-所有设置自动保存至 `%APPDATA%\VirtualDesktopSwitcher\settings.ini`。
+所有设置及日志文件自动保存至 `%LOCALAPPDATA%\VirtualDesktopSwitcher`。
 
 ## 🔧 从源码编译
 

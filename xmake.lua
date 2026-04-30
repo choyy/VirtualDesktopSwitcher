@@ -1,4 +1,4 @@
-set_version("1.1.1")
+set_version("1.1.2")
 set_encodings("utf-8")
 set_languages("c++20")
 
@@ -10,9 +10,11 @@ add_requires("stb")
 target("VirtualDesktopSwitcher")
     set_kind("binary")
     set_optimize("smallest")
+    -- set_exceptions("no-cxx")
+    set_exceptions("none")
     add_includedirs("src")
     add_files("src/**.cpp", "res/*.manifest", "res/icon.rc")
-    add_syslinks("shell32", "shlwapi", "user32", "gdi32", "advapi32", "comctl32", "comdlg32")
+    add_syslinks("shell32", "user32", "gdi32", "advapi32", "comctl32", "ole32")
     add_ldflags("/SUBSYSTEM:WINDOWS")
 
     add_packages("stb")

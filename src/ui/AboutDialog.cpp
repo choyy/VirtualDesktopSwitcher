@@ -5,10 +5,8 @@
 
 #include <array>
 #include <bit>
-#include <fstream>
-#include <sstream>
+#include <cstdlib>
 #include <string>
-#include <vector>
 
 #include "util/Utils.h"
 
@@ -41,14 +39,26 @@ std::wstring Utf8ToWide(const std::string &str) {
     return result;
 }
 
-std::vector<int> ParseVersion(const std::string &ver) {
-    std::vector<int>  parts;
-    std::stringstream ss(ver);
-    std::string       token;
-    while (std::getline(ss, token, '.')) {
-        parts.push_back(std::stoi(token));
+bool IsNewerVersion(const std::string &remote, const std::string &local) {
+    size_t r_pos = 0;
+    size_t l_pos = 0;
+
+    while (r_pos < remote.size() && l_pos < local.size()) {
+        char   *re = nullptr, *le = nullptr;
+        int32_t rn = strtol(remote.c_str() + r_pos, &re, 10);
+        int32_t ln = strtol(local.c_str() + l_pos, &le, 10);
+
+        if (rn > ln) { return true; }
+        if (rn < ln) { return false; }
+
+        r_pos = re - remote.c_str();
+        l_pos = le - local.c_str();
+
+        if (r_pos < remote.size() && remote[r_pos] == '.') { r_pos++; }
+        if (l_pos < local.size() && local[l_pos] == '.') { l_pos++; }
     }
-    return parts;
+
+    return r_pos < remote.size();
 }
 
 LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -142,17 +152,7 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         int id = LOWORD(wp);
 
         if (id == IDC_CHECK_UPDATES) {
-            auto checkResult = AboutDialog::CheckForNewerVersion();
-            if (checkResult.hasUpdate) {
-                int ret = MessageBoxW(hwnd, L"发现新版本，是否立即下载？",
-                                      L"发现更新", MB_YESNO | MB_ICONQUESTION);
-                if (ret == IDYES && !checkResult.downloadUrl.empty()) {
-                    AboutDialog::DownloadUpdate(hwnd, checkResult.downloadUrl);
-                }
-            } else {
-                MessageBoxW(hwnd, L"您已使用最新版本。",
-                            L"无需更新", MB_OK | MB_ICONINFORMATION);
-            }
+            AboutDialog::CheckAndDownload(hwnd);
             return 0;
         }
 
@@ -243,14 +243,21 @@ AboutDialog::VersionCheckResult AboutDialog::CheckForNewerVersion() {
     }
 
     // Read and parse JSON
-    std::ifstream f(dest);
-    if (!f.is_open()) {
+    HANDLE hFile = CreateFileW(dest.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hFile == INVALID_HANDLE_VALUE) {
         DeleteFileW(dest.c_str());
         return result;
     }
-    std::string content((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
-    f.close();
+    DWORD       fileSize = GetFileSize(hFile, nullptr);
+    std::string content;
+    if (fileSize > 0) {
+        content.resize(fileSize);
+        DWORD bytesRead = 0;
+        ReadFile(hFile, content.data(), fileSize, &bytesRead, nullptr);
+        content.resize(bytesRead);
+    }
+    CloseHandle(hFile);
     DeleteFileW(dest.c_str());
 
     // Parse tag_name
@@ -274,33 +281,29 @@ AboutDialog::VersionCheckResult AboutDialog::CheckForNewerVersion() {
     result.downloadUrl = extractJsonString("browser_download_url");
 
     // Compare versions
-    auto remote = ParseVersion(latestTag);
-    auto local  = ParseVersion(APP_VERSION);
-
-    for (size_t i = 0; i < remote.size() && i < local.size(); ++i) {
-        if (remote[i] > local[i]) {
-            result.hasUpdate = true;
-            return result;
-        }
-        if (remote[i] < local[i]) { return result; }
-    }
-    if (remote.size() > local.size()) { result.hasUpdate = true; }
+    result.hasUpdate = IsNewerVersion(latestTag, APP_VERSION);
     return result;
 }
 
 void AboutDialog::DownloadUpdate(HWND parent, const std::string &url) {
+    std::wstring wideUrl = Utf8ToWide(url);
+
     std::array<wchar_t, MAX_PATH> userProfile{};
     if (GetEnvironmentVariableW(L"USERPROFILE", userProfile.data(), static_cast<DWORD>(userProfile.size())) == 0) {
+        if (MessageBoxW(parent, L"下载失败，是否前往发布页手动下载？", L"错误", MB_YESNO | MB_ICONERROR) == IDYES) {
+            ShellExecuteW(parent, L"open", L"https://github.com/choyy/VirtualDesktopSwitcher/releases", nullptr, nullptr, SW_SHOW);
+        }
         return;
     }
 
-    std::wstring dest    = std::wstring(userProfile.data()) + L"\\Desktop\\VirtualDesktopSwitcher.exe";
-    std::wstring wideUrl = Utf8ToWide(url);
+    std::wstring dest = std::wstring(userProfile.data()) + L"\\Desktop\\VirtualDesktopSwitcher.exe";
 
     using URLDownloadToFileW_t = HRESULT(WINAPI *)(LPUNKNOWN, LPCWSTR, LPCWSTR, DWORD, LPUNKNOWN);
     HMODULE hUrlmon            = LoadLibraryW(L"urlmon.dll");
     if (hUrlmon == nullptr) {
-        MessageBoxW(parent, L"下载失败。", L"错误", MB_OK | MB_ICONERROR);
+        if (MessageBoxW(parent, L"下载失败，是否前往发布页手动下载？", L"错误", MB_YESNO | MB_ICONERROR) == IDYES) {
+            ShellExecuteW(parent, L"open", L"https://github.com/choyy/VirtualDesktopSwitcher/releases", nullptr, nullptr, SW_SHOW);
+        }
         return;
     }
 
@@ -308,7 +311,9 @@ void AboutDialog::DownloadUpdate(HWND parent, const std::string &url) {
         GetProcAddress(hUrlmon, "URLDownloadToFileW"));
     if (pDownload == nullptr) {
         FreeLibrary(hUrlmon);
-        MessageBoxW(parent, L"下载失败。", L"错误", MB_OK | MB_ICONERROR);
+        if (MessageBoxW(parent, L"下载失败，是否前往发布页手动下载？", L"错误", MB_YESNO | MB_ICONERROR) == IDYES) {
+            ShellExecuteW(parent, L"open", L"https://github.com/choyy/VirtualDesktopSwitcher/releases", nullptr, nullptr, SW_SHOW);
+        }
         return;
     }
 
@@ -316,10 +321,27 @@ void AboutDialog::DownloadUpdate(HWND parent, const std::string &url) {
         std::wstring msg = L"已下载到：\n" + dest;
         MessageBoxW(parent, msg.c_str(), L"下载完成", MB_OK | MB_ICONINFORMATION);
     } else {
-        MessageBoxW(parent, L"下载失败。", L"错误", MB_OK | MB_ICONERROR);
+        FreeLibrary(hUrlmon);
+        if (MessageBoxW(parent, L"下载失败，是否前往发布页手动下载？", L"错误", MB_YESNO | MB_ICONERROR) == IDYES) {
+            ShellExecuteW(parent, L"open", L"https://github.com/choyy/VirtualDesktopSwitcher/releases", nullptr, nullptr, SW_SHOW);
+        }
+        return;
     }
 
     FreeLibrary(hUrlmon);
+}
+
+void AboutDialog::CheckAndDownload(HWND parent, bool silentIfUpToDate) {
+    auto result = CheckForNewerVersion();
+    if (result.hasUpdate) {
+        int ret = MessageBoxW(parent, L"发现新版本，是否立即下载？",
+                              L"发现更新", MB_YESNO | MB_ICONQUESTION);
+        if (ret == IDYES && !result.downloadUrl.empty()) {
+            DownloadUpdate(parent, result.downloadUrl);
+        }
+    } else if (!silentIfUpToDate) {
+        MessageBoxW(parent, L"您已使用最新版本。", L"无需更新", MB_OK | MB_ICONINFORMATION);
+    }
 }
 
 AboutDialog::Result AboutDialog::Show(HWND parent, bool currentAutoCheck) {

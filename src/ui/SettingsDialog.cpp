@@ -7,8 +7,6 @@
 #include <array>
 #include <bit>
 #include <string>
-#include <unordered_set>
-#include <utility>
 #include <vector>
 
 #include "util/ConfigIni.h"
@@ -23,82 +21,83 @@ constexpr int IDC_SPACING = 104;
 constexpr int IDC_SPIN    = 105;
 constexpr int IDC_EMP_SYM = 106;
 
-const std::vector<std::wstring> &GetSymbolList() {
-    static const std::vector<std::wstring> syms = {
-        L"\u00B7",
-        L"\u2022",
-        L"\u2218",
-        L"\u2588",
-        L"\u258C",
-        L"\u2591",
-        L"\u25A0",
-        L"\u25A1",
-        L"\u25AA",
-        L"\u25AB",
-        L"\u25B2",
-        L"\u25B3",
-        L"\u25B6",
-        L"\u25B7",
-        L"\u25BC",
-        L"\u25BD",
-        L"\u25C0",
-        L"\u25C1",
-        L"\u25C6",
-        L"\u25C7",
-        L"\u25C9",
-        L"\u25CB",
-        L"\u25CC",
-        L"\u25CE",
-        L"\u25CF",
-        L"\u25D8",
-        L"\u25E6",
-        L"\u25EF",
-        L"\u25FB",
-        L"\u25FC",
-        L"\u2605",
-        L"\u2606",
-        L"\u2609",
-        L"\u2688",
-        L"\u2689",
-        L"\u26AA",
-        L"\u26AB",
-        L"\u2716",
-        L"\u2726",
-        L"\u2727",
-        L"\u273F",
-        L"\u2740",
-        L"\u2B1B",
-        L"\u2B1C",
-        L"\u2B1F",
-        L"\u2B20",
-        L"\u2B21",
-        L"\u2B22",
-        L"\u2B24",
-        L"\u2B25",
-        L"\u2B26",
-        L"\U0001F7C8",
-        L"\U0001F7C9",
-    };
-    return syms;
-}
+constexpr std::array kSymbolList = {
+    L"\u00B7",
+    L"\u2022",
+    L"\u2218",
+    L"\u2588",
+    L"\u258C",
+    L"\u2591",
+    L"\u25A0",
+    L"\u25A1",
+    L"\u25AA",
+    L"\u25AB",
+    L"\u25B2",
+    L"\u25B3",
+    L"\u25B6",
+    L"\u25B7",
+    L"\u25BC",
+    L"\u25BD",
+    L"\u25C0",
+    L"\u25C1",
+    L"\u25C6",
+    L"\u25C7",
+    L"\u25C9",
+    L"\u25CB",
+    L"\u25CC",
+    L"\u25CE",
+    L"\u25CF",
+    L"\u25D8",
+    L"\u25E6",
+    L"\u25EF",
+    L"\u25FB",
+    L"\u25FC",
+    L"\u2605",
+    L"\u2606",
+    L"\u2609",
+    L"\u2688",
+    L"\u2689",
+    L"\u26AA",
+    L"\u26AB",
+    L"\u2716",
+    L"\u2726",
+    L"\u2727",
+    L"\u273F",
+    L"\u2740",
+    L"\u2B1B",
+    L"\u2B1C",
+    L"\u2B1F",
+    L"\u2B20",
+    L"\u2B21",
+    L"\u2B22",
+    L"\u2B24",
+    L"\u2B25",
+    L"\u2B26",
+    L"\U0001F7C8",
+    L"\U0001F7C9",
+};
 
-const std::vector<std::wstring> &GetFontList() {
-    static const std::vector<std::wstring> fonts = {
-        L"Arial Black", L"Lucida Sans Unicode", L"MS Gothic",
-        L"Segoe Script", L"Segoe UI Symbol"};
-    return fonts;
-}
+constexpr std::array kFontList = {
+    L"Arial Black", L"Lucida Sans Unicode", L"MS Gothic",
+    L"Segoe Script", L"Segoe UI Symbol"};
 
 struct FontEnumData {
-    HWND                             hCmb;
-    std::unordered_set<std::wstring> added;
+    HWND                      hCmb;
+    std::vector<std::wstring> added;
 };
 
 int CALLBACK FontEnumProc(const LOGFONTW *lf, const TEXTMETRICW * /*tm*/,
                           DWORD /*fontType*/, LPARAM lParam) {
     auto *data = std::bit_cast<FontEnumData *>(lParam);
-    if (lf->lfFaceName[0] != L'@' && !data->added.contains(&lf->lfFaceName[0])) {
-        data->added.insert(&lf->lfFaceName[0]);
+    bool  dup  = false;
+    for (const auto &a : data->added) {
+        if (a == &lf->lfFaceName[0]) {
+            dup = true;
+            break;
+        }
+    }
+    if (lf->lfFaceName[0] != L'@' && !dup) {
+        data->added.push_back(&lf->lfFaceName[0]);
         SendMessageW(data->hCmb, CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(&lf->lfFaceName[0])); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
     }
@@ -129,8 +128,9 @@ void PopulateComboWithAllSystemFonts(HWND hCmb, const std::wstring &selectedFont
 }
 
 struct DialogData {
-    SettingsDialog::Result          result;
-    SettingsDialog::PreviewCallback preview;
+    SettingsDialog::Result result;
+    void (*preview)(const SettingsDialog::Result &, void *){};
+    void *previewCtx{};
 };
 
 LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -149,8 +149,8 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         // Helper to make a labeled combo box
         auto makeCombo = [&](const wchar_t *label, int ctrlId,
-                             const std::vector<std::wstring> &items,
-                             const std::wstring              &current,
+                             const wchar_t *const *items, size_t count,
+                             const std::wstring &current,
                              bool extraFont, bool editable = false) {
             CreateWindowW(L"STATIC", label, WS_CHILD | WS_VISIBLE,
                           S(15), y + S(3), S(160), S(18),
@@ -165,8 +165,8 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                                       cs->hInstance, nullptr);
             SendMessageW(hCmb, CB_SETMINVISIBLE, 10, 0);
 
-            for (const auto &item : items) {
-                SendMessageW(hCmb, CB_ADDSTRING, 0, std::bit_cast<LPARAM>(item.c_str()));
+            for (size_t i = 0; i < count; ++i) {
+                SendMessageW(hCmb, CB_ADDSTRING, 0, std::bit_cast<LPARAM>(items[i]));
             }
 
             if (extraFont) {
@@ -177,27 +177,27 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 SetWindowTextW(hCmb, current.c_str());
             } else {
                 int sel = 0;
-                for (size_t i = 0; i < items.size(); ++i) {
+                for (size_t i = 0; i < count; ++i) {
                     if (items[i] == current) {
                         sel = static_cast<int>(i);
                         break;
                     }
                 }
-                if (extraFont && (current.empty() || std::ranges::find(items, current) == items.end())) {
-                    sel = static_cast<int>(items.size());
+                if (extraFont && current.empty()) {
+                    sel = static_cast<int>(count);
                 }
                 SendMessageW(hCmb, CB_SETCURSEL, sel, 0);
             }
             y += S(30);
         };
 
-        makeCombo(L"当前桌面符号：", IDC_CUR_SYM, GetSymbolList(),
+        makeCombo(L"当前桌面符号：", IDC_CUR_SYM, kSymbolList.data(), kSymbolList.size(),
                   data->result.currentSymbol, false, true);
-        makeCombo(L"非空桌面符号：", IDC_OTH_SYM, GetSymbolList(),
+        makeCombo(L"非空桌面符号：", IDC_OTH_SYM, kSymbolList.data(), kSymbolList.size(),
                   data->result.otherSymbol, false, true);
-        makeCombo(L"空桌面符号：", IDC_EMP_SYM, GetSymbolList(),
+        makeCombo(L"空桌面符号：", IDC_EMP_SYM, kSymbolList.data(), kSymbolList.size(),
                   data->result.emptySymbol, false, true);
-        makeCombo(L"字体：", IDC_FONT, GetFontList(), data->result.fontName, true);
+        makeCombo(L"字体：", IDC_FONT, kFontList.data(), kFontList.size(), data->result.fontName, true);
 
         // Character Spacing
         CreateWindowW(L"STATIC", L"字符间距：", WS_CHILD | WS_VISIBLE,
@@ -259,15 +259,14 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
 
             if (id != IDC_FONT) {
-                const auto &symbols = GetSymbolList();
-                if (sel >= 0 && static_cast<size_t>(sel) < symbols.size()) {
+                if (sel >= 0 && static_cast<size_t>(sel) < kSymbolList.size()) {
                     auto &target = (id == IDC_CUR_SYM) ? data->result.currentSymbol : (id == IDC_OTH_SYM) ? data->result.otherSymbol
                                                                                                           : data->result.emptySymbol;
-                    target       = symbols[sel];
+                    target       = kSymbolList.at(sel);
                 }
             }
-            if (data->preview) {
-                data->preview(data->result);
+            if (data->preview != nullptr) {
+                data->preview(data->result, data->previewCtx);
             }
             return 0;
         }
@@ -277,9 +276,8 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             int  sel  = static_cast<int>(SendMessageW(hCmb, CB_GETCURSEL, 0, 0));
             if (sel == CB_ERR) { return 0; }
 
-            const auto &fonts = GetFontList();
-            if (sel >= 0 && static_cast<size_t>(sel) < fonts.size()) {
-                data->result.fontName = fonts[sel];
+            if (sel >= 0 && static_cast<size_t>(sel) < kFontList.size()) {
+                data->result.fontName = kFontList.at(sel);
             } else {
                 std::array<wchar_t, 256> buf{};
                 SendMessageW(hCmb, CB_GETLBTEXT, sel, reinterpret_cast<LPARAM>(buf.data())); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
@@ -290,7 +288,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     data->result.fontName = buf.data();
                 }
             }
-            if (data->preview) { data->preview(data->result); }
+            if (data->preview != nullptr) { data->preview(data->result, data->previewCtx); }
             return 0;
         }
 
@@ -300,18 +298,18 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (buf[0] != 0) {
                 (id == IDC_CUR_SYM ? data->result.currentSymbol : id == IDC_OTH_SYM ? data->result.otherSymbol
                                                                                     : data->result.emptySymbol) = buf.data();
-                if (data->preview) {
-                    data->preview(data->result);
+                if (data->preview != nullptr) {
+                    data->preview(data->result, data->previewCtx);
                 }
             }
             return 0;
         }
 
-        if (id == IDC_SPACING && code == EN_CHANGE && data->preview) {
+        if (id == IDC_SPACING && code == EN_CHANGE && (data->preview != nullptr)) {
             std::array<wchar_t, 16> buf{};
             GetDlgItemTextW(hwnd, IDC_SPACING, buf.data(), static_cast<int>(buf.size()));
-            data->result.charSpacing = (std::max)(0, _wtoi(buf.data()));
-            data->preview(data->result);
+            data->result.charSpacing = (_wtoi(buf.data()) < 0) ? 0 : _wtoi(buf.data());
+            data->preview(data->result, data->previewCtx);
             return 0;
         }
 
@@ -319,7 +317,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case IDOK: {
             std::array<wchar_t, 16> buf{};
             GetDlgItemTextW(hwnd, IDC_SPACING, buf.data(), static_cast<int>(buf.size()));
-            data->result.charSpacing = (std::max)(0, _wtoi(buf.data()));
+            data->result.charSpacing = (_wtoi(buf.data()) < 0) ? 0 : _wtoi(buf.data());
             data->result.accepted    = true;
             DestroyWindow(hwnd);
             return 0;
@@ -348,7 +346,8 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 } // namespace
 
 SettingsDialog::Result SettingsDialog::Show(HWND parent, const Result &current,
-                                            PreviewCallback preview) {
+                                            void (*preview)(const Result &, void *),
+                                            void *previewCtx) {
     auto *hInst = std::bit_cast<HINSTANCE>(GetWindowLongPtrW(parent, GWLP_HINSTANCE));
 
     WNDCLASSW wc     = {};
@@ -362,8 +361,9 @@ SettingsDialog::Result SettingsDialog::Show(HWND parent, const Result &current,
     auto S   = [dpi](int v) { return ScaleForDpi(v, dpi); };
 
     DialogData data;
-    data.result  = current;
-    data.preview = std::move(preview);
+    data.result     = current;
+    data.preview    = preview;
+    data.previewCtx = previewCtx;
 
     // Override with INI values
     std::wstring iniCur = DecodeSymbol(ReadIniString(L"Display", L"CurrentSymbol",

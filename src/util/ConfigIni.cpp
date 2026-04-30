@@ -5,14 +5,13 @@
 #include <shlobj.h>
 
 #include <array>
-#include <iomanip>
-#include <sstream>
+#include <cstdio>
 
 namespace {
 std::wstring GetOrCreateConfigPath() {
     static std::wstring path = []() {
         std::array<wchar_t, MAX_PATH> appData{};
-        if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, appData.data()))) {
+        if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appData.data()))) {
             std::wstring p = std::wstring(appData.data()) + L"\\VirtualDesktopSwitcher";
             CreateDirectoryW(p.c_str(), nullptr);
             return p + L"\\settings.ini";
@@ -60,10 +59,9 @@ std::wstring EncodeSymbol(const std::wstring &sym) {
     if (sym.empty()) {
         return {};
     }
-    std::wstringstream ss;
-    ss << L"\\u" << std::uppercase << std::hex << std::setw(4) << std::setfill(L'0')
-       << static_cast<unsigned>(sym[0]);
-    return ss.str();
+    std::array<wchar_t, 8> buf{};
+    swprintf_s(buf.data(), buf.size(), L"\\u%04X", static_cast<unsigned>(sym[0])); // NOLINT
+    return buf.data();
 }
 
 std::wstring DecodeSymbol(const std::wstring &str) {

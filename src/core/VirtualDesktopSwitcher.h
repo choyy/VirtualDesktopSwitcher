@@ -4,14 +4,11 @@
 
 #include <array>
 #include <memory>
-#include <vector>
 
 constexpr UINT WM_SWITCH_DESKTOP = WM_USER + 1;
 
 class VirtualDesktopSwitcher {
 public:
-    static constexpr size_t kMaxDesktops = 9;
-
     VirtualDesktopSwitcher(const VirtualDesktopSwitcher &)            = delete;
     VirtualDesktopSwitcher &operator=(const VirtualDesktopSwitcher &) = delete;
     VirtualDesktopSwitcher(VirtualDesktopSwitcher &&)                 = delete;
@@ -25,11 +22,11 @@ public:
     bool ReinstallHook();
     void SwitchToDesktop(int index);
 
-    void                            SetWindowHandle(HWND hwnd) { m_hwnd = hwnd; }
-    [[nodiscard]] HWND              GetWindowHandle() const { return m_hwnd; }
-    [[nodiscard]] int               GetDesktopCount() const { return m_pVDeskHelper ? m_pVDeskHelper->GetDesktopCount() : 0; }
-    [[nodiscard]] int               GetCurrentDesktopIndex() const { return m_pVDeskHelper ? m_pVDeskHelper->GetCurrentDesktopIndex() : -1; }
-    [[nodiscard]] std::vector<bool> GetDesktopEmptyMask() const { return m_pVDeskHelper ? m_pVDeskHelper->GetDesktopEmptyMask() : std::vector<bool>{}; }
+    void                                         SetWindowHandle(HWND hwnd) { m_hwnd = hwnd; }
+    [[nodiscard]] HWND                           GetWindowHandle() const { return m_hwnd; }
+    [[nodiscard]] int                            GetDesktopCount() const { return m_pVDeskHelper ? m_pVDeskHelper->GetDesktopCount() : 0; }
+    [[nodiscard]] int                            GetCurrentDesktopIndex() const { return m_pVDeskHelper ? m_pVDeskHelper->GetCurrentDesktopIndex() : -1; }
+    [[nodiscard]] std::array<bool, kMaxDesktops> GetDesktopEmptyMask() const { return m_pVDeskHelper ? m_pVDeskHelper->GetDesktopEmptyMask() : std::array<bool, kMaxDesktops>{}; }
 
 private:
     std::unique_ptr<VirtualDesktopHelper> m_pVDeskHelper;

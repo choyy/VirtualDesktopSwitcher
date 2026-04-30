@@ -5,7 +5,6 @@
 
 #include <shellapi.h>
 
-#include <functional>
 #include <string>
 
 constexpr UINT WM_TRAYICON                = WM_USER + 2;
@@ -41,11 +40,26 @@ public:
     [[nodiscard]] bool GetAutoStartStatus() const { return m_autoStartEnabled; }
 
     void SetActivePositionPreset(int preset) { m_activePositionPreset = preset; }
-    void SetEditModeCallback(std::function<void()> cb) { m_editModeCb = std::move(cb); }
-    void SetPositionCallback(std::function<void(int)> cb) { m_positionCb = std::move(cb); }
-    void SetColorCallback(std::function<void(const std::wstring &)> cb) { m_colorCb = std::move(cb); }
-    void SetSettingsCallback(std::function<void()> cb) { m_settingsCb = std::move(cb); }
-    void SetAboutCallback(std::function<void()> cb) { m_aboutCb = std::move(cb); }
+    void SetEditModeCallback(void (*cb)(void *), void *ctx) {
+        m_editModeFn  = cb;
+        m_editModeCtx = ctx;
+    }
+    void SetPositionCallback(void (*cb)(int, void *), void *ctx) {
+        m_positionFn  = cb;
+        m_positionCtx = ctx;
+    }
+    void SetColorCallback(void (*cb)(const std::wstring &, void *), void *ctx) {
+        m_colorFn  = cb;
+        m_colorCtx = ctx;
+    }
+    void SetSettingsCallback(void (*cb)(void *), void *ctx) {
+        m_settingsFn  = cb;
+        m_settingsCtx = ctx;
+    }
+    void SetAboutCallback(void (*cb)(void *), void *ctx) {
+        m_aboutFn  = cb;
+        m_aboutCtx = ctx;
+    }
 
 private:
     NOTIFYICONDATAW m_nid{};
@@ -54,11 +68,16 @@ private:
     bool            m_editModeChecked      = false;
     int             m_activePositionPreset = 1;
 
-    std::function<void()>                     m_editModeCb;
-    std::function<void(int)>                  m_positionCb;
-    std::function<void(const std::wstring &)> m_colorCb;
-    std::function<void()>                     m_settingsCb;
-    std::function<void()>                     m_aboutCb;
+    void (*m_editModeFn)(void *)                    = nullptr;
+    void *m_editModeCtx                             = nullptr;
+    void (*m_positionFn)(int, void *)               = nullptr;
+    void *m_positionCtx                             = nullptr;
+    void (*m_colorFn)(const std::wstring &, void *) = nullptr;
+    void *m_colorCtx                                = nullptr;
+    void (*m_settingsFn)(void *)                    = nullptr;
+    void *m_settingsCtx                             = nullptr;
+    void (*m_aboutFn)(void *)                       = nullptr;
+    void *m_aboutCtx                                = nullptr;
 
     static bool IsAutoStartEnabled();
     static void SetAutoStart(bool enable);

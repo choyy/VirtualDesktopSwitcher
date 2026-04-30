@@ -20,6 +20,7 @@ public:
     static VersionCheckResult CheckForNewerVersion();
     static Result             Show(HWND parent, bool currentAutoCheck);
     static void               DownloadUpdate(HWND parent, const std::string &url);
+    static void               CheckAndDownload(HWND parent, bool silentIfUpToDate = false);
 };
 
 #endif

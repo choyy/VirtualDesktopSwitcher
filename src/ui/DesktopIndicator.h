@@ -5,9 +5,11 @@
 
 #include <windows.h>
 
+#include <array>
 #include <memory>
 #include <string>
-#include <vector>
+
+#include "util/Constants.h"
 
 class FontRenderer;
 
@@ -20,10 +22,15 @@ class DesktopIndicator {
 public:
     DesktopIndicator();
     ~DesktopIndicator();
+    // 禁用复制和移动操作
+    DesktopIndicator(const DesktopIndicator &)            = delete;
+    DesktopIndicator &operator=(const DesktopIndicator &) = delete;
+    DesktopIndicator(DesktopIndicator &&)                 = delete;
+    DesktopIndicator &operator=(DesktopIndicator &&)      = delete;
 
     bool Initialize(HINSTANCE hInstance);
     void Show();
-    void SetDesktopState(int count, int currentIndex, const std::vector<bool> &emptyDesktops);
+    void SetDesktopState(int count, int currentIndex, const std::array<bool, kMaxDesktops> &emptyDesktops);
     void SetColor(const std::wstring &hexColor);
     void SetColorPreview(const std::wstring &hexColor);
     void CancelPreview();
@@ -49,28 +56,28 @@ public:
     void SetAutoCheckUpdates(bool v);
 
 private:
-    HWND                          m_hwnd = nullptr;
-    std::unique_ptr<FontRenderer> m_renderer;
-    std::wstring                  m_text;
-    std::wstring                  m_textColor = L"#FFA745_#FE869F_#EF7AC8_#A083ED_#43AEFF";
-    std::wstring                  m_previewColor;
-    bool                          m_hasPreview     = false;
-    std::wstring                  m_fontName       = L"Segoe UI Symbol";
-    int                           m_fontSize       = 10;
-    int                           m_charSpacing    = 0;
-    int                           m_desktopCount   = 0;
-    int                           m_currentDesktop = 0;
-    std::wstring                  m_currentSymbol  = L"\u25C9";
-    std::wstring                  m_otherSymbol    = L"\u25CB";
-    std::wstring                  m_emptySymbol    = L"\u25CC";
-    std::vector<bool>             m_emptyDesktops;
-    bool                          m_posInitialized   = false;
-    bool                          m_editMode         = false;
-    int                           m_positionPreset   = -1;
-    bool                          m_autoCheckUpdates = true;
-    bool                          m_dragging         = false;
-    POINT                         m_windowPos        = {.x = 0, .y = 0};
-    POINT                         m_dragOffset       = {.x = 0, .y = 0};
+    HWND                           m_hwnd = nullptr;
+    std::unique_ptr<FontRenderer>  m_renderer;
+    std::wstring                   m_text;
+    std::wstring                   m_textColor = L"#FFA745_#FE869F_#EF7AC8_#A083ED_#43AEFF";
+    std::wstring                   m_previewColor;
+    bool                           m_hasPreview     = false;
+    std::wstring                   m_fontName       = L"Segoe UI Symbol";
+    int                            m_fontSize       = 10;
+    int                            m_charSpacing    = 0;
+    int                            m_desktopCount   = 0;
+    int                            m_currentDesktop = 0;
+    std::wstring                   m_currentSymbol  = L"\u25C9";
+    std::wstring                   m_otherSymbol    = L"\u25CB";
+    std::wstring                   m_emptySymbol    = L"\u25CC";
+    std::array<bool, kMaxDesktops> m_emptyDesktops{};
+    bool                           m_posInitialized   = false;
+    bool                           m_editMode         = false;
+    int                            m_positionPreset   = -1;
+    bool                           m_autoCheckUpdates = true;
+    bool                           m_dragging         = false;
+    POINT                          m_windowPos        = {.x = 0, .y = 0};
+    POINT                          m_dragOffset       = {.x = 0, .y = 0};
 
     void RebuildText();
     void Render();

@@ -4,11 +4,8 @@
 
 #include <windowsx.h>
 
-#include <algorithm>
 #include <bit>
-#include <vector>
 
-#include "util/ColorState.h"
 #include "util/ConfigIni.h"
 #include "util/DrawingTextSTB.h"
 #include "util/Utils.h"
@@ -129,7 +126,7 @@ void DesktopIndicator::Show() {
     Render();
 }
 
-void DesktopIndicator::SetDesktopState(int count, int currentIndex, const std::vector<bool> &emptyDesktops) {
+void DesktopIndicator::SetDesktopState(int count, int currentIndex, const std::array<bool, kMaxDesktops> &emptyDesktops) {
     m_desktopCount   = count;
     m_currentDesktop = currentIndex;
     m_emptyDesktops  = emptyDesktops;
@@ -141,10 +138,10 @@ void DesktopIndicator::RebuildText() {
         return;
     }
     std::wstring text;
-    for (int i = 0; i < m_desktopCount; ++i) {
+    for (int i = 0; i < m_desktopCount && i < static_cast<int>(kMaxDesktops); ++i) {
         if (i == m_currentDesktop) {
             text += m_currentSymbol;
-        } else if (static_cast<size_t>(i) < m_emptyDesktops.size() && m_emptyDesktops[i]) {
+        } else if (m_emptyDesktops.at(i)) {
             text += m_emptySymbol;
         } else {
             text += m_otherSymbol;
@@ -201,7 +198,7 @@ void DesktopIndicator::SetFontName(const std::wstring &name) {
 }
 
 void DesktopIndicator::SetCharSpacing(int spacing) {
-    spacing       = (std::max)(spacing, 0);
+    spacing       = (spacing < 0) ? 0 : spacing;
     m_charSpacing = spacing;
     SaveConfig();
     if (m_desktopCount > 0) {
@@ -304,8 +301,8 @@ void DesktopIndicator::Render() {
     m_renderer->Measure(spacedText.c_str(), effectiveFontSize, &textWidth, &textHeight);
 
     int padding = 8;
-    int width   = (std::max)(textWidth + padding * 2, 50);
-    int height  = (std::max)(textHeight + padding * 2, 20);
+    int width   = (textWidth + padding * 2 > 50) ? (textWidth + padding * 2) : 50;
+    int height  = (textHeight + padding * 2 > 20) ? (textHeight + padding * 2) : 20;
 
     HDC hdcScreen = GetDC(nullptr);
     if (hdcScreen == nullptr) {
@@ -344,17 +341,11 @@ void DesktopIndicator::Render() {
     auto *pixels      = static_cast<DWORD *>(bits);
     std::fill_n(pixels, totalPixels, clearColor);
 
-    std::wstring          colorStr = m_hasPreview ? m_previewColor : m_textColor;
-    std::vector<COLORREF> renderColors;
-    if (IsGradientColor(colorStr)) {
-        ParseGradientColors(colorStr, renderColors);
-    } else {
-        renderColors.push_back(ParseColorString(colorStr));
-    }
-    int textAreaW = width - padding * 2;
-    int textAreaH = height - padding * 2;
+    std::wstring colorStr  = m_hasPreview ? m_previewColor : m_textColor;
+    int          textAreaW = width - padding * 2;
+    int          textAreaH = height - padding * 2;
     m_renderer->Render(bits, width, height, padding, padding, textAreaW, textAreaH,
-                       spacedText.c_str(), renderColors, effectiveFontSize);
+                       spacedText.c_str(), colorStr, effectiveFontSize);
 
     if (!m_posInitialized) {
         int sw           = GetSystemMetrics(SM_CXSCREEN);
@@ -368,9 +359,9 @@ void DesktopIndicator::Render() {
     blend.SourceConstantAlpha = 255;
     blend.AlphaFormat         = AC_SRC_ALPHA;
 
-    POINT pos  = {m_windowPos.x, m_windowPos.y};
-    SIZE  size = {width, height};
-    POINT src  = {0, 0};
+    POINT pos  = {.x = m_windowPos.x, .y = m_windowPos.y};
+    SIZE  size = {.cx = width, .cy = height};
+    POINT src  = {.x = 0, .y = 0};
 
     UpdateLayeredWindow(m_hwnd, hdcScreen, &pos, &size, hdcMem, &src, 0, &blend, ULW_ALPHA);
 
@@ -450,7 +441,8 @@ LRESULT DesktopIndicator::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             int delta   = GET_WHEEL_DELTA_WPARAM(wp);
             int oldSize = m_fontSize;
             m_fontSize += (delta > 0) ? 4 : -4;
-            m_fontSize = (std::max)(12, (std::min)(300, m_fontSize));
+            m_fontSize = (m_fontSize < 12) ? 12 : (m_fontSize > 300) ? 300
+                                                                     : m_fontSize;
             if (m_fontSize != oldSize) {
                 SaveConfig();
                 if (m_desktopCount > 0) { RebuildText(); }

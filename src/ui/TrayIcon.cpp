@@ -81,9 +81,8 @@ void TrayIcon::BuildMenu() {
     AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hPosMenu), L"显示位置"); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
     AppendMenuW(m_hMenu, MF_SEPARATOR, 0, nullptr);
 
-    HMENU       hColorMenu = CreatePopupMenu();
-    const auto &colors     = GetPredefinedColors();
-    for (UINT i = 0; i < static_cast<UINT>(colors.size()); ++i) {
+    HMENU hColorMenu = CreatePopupMenu();
+    for (UINT i = 0; i < static_cast<UINT>(kPredefinedColors.size()); ++i) {
         MENUITEMINFOW mii = {};
         mii.cbSize        = sizeof(mii);
         mii.fMask         = MIIM_ID | MIIM_FTYPE;
@@ -173,35 +172,34 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
     } else if (cmd >= CMD_POSITION_BASE && cmd < CMD_POSITION_CUSTOM) {
         m_activePositionPreset = static_cast<int>(cmd - CMD_POSITION_BASE);
         m_editModeChecked      = false;
-        if (m_positionCb) {
-            m_positionCb(m_activePositionPreset);
+        if (m_positionFn != nullptr) {
+            m_positionFn(m_activePositionPreset, m_positionCtx);
         }
     } else if (cmd == CMD_POSITION_CUSTOM) {
         m_editModeChecked      = !m_editModeChecked;
         m_activePositionPreset = -1;
-        if (m_editModeCb) {
-            m_editModeCb();
+        if (m_editModeFn != nullptr) {
+            m_editModeFn(m_editModeCtx);
         }
     } else if (cmd == WM_TRAY_SETTINGS) {
-        if (m_settingsCb) {
-            m_settingsCb();
+        if (m_settingsFn != nullptr) {
+            m_settingsFn(m_settingsCtx);
         }
     } else if (cmd == WM_TRAY_ABOUT) {
-        if (m_aboutCb) {
-            m_aboutCb();
+        if (m_aboutFn != nullptr) {
+            m_aboutFn(m_aboutCtx);
         }
-    } else if (cmd >= CMD_COLOR_OPTIONS_BASE && cmd < CMD_COLOR_OPTIONS_BASE + static_cast<UINT>(GetPredefinedColors().size())) {
+    } else if (cmd >= CMD_COLOR_OPTIONS_BASE && cmd < CMD_COLOR_OPTIONS_BASE + static_cast<UINT>(kPredefinedColors.size())) {
         const int index = static_cast<int>(cmd - CMD_COLOR_OPTIONS_BASE);
-        if (m_colorCb) {
-            m_colorCb(GetPredefinedColors()[index]);
+        if (m_colorFn != nullptr) {
+            m_colorFn(kPredefinedColors.at(index), m_colorCtx);
         }
     }
 }
 
 void TrayIcon::DrawColorSwatch(LPDRAWITEMSTRUCT dis) {
-    const int   colorIndex = static_cast<int>(dis->itemID - CMD_COLOR_OPTIONS_BASE);
-    const auto &colors     = GetPredefinedColors();
-    if (colorIndex < 0 || static_cast<size_t>(colorIndex) >= colors.size()) {
+    const int colorIndex = static_cast<int>(dis->itemID - CMD_COLOR_OPTIONS_BASE);
+    if (colorIndex < 0 || static_cast<size_t>(colorIndex) >= kPredefinedColors.size()) {
         return;
     }
 
@@ -234,7 +232,7 @@ void TrayIcon::DrawColorSwatch(LPDRAWITEMSTRUCT dis) {
     cr.bottom -= 2;
     cr.right = cr.left + swatchW;
 
-    DrawSwatchRect(dis->hDC, cr, colors[static_cast<size_t>(colorIndex)]);
+    DrawSwatchRect(dis->hDC, cr, kPredefinedColors.at(colorIndex));
 
     // Number label
     const std::wstring numStr = std::to_wstring(colorIndex + 1);

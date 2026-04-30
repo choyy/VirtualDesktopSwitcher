@@ -6,10 +6,9 @@
 
 #include <shlwapi.h>
 
-#include <algorithm>
-#include <array>
 #include <cstddef>
-#include <span>
+
+#include "util/ColorState.h"
 
 std::wstring FontRenderer::FindSystemFontPath(const std::wstring &fontName) {
     HKEY hKey = nullptr;
@@ -118,15 +117,15 @@ bool FontRenderer::Measure(const wchar_t *text, int fontSize, int *width, int *h
     int   a = 0, d = 0;
     stbtt_GetFontVMetrics(&m_fontInfo, &a, &d, nullptr);
 
-    float x        = 0;
-    auto  textSpan = std::span(text, wcslen(text));
-    for (size_t i = 0; i < textSpan.size(); ++i) {
+    float  x   = 0;
+    size_t len = wcslen(text);
+    for (size_t i = 0; i < len; ++i) {
         int adv = 0, lsb = 0;
-        stbtt_GetCodepointHMetrics(&m_fontInfo, textSpan[i], &adv, &lsb);
+        stbtt_GetCodepointHMetrics(&m_fontInfo, text[i], &adv, &lsb);
         x += static_cast<float>(adv) * sc;
-        if (i + 1 < textSpan.size()) {
-            int ni = stbtt_FindGlyphIndex(&m_fontInfo, textSpan[i + 1]);
-            int ci = stbtt_FindGlyphIndex(&m_fontInfo, textSpan[i]);
+        if (i + 1 < len) {
+            int ni = stbtt_FindGlyphIndex(&m_fontInfo, text[i + 1]);
+            int ci = stbtt_FindGlyphIndex(&m_fontInfo, text[i]);
             if ((ni != 0) && (ci != 0)) {
                 x += static_cast<float>(stbtt_GetGlyphKernAdvance(&m_fontInfo, ci, ni)) * sc;
             }
@@ -140,10 +139,29 @@ bool FontRenderer::Measure(const wchar_t *text, int fontSize, int *width, int *h
 void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
                           int textOffsetX, int textOffsetY,
                           int textAreaW, int textAreaH,
-                          const wchar_t               *text,
-                          const std::vector<COLORREF> &colors, int fontSize) const {
-    if (!m_loaded || bits == nullptr || text == nullptr || colors.empty()) {
+                          const wchar_t      *text,
+                          const std::wstring &colorStr, int fontSize) const {
+    if (!m_loaded || bits == nullptr || text == nullptr) {
         return;
+    }
+
+    std::array<COLORREF, 5> colors{};
+    size_t                  colorCount = 0;
+    size_t                  pos        = colorStr.find(L'_');
+    if (pos != std::wstring::npos) {
+        size_t start = 0;
+        while (start < colorStr.size() && colorCount < 5) {
+            size_t end = colorStr.find(L'_', start);
+            if (end == std::wstring::npos) {
+                colors.at(colorCount++) = ParseColorString(colorStr.substr(start));
+                break;
+            }
+            colors.at(colorCount++) = ParseColorString(colorStr.substr(start, end - start));
+            start                   = end + 1;
+        }
+    } else {
+        colors.at(0) = ParseColorString(colorStr);
+        colorCount   = 1;
     }
 
     float sc = stbtt_ScaleForPixelHeight(&m_fontInfo, static_cast<float>(fontSize));
@@ -159,22 +177,22 @@ void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
     int sx = textOffsetX + (textAreaW - tw) / 2;
     int bl = textOffsetY + (textAreaH - th) / 2 + static_cast<int>(static_cast<float>(a) * sc);
 
-    bool  isGradient = colors.size() > 1;
-    float x          = 0;
+    bool   isGradient = colorCount > 1;
+    float  x          = 0;
+    size_t len        = wcslen(text);
 
-    auto textSpan = std::span(text, wcslen(text));
-    for (size_t i = 0; i < textSpan.size(); ++i) {
+    for (size_t i = 0; i < len; ++i) {
         int adv = 0, lsb = 0;
-        stbtt_GetCodepointHMetrics(&m_fontInfo, textSpan[i], &adv, &lsb);
-        int gi = stbtt_FindGlyphIndex(&m_fontInfo, textSpan[i]);
+        stbtt_GetCodepointHMetrics(&m_fontInfo, text[i], &adv, &lsb);
+        int gi = stbtt_FindGlyphIndex(&m_fontInfo, text[i]);
         if (gi == 0) {
             x += static_cast<float>(adv) * sc;
             continue;
         }
 
         int kern = 0;
-        if (i + 1 < textSpan.size()) {
-            int ni = stbtt_FindGlyphIndex(&m_fontInfo, textSpan[i + 1]);
+        if (i + 1 < len) {
+            int ni = stbtt_FindGlyphIndex(&m_fontInfo, text[i + 1]);
             if (ni != 0) {
                 kern = static_cast<int>(static_cast<float>(stbtt_GetGlyphKernAdvance(&m_fontInfo, gi, ni)) * sc);
             }
@@ -187,7 +205,7 @@ void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
             continue;
         }
 
-        std::span<const unsigned char> bmpSpan(bmp, static_cast<size_t>(cw * ch));
+        auto bmpLen = static_cast<size_t>(cw) * static_cast<size_t>(ch);
 
         int px = sx + static_cast<int>(x) + xo;
         int py = bl + yo;
@@ -202,7 +220,7 @@ void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
                 if (dx < 0 || dx >= bufWidth) {
                     continue;
                 }
-                unsigned char alpha = bmpSpan[r * cw + c];
+                unsigned char alpha = bmp[r * cw + c];
                 if (alpha == 0) {
                     continue;
                 }
@@ -210,8 +228,9 @@ void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
                 int rr = 0, gg = 0, bb = 0;
                 if (isGradient) {
                     float t    = static_cast<float>(dx) / static_cast<float>(bufWidth);
-                    t          = std::clamp(t, 0.0f, 1.0f);
-                    int   segs = static_cast<int>(colors.size()) - 1;
+                    t          = (t < 0.0f) ? 0.0f : (t > 1.0f) ? 1.0f
+                                                                : t;
+                    int   segs = static_cast<int>(colorCount) - 1;
                     float segT = t * static_cast<float>(segs);
                     int   idx  = static_cast<int>(segT);
                     if (idx >= segs) {
@@ -221,17 +240,17 @@ void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
                         segT -= static_cast<float>(idx);
                     }
                     float s = 1.0f - segT;
-                    rr      = static_cast<int>(GetRValue(colors[idx]) * s + GetRValue(colors[idx + 1]) * segT);
-                    gg      = static_cast<int>(GetGValue(colors[idx]) * s + GetGValue(colors[idx + 1]) * segT);
-                    bb      = static_cast<int>(GetBValue(colors[idx]) * s + GetBValue(colors[idx + 1]) * segT);
+                    rr      = static_cast<int>(GetRValue(colors.at(idx)) * s + GetRValue(colors.at(idx + 1)) * segT);
+                    gg      = static_cast<int>(GetGValue(colors.at(idx)) * s + GetGValue(colors.at(idx + 1)) * segT);
+                    bb      = static_cast<int>(GetBValue(colors.at(idx)) * s + GetBValue(colors.at(idx + 1)) * segT);
                 } else {
-                    COLORREF c = colors[0];
+                    COLORREF c = colors.at(0);
                     rr         = GetRValue(c);
                     gg         = GetGValue(c);
                     bb         = GetBValue(c);
                 }
 
-                auto  pixels        = std::span(static_cast<DWORD *>(bits), static_cast<size_t>(bufWidth) * bufHeight);
+                auto *pixels        = static_cast<DWORD *>(bits);
                 auto &pix           = pixels[sy * bufWidth + dx];
                 DWORD existingAlpha = (pix >> 24u) & 0xFFu;
                 if (alpha > existingAlpha) {

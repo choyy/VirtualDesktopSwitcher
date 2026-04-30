@@ -3,7 +3,6 @@
 
 #include <windows.h>
 
-#include <functional>
 #include <string>
 
 class SettingsDialog {
@@ -17,9 +16,9 @@ public:
         bool         accepted    = false;
     };
 
-    using PreviewCallback = std::function<void(const Result &)>;
-
-    static Result Show(HWND parent, const Result &current, PreviewCallback preview = nullptr);
+    static Result Show(HWND parent, const Result &current,
+                       void (*preview)(const Result &, void *) = nullptr,
+                       void *previewCtx                        = nullptr);
 };
 
 #endif

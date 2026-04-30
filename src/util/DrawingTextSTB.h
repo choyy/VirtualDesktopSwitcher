@@ -6,7 +6,6 @@
 #include <windows.h>
 
 #include <string>
-#include <vector>
 
 #include "stb_truetype.h"
 
@@ -26,7 +25,7 @@ public:
     bool Measure(const wchar_t *text, int fontSize, int *width, int *height) const;
     void Render(void *bits, int bufWidth, int bufHeight, int textOffsetX, int textOffsetY,
                 int textAreaW, int textAreaH, const wchar_t *text,
-                const std::vector<COLORREF> &colors, int fontSize) const;
+                const std::wstring &colorStr, int fontSize) const;
 
     [[nodiscard]] bool IsLoaded() const { return m_loaded; }
 

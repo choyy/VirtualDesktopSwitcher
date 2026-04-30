@@ -1,7 +1,9 @@
 #include "VirtualDesktopSwitcher.h"
 
 #include <bit>
-#include <iostream>
+#include <string>
+
+#include "util/Log.h"
 
 namespace {
 
@@ -150,17 +152,13 @@ bool VirtualDesktopSwitcher::TryActivatePreviousWindow(int desktopIndex) {
     }
 
     if (IsWindow(targetHwnd) == FALSE) {
-        std::wcout << L"Previous foreground window on desktop " << desktopIndex
-                   << L" is no longer valid: " << GetWindowTitle(targetHwnd)
-                   << L" (" << targetHwnd << L")\n";
+        Log(L"[DEBUG] Window on desktop " + std::to_wstring(desktopIndex) + L" is invalid: " + GetWindowTitle(targetHwnd));
         m_desktopLastForeground.at(desktopIndex) = nullptr;
         return false;
     }
 
     if (!m_pVDeskHelper->IsWindowOnCurrentDesktop(targetHwnd)) {
-        std::wcout << L"Previous foreground window on desktop " << desktopIndex
-                   << L" is not on current desktop: " << GetWindowTitle(targetHwnd)
-                   << L" (" << targetHwnd << L")\n";
+        Log(L"[DEBUG] Window on desktop " + std::to_wstring(desktopIndex) + L" not on current desktop: " + GetWindowTitle(targetHwnd));
         m_desktopLastForeground.at(desktopIndex) = nullptr;
         return false;
     }
@@ -173,26 +171,21 @@ bool VirtualDesktopSwitcher::TryActivatePreviousWindow(int desktopIndex) {
     Sleep(100);
 
     if (GetForegroundWindow() == targetHwnd) {
-        std::wcout << L"Activating previous foreground window on desktop " << desktopIndex
-                   << L": " << GetWindowTitle(targetHwnd)
-                   << L" (" << targetHwnd << L")\n";
+        Log(L"[DEBUG] Activated previous window on desktop " + std::to_wstring(desktopIndex) + L": " + GetWindowTitle(targetHwnd));
         return true;
     }
 
-    std::wcout << L"Failed to activate previous foreground window on desktop " << desktopIndex
-               << L": " << GetWindowTitle(targetHwnd)
-               << L" (" << targetHwnd << L")\n";
+    Log(L"[DEBUG] Failed to activate previous window on desktop " + std::to_wstring(desktopIndex) + L": " + GetWindowTitle(targetHwnd));
     return false;
 }
 
 void VirtualDesktopSwitcher::ActivateFallbackWindow(int desktopIndex) {
     HWND hwnd = FindTopWindowOnCurrentDesktop(m_pVDeskHelper.get());
     if (hwnd != nullptr) {
-        std::wcout << L"Activating fallback window on desktop " << desktopIndex
-                   << L": " << GetWindowTitle(hwnd) << L" (" << hwnd << L")\n";
+        Log(L"[DEBUG] Activating fallback window on desktop " + std::to_wstring(desktopIndex) + L": " + GetWindowTitle(hwnd));
         ActivateWindow(hwnd);
     } else {
-        std::wcout << L"No window to activate on desktop " << desktopIndex << L'\n';
+        Log(L"[DEBUG] No window to activate on desktop " + std::to_wstring(desktopIndex));
     }
 }
 
@@ -208,7 +201,7 @@ void VirtualDesktopSwitcher::SwitchToDesktop(int index) {
     Sleep(100);
 
     if (index == currentIndex) {
-        std::wcout << L"Switched to same desktop " << index << L", no activation needed.\n";
+        Log(L"[DEBUG] Switched to same desktop " + std::to_wstring(index) + L", no activation needed");
         return;
     }
 
