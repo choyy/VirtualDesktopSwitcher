@@ -1,6 +1,8 @@
 #ifndef VIRTUAL_DESKTOP_SWITCHER_H
 #define VIRTUAL_DESKTOP_SWITCHER_H
-#include "util/VirtualDesktopHelper.h"
+#include "util/Constants.h"
+
+#include <windows.h>
 
 #include <array>
 #include <memory>
@@ -22,17 +24,17 @@ public:
     bool ReinstallHook();
     void SwitchToDesktop(int index);
 
-    void                                         SetWindowHandle(HWND hwnd) { m_hwnd = hwnd; }
-    [[nodiscard]] HWND                           GetWindowHandle() const { return m_hwnd; }
-    [[nodiscard]] int                            GetDesktopCount() const { return m_pVDeskHelper ? m_pVDeskHelper->GetDesktopCount() : 0; }
-    [[nodiscard]] int                            GetCurrentDesktopIndex() const { return m_pVDeskHelper ? m_pVDeskHelper->GetCurrentDesktopIndex() : -1; }
-    [[nodiscard]] std::array<bool, kMaxDesktops> GetDesktopEmptyMask() const { return m_pVDeskHelper ? m_pVDeskHelper->GetDesktopEmptyMask() : std::array<bool, kMaxDesktops>{}; }
+    void SetWindowHandle(HWND hwnd) { m_hwnd = hwnd; }
+
+    [[nodiscard]] int                            GetDesktopCount() const;
+    [[nodiscard]] int                            GetCurrentDesktopIndex() const;
+    [[nodiscard]] std::array<bool, kMaxDesktops> GetDesktopEmptyMask() const;
 
 private:
-    std::unique_ptr<VirtualDesktopHelper> m_pVDeskHelper;
-    HHOOK                                 m_hHook = nullptr;
-    HWND                                  m_hwnd  = nullptr;
-    std::array<HWND, kMaxDesktops>        m_desktopLastForeground{};
+    std::unique_ptr<class VirtualDesktopHelper> m_pVDeskHelper;
+    HHOOK                                       m_hHook = nullptr;
+    HWND                                        m_hwnd  = nullptr;
+    std::array<HWND, kMaxDesktops>              m_desktopLastForeground{};
 
     static VirtualDesktopSwitcher *s_active;
 

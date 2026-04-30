@@ -13,11 +13,6 @@
 
 class FontRenderer;
 
-constexpr UINT WM_OVERLAY_SETCOLOR       = WM_USER + 10;
-constexpr UINT WM_OVERLAY_EDITMODE       = WM_USER + 12;
-constexpr UINT WM_OVERLAY_PREVIEW_COLOR  = WM_USER + 13;
-constexpr UINT WM_OVERLAY_CANCEL_PREVIEW = WM_USER + 14;
-
 class DesktopIndicator {
 public:
     DesktopIndicator();

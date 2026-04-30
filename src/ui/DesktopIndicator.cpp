@@ -464,26 +464,6 @@ LRESULT DesktopIndicator::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         }
         return 0;
 
-    case WM_OVERLAY_SETCOLOR:
-        if (lp != 0) {
-            SetColor(std::bit_cast<const wchar_t *>(lp));
-        }
-        return 0;
-
-    case WM_OVERLAY_EDITMODE:
-        ToggleEditMode();
-        return 0;
-
-    case WM_OVERLAY_PREVIEW_COLOR:
-        if (lp != 0) {
-            SetColorPreview(std::bit_cast<const wchar_t *>(lp));
-        }
-        return 0;
-
-    case WM_OVERLAY_CANCEL_PREVIEW:
-        CancelPreview();
-        return 0;
-
     case WM_DESTROY:
         SaveConfig();
         return 0;

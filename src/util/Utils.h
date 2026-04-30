@@ -3,11 +3,15 @@
 
 #include <windows.h>
 
+inline int CalcScalePercent(int dpi) {
+    return (dpi * 100 + 48) / 96;
+}
+
 inline int GetDpiScale() {
     HDC       hdc = GetDC(nullptr);
     const int dpi = GetDeviceCaps(hdc, LOGPIXELSY);
     ReleaseDC(nullptr, hdc);
-    return (dpi * 100 + 48) / 96;
+    return CalcScalePercent(dpi);
 }
 
 inline int GetWindowDpi(HWND hwnd) {
@@ -18,8 +22,7 @@ inline int GetWindowDpi(HWND hwnd) {
 }
 
 inline int ScaleForDpi(int value, int dpi) {
-    const int scale = (dpi * 100 + 48) / 96;
-    return value * scale / 100;
+    return value * CalcScalePercent(dpi) / 100;
 }
 
 inline HFONT CreateDefaultFont(int pointSize, int dpi, bool bold = false) {

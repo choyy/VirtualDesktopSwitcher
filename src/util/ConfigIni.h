@@ -7,7 +7,7 @@
 
 #include <string>
 
-std::wstring GetConfigPath();
+std::wstring GetAppDataDir();
 std::wstring ReadIniString(const std::wstring &section, const std::wstring &key, const std::wstring &defaultVal);
 int          ReadIniInt(const std::wstring &section, const std::wstring &key, int defaultVal);
 void         WriteIniString(const std::wstring &section, const std::wstring &key, const std::wstring &value);

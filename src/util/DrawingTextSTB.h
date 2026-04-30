@@ -20,14 +20,11 @@ public:
     FontRenderer &operator=(FontRenderer &&)      = delete;
 
     bool Init(const std::wstring &fontName);
-    void Cleanup();
 
     bool Measure(const wchar_t *text, int fontSize, int *width, int *height) const;
     void Render(void *bits, int bufWidth, int bufHeight, int textOffsetX, int textOffsetY,
                 int textAreaW, int textAreaH, const wchar_t *text,
                 const std::wstring &colorStr, int fontSize) const;
-
-    [[nodiscard]] bool IsLoaded() const { return m_loaded; }
 
 private:
     bool           m_loaded = false;
@@ -36,6 +33,7 @@ private:
     HANDLE         m_fontFile    = INVALID_HANDLE_VALUE;
     HANDLE         m_fontMapping = nullptr;
 
+    void                Cleanup();
     static std::wstring FindSystemFontPath(const std::wstring &fontName);
     bool                LoadFontFile(const std::wstring &path);
     void                UnloadFontFile();

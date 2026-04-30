@@ -1,11 +1,13 @@
 #ifndef APPLICATION_H
 #define APPLICATION_H
 
+#include <windows.h>
+
 #include <memory>
 
-#include "VirtualDesktopSwitcher.h"
-#include "ui/DesktopIndicator.h"
-#include "ui/TrayIcon.h"
+class VirtualDesktopSwitcher;
+class TrayIcon;
+class DesktopIndicator;
 
 class Application {
 private:
@@ -19,6 +21,7 @@ private:
     // 窗口过程函数
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     void                    OnSystemResume();
+    void                    SyncDesktopState();
 
 public:
     Application(const Application &)            = delete;
@@ -26,7 +29,7 @@ public:
     Application(Application &&)                 = delete;
     Application &operator=(Application &&)      = delete;
 
-    Application() = default;
+    Application();
     ~Application();
 
     // 初始化应用程序

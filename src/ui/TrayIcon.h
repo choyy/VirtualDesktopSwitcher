@@ -8,11 +8,6 @@
 #include <string>
 
 constexpr UINT WM_TRAYICON                = WM_USER + 2;
-constexpr UINT WM_TRAY_EXIT               = WM_USER + 3;
-constexpr UINT WM_TRAY_TOGGLE_AUTOSTART   = WM_USER + 4;
-constexpr UINT WM_TRAY_EDIT_MODE          = WM_USER + 5;
-constexpr UINT WM_TRAY_SETTINGS           = WM_USER + 6;
-constexpr UINT WM_TRAY_ABOUT              = WM_USER + 7;
 constexpr UINT CMD_COLOR_OPTIONS_BASE     = WM_USER + 100;
 constexpr UINT CMD_POSITION_BASE          = WM_USER + 200;
 constexpr UINT CMD_POSITION_TOP_LEFT      = CMD_POSITION_BASE + 0;

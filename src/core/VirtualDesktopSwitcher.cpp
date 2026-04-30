@@ -4,6 +4,7 @@
 #include <string>
 
 #include "util/Log.h"
+#include "util/VirtualDesktopHelper.h"
 
 namespace {
 
@@ -122,6 +123,18 @@ void VirtualDesktopSwitcher::UninstallHook() {
 bool VirtualDesktopSwitcher::ReinstallHook() {
     UninstallHook();
     return InstallHook();
+}
+
+int VirtualDesktopSwitcher::GetDesktopCount() const {
+    return m_pVDeskHelper ? m_pVDeskHelper->GetDesktopCount() : 0;
+}
+
+int VirtualDesktopSwitcher::GetCurrentDesktopIndex() const {
+    return m_pVDeskHelper ? m_pVDeskHelper->GetCurrentDesktopIndex() : -1;
+}
+
+std::array<bool, kMaxDesktops> VirtualDesktopSwitcher::GetDesktopEmptyMask() const {
+    return m_pVDeskHelper ? m_pVDeskHelper->GetDesktopEmptyMask() : std::array<bool, kMaxDesktops>{};
 }
 
 void VirtualDesktopSwitcher::RecordForeground(int desktopIndex) {

@@ -1,16 +1,14 @@
 #pragma once
 #include <windows.h>
 
-#include <array>
 #include <string>
+
+#include "util/ConfigIni.h"
 
 inline void Log(const std::wstring &msg) {
     static HANDLE h = [] {
-        std::array<wchar_t, MAX_PATH> buf{};
-        GetEnvironmentVariableW(L"LOCALAPPDATA", buf.data(), MAX_PATH);
-        std::wstring p(buf.data());
-        p += L"\\VirtualDesktopSwitcher";
-        CreateDirectoryW(p.c_str(), nullptr);
+        std::wstring p = GetAppDataDir();
+        if (p.empty()) { return INVALID_HANDLE_VALUE; }
         p += L"\\log.txt";
         HANDLE f        = CreateFileW(p.c_str(), GENERIC_READ, FILE_SHARE_READ,
                                       nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);

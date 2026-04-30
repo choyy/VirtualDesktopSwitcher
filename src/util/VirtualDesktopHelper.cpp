@@ -27,11 +27,15 @@ void **ComPtrAsVoid(Microsoft::WRL::ComPtr<T> &ptr) {
 } // namespace
 
 VirtualDesktopHelper::VirtualDesktopHelper() {
-    CoInitialize(nullptr);
+    HRESULT hr = CoInitialize(nullptr);
+    if (FAILED(hr)) {
+        Log(L"[ERROR] CoInitialize failed: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
+        return;
+    }
 
     Microsoft::WRL::ComPtr<IUnknown> immersiveShell;
-    HRESULT                          hr = CoCreateInstance(CLSID_ImmersiveShell, nullptr, CLSCTX_LOCAL_SERVER,
-                                                           IID_IUnknown, ComPtrAsVoid(immersiveShell));
+    hr = CoCreateInstance(CLSID_ImmersiveShell, nullptr, CLSCTX_LOCAL_SERVER,
+                          IID_IUnknown, ComPtrAsVoid(immersiveShell));
     if (FAILED(hr)) {
         Log(L"[ERROR] Failed to create IImmersiveShell: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
         return;

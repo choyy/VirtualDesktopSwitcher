@@ -28,8 +28,6 @@ COLORREF ParseColorString(const std::wstring &colorStr) {
     return RGB(r, g, b);
 }
 
-// kPredefinedColors defined inline in ColorState.h
-
 bool IsGradientColor(const std::wstring &hexColor) {
     return hexColor.find(L'_') != std::wstring::npos;
 }

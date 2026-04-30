@@ -8,6 +8,12 @@
 
 namespace {
 
+constexpr UINT WM_TRAY_EXIT             = WM_USER + 3;
+constexpr UINT WM_TRAY_TOGGLE_AUTOSTART = WM_USER + 4;
+constexpr UINT WM_TRAY_EDIT_MODE        = WM_USER + 5;
+constexpr UINT WM_TRAY_SETTINGS         = WM_USER + 6;
+constexpr UINT WM_TRAY_ABOUT            = WM_USER + 7;
+
 void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
     const size_t usPos = hex.find(L'_');
 

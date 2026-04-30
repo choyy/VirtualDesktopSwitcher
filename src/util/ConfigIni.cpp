@@ -8,13 +8,13 @@
 #include <cstdio>
 
 namespace {
-std::wstring GetOrCreateConfigPath() {
+std::wstring GetOrCreateAppDataDir() {
     static std::wstring path = []() {
         std::array<wchar_t, MAX_PATH> appData{};
         if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appData.data()))) {
             std::wstring p = std::wstring(appData.data()) + L"\\VirtualDesktopSwitcher";
             CreateDirectoryW(p.c_str(), nullptr);
-            return p + L"\\settings.ini";
+            return p;
         }
         return std::wstring();
     }();
@@ -22,35 +22,37 @@ std::wstring GetOrCreateConfigPath() {
 }
 } // namespace
 
-std::wstring GetConfigPath() {
-    return GetOrCreateConfigPath();
+std::wstring GetAppDataDir() {
+    return GetOrCreateAppDataDir();
 }
 
 std::wstring ReadIniString(const std::wstring &section, const std::wstring &key,
                            const std::wstring &defaultVal) {
     std::array<wchar_t, 1024> buf{};
-    DWORD                     ret = GetPrivateProfileStringW(section.c_str(), key.c_str(),
-                                                             defaultVal.c_str(), buf.data(), static_cast<DWORD>(buf.size()),
-                                                             GetOrCreateConfigPath().c_str());
+    std::wstring              path = GetOrCreateAppDataDir() + L"\\settings.ini";
+    DWORD                     ret  = GetPrivateProfileStringW(section.c_str(), key.c_str(),
+                                                              defaultVal.c_str(), buf.data(), static_cast<DWORD>(buf.size()),
+                                                              path.c_str());
     return {buf.data(), ret};
 }
 
 int ReadIniInt(const std::wstring &section, const std::wstring &key, int defaultVal) {
+    std::wstring path = GetOrCreateAppDataDir() + L"\\settings.ini";
     return static_cast<int>(GetPrivateProfileIntW(section.c_str(), key.c_str(),
                                                   defaultVal,
-                                                  GetOrCreateConfigPath().c_str()));
+                                                  path.c_str()));
 }
 
 void WriteIniString(const std::wstring &section, const std::wstring &key,
                     const std::wstring &value) {
-    std::wstring path = GetOrCreateConfigPath();
+    std::wstring path = GetOrCreateAppDataDir() + L"\\settings.ini";
     WritePrivateProfileStringW(section.c_str(), key.c_str(), value.c_str(), path.c_str());
     WritePrivateProfileStringW(nullptr, nullptr, nullptr, path.c_str());
 }
 
 void WriteIniInt(const std::wstring &section, const std::wstring &key, int value) {
     std::wstring valueStr = std::to_wstring(value);
-    std::wstring path     = GetOrCreateConfigPath();
+    std::wstring path     = GetOrCreateAppDataDir() + L"\\settings.ini";
     WritePrivateProfileStringW(section.c_str(), key.c_str(), valueStr.c_str(), path.c_str());
     WritePrivateProfileStringW(nullptr, nullptr, nullptr, path.c_str());
 }

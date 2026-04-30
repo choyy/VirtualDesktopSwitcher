@@ -3,8 +3,11 @@
 #include <bit>
 #include <string>
 
+#include "core/VirtualDesktopSwitcher.h"
 #include "ui/AboutDialog.h"
+#include "ui/DesktopIndicator.h"
 #include "ui/SettingsDialog.h"
+#include "ui/TrayIcon.h"
 #include "util/ColorState.h"
 #include "util/Log.h"
 
@@ -15,6 +18,8 @@ std::wstring BuildTooltipText(int desktopCount, int currentDesktop) {
 }
 
 } // namespace
+
+Application::Application() = default;
 
 Application::~Application() {
     if (m_hwnd != nullptr) {
@@ -60,29 +65,14 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 
     case WM_SWITCH_DESKTOP: {
         pApp->m_switcher->SwitchToDesktop(static_cast<int>(wParam));
-        int desktopCount         = pApp->m_switcher->GetDesktopCount();
-        int currentDesktop       = pApp->m_switcher->GetCurrentDesktopIndex();
-        pApp->m_lastDesktopIndex = currentDesktop;
-
-        pApp->m_pTrayIcon->UpdateTooltip(BuildTooltipText(desktopCount, currentDesktop));
-
-        if (pApp->m_pOverlay) {
-            auto emptyMask = pApp->m_switcher->GetDesktopEmptyMask();
-            pApp->m_pOverlay->SetDesktopState(desktopCount, currentDesktop, emptyMask);
-        }
+        pApp->SyncDesktopState();
         return 0;
     }
 
     case WM_TIMER: {
-        int desktopCount   = pApp->m_switcher->GetDesktopCount();
         int currentDesktop = pApp->m_switcher->GetCurrentDesktopIndex();
         if (currentDesktop != pApp->m_lastDesktopIndex) {
-            pApp->m_lastDesktopIndex = currentDesktop;
-            pApp->m_pTrayIcon->UpdateTooltip(BuildTooltipText(desktopCount, currentDesktop));
-            if (pApp->m_pOverlay) {
-                auto emptyMask = pApp->m_switcher->GetDesktopEmptyMask();
-                pApp->m_pOverlay->SetDesktopState(desktopCount, currentDesktop, emptyMask);
-            }
+            pApp->SyncDesktopState();
         }
         return 0;
     }
@@ -231,19 +221,21 @@ bool Application::Initialize() {
     return true;
 }
 
-void Application::OnSystemResume() {
-    m_switcher->ReinstallHook();
-    m_pTrayIcon->Reinitialize();
-
+void Application::SyncDesktopState() {
     int desktopCount   = m_switcher->GetDesktopCount();
     int currentDesktop = m_switcher->GetCurrentDesktopIndex();
     m_lastDesktopIndex = currentDesktop;
     m_pTrayIcon->UpdateTooltip(BuildTooltipText(desktopCount, currentDesktop));
-
     if (m_pOverlay) {
         auto emptyMask = m_switcher->GetDesktopEmptyMask();
         m_pOverlay->SetDesktopState(desktopCount, currentDesktop, emptyMask);
     }
+}
+
+void Application::OnSystemResume() {
+    m_switcher->ReinstallHook();
+    m_pTrayIcon->Reinitialize();
+    SyncDesktopState();
 }
 
 int Application::Run() {
