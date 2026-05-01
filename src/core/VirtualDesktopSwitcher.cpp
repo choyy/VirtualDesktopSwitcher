@@ -4,41 +4,10 @@
 #include <string>
 
 #include "util/Log.h"
+#include "util/Utils.h"
 #include "util/VirtualDesktopHelper.h"
 
 namespace {
-
-void ActivateWindow(HWND hwnd) {
-    HWND        foreHwnd     = GetForegroundWindow();
-    DWORD       foreThreadId = 0;
-    const DWORD curThreadId  = GetCurrentThreadId();
-    BOOL        attached     = FALSE;
-
-    if (foreHwnd != nullptr) {
-        foreThreadId = GetWindowThreadProcessId(foreHwnd, nullptr);
-        if (foreThreadId != 0 && foreThreadId != curThreadId) {
-            AttachThreadInput(curThreadId, foreThreadId, TRUE);
-            attached = TRUE;
-        }
-    }
-
-    BringWindowToTop(hwnd);
-    SetForegroundWindow(hwnd);
-
-    if (attached != FALSE) {
-        AttachThreadInput(curThreadId, foreThreadId, FALSE);
-    }
-}
-
-std::wstring GetWindowTitle(HWND hwnd) {
-    std::wstring buffer(256, L'\0');
-    const int    length = GetWindowTextW(hwnd, buffer.data(), static_cast<int>(buffer.size()));
-    if (length <= 0) {
-        return {};
-    }
-    buffer.resize(length);
-    return buffer;
-}
 
 struct EnumContext {
     const VirtualDesktopHelper *pHelper;
@@ -138,7 +107,7 @@ std::array<bool, kMaxDesktops> VirtualDesktopSwitcher::GetDesktopEmptyMask() con
 }
 
 void VirtualDesktopSwitcher::RecordForeground(int desktopIndex) {
-    if (desktopIndex < 0 || desktopIndex >= kMaxDesktops) {
+    if (desktopIndex < 0 || desktopIndex >= static_cast<int>(kMaxDesktops)) {
         return;
     }
 
@@ -155,7 +124,7 @@ void VirtualDesktopSwitcher::RecordForeground(int desktopIndex) {
 }
 
 bool VirtualDesktopSwitcher::TryActivatePreviousWindow(int desktopIndex) {
-    if (desktopIndex < 0 || desktopIndex >= kMaxDesktops) {
+    if (desktopIndex < 0 || desktopIndex >= static_cast<int>(kMaxDesktops)) {
         return false;
     }
 

@@ -1,7 +1,6 @@
 // Adapted from Catime (Apache 2.0)
 // Original: https://github.com/vladelaina/Catime
-#ifndef COLOR_STATE_H
-#define COLOR_STATE_H
+#pragma once
 
 #include <windows.h>
 
@@ -41,7 +40,3 @@ inline constexpr std::array<const wchar_t *, 29> kPredefinedColors = {
     L"#30CFD0_#330867",
     L"#FFA745_#FE869F_#EF7AC8_#A083ED_#43AEFF",
 };
-
-bool IsGradientColor(const std::wstring &hexColor);
-
-#endif

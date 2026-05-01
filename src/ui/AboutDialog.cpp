@@ -7,6 +7,8 @@
 #include <cstdlib>
 #include <string>
 
+#include "util/Utils.h"
+
 namespace {
 
 constexpr int IDC_AUTO_CHECK    = 201;
@@ -17,16 +19,6 @@ struct AboutData {
     HWND                hHomepage    = nullptr;
     RECT                homepageRect = {};
 };
-
-std::wstring Utf8ToWide(const std::string &str) {
-    if (str.empty()) { return {}; }
-    const int len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
-    if (len <= 0) { return {}; }
-    std::wstring result(len, L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, result.data(), len);
-    result.resize(len - 1);
-    return result;
-}
 
 bool IsNewerVersion(const std::string &remote, const std::string &local) {
     size_t r_pos = 0, l_pos = 0;
@@ -57,19 +49,17 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         auto *hInst = std::bit_cast<HINSTANCE>(GetWindowLongPtrW(GetParent(hwnd), GWLP_HINSTANCE));
 
-        HICON hIcon = static_cast<HICON>(LoadImageW(hInst, MAKEINTRESOURCEW(101), IMAGE_ICON, 200, 200, LR_DEFAULTCOLOR));
+        auto *hIcon = static_cast<HICON>(LoadImageW(hInst, MAKEINTRESOURCEW(101), IMAGE_ICON, 200, 200, LR_DEFAULTCOLOR));
         if (hIcon != nullptr) {
             SendDlgItemMessageW(hwnd, 104, STM_SETICON, std::bit_cast<WPARAM>(hIcon), 0);
-            SetPropW(hwnd, L"IC", static_cast<HANDLE>(hIcon));
         }
 
-        HFONT hBoldFont = CreateFontW(-MulDiv(14, GetDpiForWindow(hwnd), 72), 0, 0, 0, FW_BOLD,
+        HFONT hBoldFont = CreateFontW(-MulDiv(14, static_cast<int>(GetDpiForWindow(hwnd)), 72), 0, 0, 0, FW_NORMAL,
                                       FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                                       OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                       CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         if (hBoldFont != nullptr) {
             SendDlgItemMessageW(hwnd, 105, WM_SETFONT, std::bit_cast<WPARAM>(hBoldFont), TRUE);
-            SetPropW(hwnd, L"AB", hBoldFont);
         }
 
         std::wstring verStr = L"版本：" + Utf8ToWide(APP_VERSION);
@@ -103,12 +93,6 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 data->result.autoCheckUpdates = SendDlgItemMessageW(hwnd, IDC_AUTO_CHECK, BM_GETCHECK, 0, 0) == BST_CHECKED;
                 data->result.accepted         = TRUE;
             }
-            if (HFONT hFont = static_cast<HFONT>(RemovePropW(hwnd, L"AB"))) {
-                DeleteObject(hFont);
-            }
-            if (HICON hIC = static_cast<HICON>(RemovePropW(hwnd, L"IC"))) {
-                DestroyIcon(hIC);
-            }
             EndDialog(hwnd, id);
             return TRUE;
         }
@@ -119,11 +103,11 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return std::bit_cast<INT_PTR>(GetSysColorBrush(COLOR_WINDOW));
 
     case WM_CTLCOLORSTATIC: {
-        SetBkMode(std::bit_cast<HDC>(wp), TRANSPARENT);
         if (data != nullptr && data->hHomepage != nullptr && std::bit_cast<HWND>(lp) == data->hHomepage) {
             SetTextColor(std::bit_cast<HDC>(wp), RGB(0, 102, 204));
+            SetBkMode(std::bit_cast<HDC>(wp), TRANSPARENT);
         }
-        return std::bit_cast<INT_PTR>(GetStockObject(NULL_BRUSH));
+        return std::bit_cast<INT_PTR>(GetSysColorBrush(COLOR_WINDOW));
     }
 
     case WM_SETCURSOR: {
@@ -154,19 +138,9 @@ AboutDialog::VersionCheckResult AboutDialog::CheckForNewerVersion() {
 
     std::wstring dest = std::wstring(tempPath.data()) + L"vds_version.json";
 
-    using URLDownloadToFileW_t = HRESULT(WINAPI *)(LPUNKNOWN, LPCWSTR, LPCWSTR, DWORD, LPUNKNOWN);
-    HMODULE hUrlmon            = LoadLibraryW(L"urlmon.dll");
-    if (hUrlmon == nullptr) { return result; }
-
-    auto pDownload = std::bit_cast<URLDownloadToFileW_t>(GetProcAddress(hUrlmon, "URLDownloadToFileW"));
-    if (pDownload == nullptr) {
-        FreeLibrary(hUrlmon);
+    if (!DownloadFile(L"https://api.github.com/repos/choyy/VirtualDesktopSwitcher/releases/latest", dest)) {
         return result;
     }
-
-    HRESULT hr = pDownload(nullptr, L"https://api.github.com/repos/choyy/VirtualDesktopSwitcher/releases/latest", dest.c_str(), 0, nullptr);
-    FreeLibrary(hUrlmon);
-    if (FAILED(hr)) { return result; }
 
     HANDLE hFile = CreateFileW(dest.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile == INVALID_HANDLE_VALUE) {
@@ -209,39 +183,17 @@ void AboutDialog::DownloadUpdate(HWND parent, const std::string &url) {
     std::wstring                  wideUrl = Utf8ToWide(url);
     std::array<wchar_t, MAX_PATH> userProfile{};
     if (GetEnvironmentVariableW(L"USERPROFILE", userProfile.data(), static_cast<DWORD>(userProfile.size())) == 0) {
-        if (MessageBoxW(parent, L"下载失败，是否前往发布页手动下载？", L"错误", MB_YESNO | MB_ICONERROR) == IDYES) {
-            ShellExecuteW(parent, L"open", L"https://github.com/choyy/VirtualDesktopSwitcher/releases", nullptr, nullptr, SW_SHOW);
-        }
+        ShowDownloadFailedDialog(parent);
         return;
     }
 
     std::wstring dest = std::wstring(userProfile.data()) + L"\\Desktop\\VirtualDesktopSwitcher.exe";
 
-    using URLDownloadToFileW_t = HRESULT(WINAPI *)(LPUNKNOWN, LPCWSTR, LPCWSTR, DWORD, LPUNKNOWN);
-    HMODULE hUrlmon            = LoadLibraryW(L"urlmon.dll");
-    if (hUrlmon == nullptr) {
-        if (MessageBoxW(parent, L"下载失败，是否前往发布页手动下载？", L"错误", MB_YESNO | MB_ICONERROR) == IDYES) {
-            ShellExecuteW(parent, L"open", L"https://github.com/choyy/VirtualDesktopSwitcher/releases", nullptr, nullptr, SW_SHOW);
-        }
-        return;
-    }
-
-    auto pDownload = std::bit_cast<URLDownloadToFileW_t>(GetProcAddress(hUrlmon, "URLDownloadToFileW"));
-    if (pDownload == nullptr) {
-        FreeLibrary(hUrlmon);
-        return;
-    }
-
-    if (SUCCEEDED(pDownload(nullptr, wideUrl.c_str(), dest.c_str(), 0, nullptr))) {
+    if (DownloadFile(wideUrl, dest)) {
         MessageBoxW(parent, (L"已下载到：\n" + dest).c_str(), L"下载完成", MB_OK | MB_ICONINFORMATION);
     } else {
-        FreeLibrary(hUrlmon);
-        if (MessageBoxW(parent, L"下载失败，是否前往发布页手动下载？", L"错误", MB_YESNO | MB_ICONERROR) == IDYES) {
-            ShellExecuteW(parent, L"open", L"https://github.com/choyy/VirtualDesktopSwitcher/releases", nullptr, nullptr, SW_SHOW);
-        }
-        return;
+        ShowDownloadFailedDialog(parent);
     }
-    FreeLibrary(hUrlmon);
 }
 
 void AboutDialog::CheckAndDownload(HWND parent, bool silentIfUpToDate) {

@@ -17,5 +17,5 @@ int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR /
     if (!app.Initialize()) {
         return -1;
     }
-    return app.Run();
+    return Application::Run();
 }

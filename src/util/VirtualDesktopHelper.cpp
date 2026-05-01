@@ -9,6 +9,12 @@
 #include "util/Log.h"
 
 namespace {
+
+template <typename T>
+void **ComPtrAsVoid(Microsoft::WRL::ComPtr<T> &ptr) {
+    return reinterpret_cast<void **>(ptr.ReleaseAndGetAddressOf()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+}
+
 // CLSID and IID definitions
 const CLSID CLSID_ImmersiveShell                       = {.Data1 = 0xC2F03A33, .Data2 = 0x21F5, .Data3 = 0x47FA, .Data4 = {0xB4, 0xBB, 0x15, 0x63, 0x62, 0xA2, 0xF2, 0x39}};
 const CLSID CLSID_VirtualDesktopManager                = {.Data1 = 0xaa509086, .Data2 = 0x5ca9, .Data3 = 0x4c25, .Data4 = {0x8f, 0x95, 0x58, 0x9d, 0x3c, 0x07, 0xb4, 0x8a}};
@@ -19,23 +25,17 @@ const IID   IID_IVirtualDesktopManagerInternal_Win11   = {.Data1 = 0x53F5CA0B, .
 const IID   IID_IVirtualDesktopManagerInternal_Service = {.Data1 = 0xC5E0CDCA, .Data2 = 0x7B6E, .Data3 = 0x41B2, .Data4 = {0x9F, 0xC4, 0xD9, 0x39, 0x75, 0xCC, 0x46, 0x7B}};
 const IID   IID_IVirtualDesktopManagerInternal_Win10   = {.Data1 = 0xF31574D6, .Data2 = 0xB682, .Data3 = 0x4CDC, .Data4 = {0xBD, 0x56, 0x18, 0x27, 0x86, 0x0A, 0xBE, 0xC6}};
 const IID   IID_IVirtualDesktop_Win10                  = {.Data1 = 0xFF72FFDD, .Data2 = 0xBE7E, .Data3 = 0x43FC, .Data4 = {0x9C, 0x03, 0xAD, 0x81, 0x68, 0x1E, 0x88, 0xE4}};
-
-template <typename T>
-void **ComPtrAsVoid(Microsoft::WRL::ComPtr<T> &ptr) {
-    return reinterpret_cast<void **>(ptr.ReleaseAndGetAddressOf()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-}
 } // namespace
 
 VirtualDesktopHelper::VirtualDesktopHelper() {
-    HRESULT hr = CoInitialize(nullptr);
-    if (FAILED(hr)) {
-        Log(L"[ERROR] CoInitialize failed: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
+    if (!m_comInit.Succeeded()) {
+        Log(L"[ERROR] CoInitialize failed: 0x" + std::to_wstring(static_cast<uint32_t>(m_comInit.Result())));
         return;
     }
 
     Microsoft::WRL::ComPtr<IUnknown> immersiveShell;
-    hr = CoCreateInstance(CLSID_ImmersiveShell, nullptr, CLSCTX_LOCAL_SERVER,
-                          IID_IUnknown, ComPtrAsVoid(immersiveShell));
+    HRESULT                          hr = CoCreateInstance(CLSID_ImmersiveShell, nullptr, CLSCTX_LOCAL_SERVER,
+                                                           IID_IUnknown, ComPtrAsVoid(immersiveShell));
     if (FAILED(hr)) {
         Log(L"[ERROR] Failed to create IImmersiveShell: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
         return;

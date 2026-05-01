@@ -27,7 +27,3 @@ COLORREF ParseColorString(const std::wstring &colorStr) {
     b = static_cast<int>(wcstoul(s, &next, 10));
     return RGB(r, g, b);
 }
-
-bool IsGradientColor(const std::wstring &hexColor) {
-    return hexColor.find(L'_') != std::wstring::npos;
-}

@@ -1,12 +1,11 @@
-#ifndef VIRTUAL_DESKTOP_HELPER_H
-#define VIRTUAL_DESKTOP_HELPER_H
+#pragma once
 
 #include <ObjectArray.h>
 #include <wrl/client.h>
 
 #include <array>
 
-#include "util/Constants.h"
+#include "util/Utils.h"
 
 // IVirtualDesktop接口定义
 MIDL_INTERFACE("3F07F4BE-B107-441A-AF0F-39D82529072C")
@@ -52,6 +51,7 @@ public:
 
 class VirtualDesktopHelper {
 private:
+    ComInitializer                                         m_comInit;
     Microsoft::WRL::ComPtr<IVirtualDesktopManagerInternal> virtualDesktopManagerInternal;
     Microsoft::WRL::ComPtr<IVirtualDesktopManager>         virtualDesktopManager;
     Microsoft::WRL::ComPtr<IApplicationViewCollection>     viewCollection;
@@ -67,7 +67,7 @@ public:
     VirtualDesktopHelper &operator=(VirtualDesktopHelper &&)      = delete;
 
     VirtualDesktopHelper();
-    ~VirtualDesktopHelper() { CoUninitialize(); }
+    ~VirtualDesktopHelper() = default;
 
     [[nodiscard]] int                            GetDesktopCount() const;
     [[nodiscard]] int                            GetCurrentDesktopIndex() const;
@@ -75,5 +75,3 @@ public:
     [[nodiscard]] std::array<bool, kMaxDesktops> GetDesktopEmptyMask() const;
     void                                         SwitchToDesktop(int index) const;
 };
-
-#endif // VIRTUAL_DESKTOP_HELPER_H

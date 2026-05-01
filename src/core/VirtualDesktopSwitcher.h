@@ -1,11 +1,11 @@
-#ifndef VIRTUAL_DESKTOP_SWITCHER_H
-#define VIRTUAL_DESKTOP_SWITCHER_H
-#include "util/Constants.h"
+#pragma once
 
 #include <windows.h>
 
 #include <array>
 #include <memory>
+
+#include "util/Utils.h"
 
 constexpr UINT WM_SWITCH_DESKTOP = WM_USER + 1;
 
@@ -44,5 +44,3 @@ private:
     [[nodiscard]] bool TryActivatePreviousWindow(int desktopIndex);
     void               ActivateFallbackWindow(int desktopIndex);
 };
-
-#endif

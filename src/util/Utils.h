@@ -1,7 +1,10 @@
-#ifndef UTILS_H
-#define UTILS_H
+#pragma once
 
 #include <windows.h>
+
+#include <string>
+
+constexpr size_t kMaxDesktops = 9;
 
 inline int CalcScalePercent(int dpi) {
     return (dpi * 100 + 48) / 96;
@@ -52,24 +55,30 @@ inline void CleanupWindowFont(HWND hwnd, const wchar_t *propName) {
     RemovePropW(hwnd, propName);
 }
 
-inline void CenterWindow(HWND hwnd) {
-    const int sw = GetSystemMetrics(SM_CXSCREEN);
-    const int sh = GetSystemMetrics(SM_CYSCREEN);
-    RECT      r;
-    GetWindowRect(hwnd, &r);
-    SetWindowPos(hwnd, nullptr,
-                 (sw - (r.right - r.left)) / 2,
-                 (sh - (r.bottom - r.top)) / 2,
-                 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-}
+// Window activation helper
+void         ActivateWindow(HWND hwnd);
+std::wstring GetWindowTitle(HWND hwnd);
 
-inline int RunModalLoop(HWND hwnd) {
-    MSG msg;
-    while ((IsWindow(hwnd) != 0) && GetMessage(&msg, nullptr, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
-    return 0;
-}
+// String conversion
+std::wstring Utf8ToWide(const std::string &str);
 
-#endif
+// COM RAII wrapper
+class ComInitializer {
+public:
+    ComInitializer() : m_hr(CoInitialize(nullptr)) {}
+    ~ComInitializer() { CoUninitialize(); }
+
+    ComInitializer(const ComInitializer &)             = delete;
+    ComInitializer &operator=(const ComInitializer &)  = delete;
+    ComInitializer(ComInitializer &&)                  = delete;
+    ComInitializer       &operator=(ComInitializer &&) = delete;
+    [[nodiscard]] bool    Succeeded() const { return SUCCEEDED(m_hr); }
+    [[nodiscard]] HRESULT Result() const { return m_hr; }
+
+private:
+    HRESULT m_hr;
+};
+
+// Network download helpers
+bool DownloadFile(const std::wstring &url, const std::wstring &dest);
+void ShowDownloadFailedDialog(HWND parent);

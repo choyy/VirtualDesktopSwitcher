@@ -1,7 +1,6 @@
 // Contains code adapted from Catime (Apache 2.0)
 // Original: https://github.com/vladelaina/Catime
-#ifndef DESKTOP_INDICATOR_H
-#define DESKTOP_INDICATOR_H
+#pragma once
 
 #include <windows.h>
 
@@ -9,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "util/Constants.h"
+#include "util/Utils.h"
 
 class FontRenderer;
 
@@ -83,5 +82,3 @@ private:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
     LRESULT                 HandleMessage(UINT msg, WPARAM wp, LPARAM lp);
 };
-
-#endif

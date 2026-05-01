@@ -261,12 +261,8 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 
     case WM_CTLCOLORDLG:
+    case WM_CTLCOLORSTATIC:
         return std::bit_cast<INT_PTR>(GetSysColorBrush(COLOR_WINDOW));
-
-    case WM_CTLCOLORSTATIC: {
-        SetBkMode(std::bit_cast<HDC>(wp), TRANSPARENT);
-        return std::bit_cast<INT_PTR>(GetStockObject(NULL_BRUSH));
-    }
     default: break;
     }
     return FALSE;

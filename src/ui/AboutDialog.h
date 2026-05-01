@@ -1,26 +1,24 @@
-#ifndef ABOUT_DIALOG_H
-#define ABOUT_DIALOG_H
+#pragma once
 
 #include <windows.h>
 
 #include <string>
 
-class AboutDialog {
-public:
-    struct Result {
-        bool autoCheckUpdates = false;
-        bool accepted         = false;
-    };
+namespace AboutDialog {
 
-    struct VersionCheckResult {
-        bool        hasUpdate = false;
-        std::string downloadUrl;
-    };
-
-    static VersionCheckResult CheckForNewerVersion();
-    static Result             Show(HWND parent, bool currentAutoCheck);
-    static void               DownloadUpdate(HWND parent, const std::string &url);
-    static void               CheckAndDownload(HWND parent, bool silentIfUpToDate = false);
+struct Result {
+    bool autoCheckUpdates = false;
+    bool accepted         = false;
 };
 
-#endif
+struct VersionCheckResult {
+    bool        hasUpdate = false;
+    std::string downloadUrl;
+};
+
+VersionCheckResult CheckForNewerVersion();
+Result             Show(HWND parent, bool currentAutoCheck);
+void               DownloadUpdate(HWND parent, const std::string &url);
+void               CheckAndDownload(HWND parent, bool silentIfUpToDate = false);
+
+} // namespace AboutDialog

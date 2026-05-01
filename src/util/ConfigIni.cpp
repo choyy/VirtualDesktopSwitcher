@@ -20,6 +20,11 @@ std::wstring GetOrCreateAppDataDir() {
     }();
     return path;
 }
+
+const std::wstring &GetSettingsPath() {
+    static std::wstring path = GetOrCreateAppDataDir() + L"\\settings.ini";
+    return path;
+}
 } // namespace
 
 std::wstring GetAppDataDir() {
@@ -29,7 +34,7 @@ std::wstring GetAppDataDir() {
 std::wstring ReadIniString(const std::wstring &section, const std::wstring &key,
                            const std::wstring &defaultVal) {
     std::array<wchar_t, 1024> buf{};
-    std::wstring              path = GetOrCreateAppDataDir() + L"\\settings.ini";
+    const std::wstring       &path = GetSettingsPath();
     DWORD                     ret  = GetPrivateProfileStringW(section.c_str(), key.c_str(),
                                                               defaultVal.c_str(), buf.data(), static_cast<DWORD>(buf.size()),
                                                               path.c_str());
@@ -37,7 +42,7 @@ std::wstring ReadIniString(const std::wstring &section, const std::wstring &key,
 }
 
 int ReadIniInt(const std::wstring &section, const std::wstring &key, int defaultVal) {
-    std::wstring path = GetOrCreateAppDataDir() + L"\\settings.ini";
+    const std::wstring &path = GetSettingsPath();
     return static_cast<int>(GetPrivateProfileIntW(section.c_str(), key.c_str(),
                                                   defaultVal,
                                                   path.c_str()));
@@ -45,14 +50,14 @@ int ReadIniInt(const std::wstring &section, const std::wstring &key, int default
 
 void WriteIniString(const std::wstring &section, const std::wstring &key,
                     const std::wstring &value) {
-    std::wstring path = GetOrCreateAppDataDir() + L"\\settings.ini";
+    const std::wstring &path = GetSettingsPath();
     WritePrivateProfileStringW(section.c_str(), key.c_str(), value.c_str(), path.c_str());
     WritePrivateProfileStringW(nullptr, nullptr, nullptr, path.c_str());
 }
 
 void WriteIniInt(const std::wstring &section, const std::wstring &key, int value) {
-    std::wstring valueStr = std::to_wstring(value);
-    std::wstring path     = GetOrCreateAppDataDir() + L"\\settings.ini";
+    std::wstring        valueStr = std::to_wstring(value);
+    const std::wstring &path     = GetSettingsPath();
     WritePrivateProfileStringW(section.c_str(), key.c_str(), valueStr.c_str(), path.c_str());
     WritePrivateProfileStringW(nullptr, nullptr, nullptr, path.c_str());
 }
