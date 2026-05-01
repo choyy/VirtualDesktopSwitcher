@@ -13,7 +13,7 @@ target("VirtualDesktopSwitcher")
     -- set_exceptions("no-cxx")
     set_exceptions("none")
     add_includedirs("src")
-    add_files("src/**.cpp", "res/*.manifest", "res/icon.rc")
+    add_files("src/**.cpp", "res/*.manifest", "res/*.rc")
     add_syslinks("shell32", "user32", "gdi32", "advapi32", "comctl32", "ole32")
     add_ldflags("/SUBSYSTEM:WINDOWS")
 

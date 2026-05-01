@@ -1,0 +1,30 @@
+﻿#include <windows.h>
+
+#define IDC_STATIC      (-1)
+
+#define IDD_ABOUT           1000
+
+#define IDC_HOMEPAGE        102
+#define IDC_VERSION_TEXT    103
+#define IDC_ABOUT_ICON      104
+#define IDC_ABOUT_TITLE     105
+
+#define IDC_AUTO_CHECK      201
+#define IDC_CHECK_UPDATES   202
+
+IDD_ABOUT DIALOGEX 0, 0, 270, 110
+STYLE    DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION  "关于 虚拟桌面切换器"
+FONT     9, "Segoe UI", 400, 0, 0
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+BEGIN
+    ICON          101,           IDC_ABOUT_ICON,   12, 12, 44, 48
+    LTEXT         "虚拟桌面切换器", IDC_ABOUT_TITLE,  84, 14, 160, 18
+    LTEXT         "主页：",       IDC_STATIC,       84, 36, 24,  10
+    LTEXT         "github.com/choyy/VirtualDesktopSwitcher", IDC_HOMEPAGE, 110, 36, 140, 10, 0x100
+    LTEXT         "",            IDC_VERSION_TEXT, 84, 50, 80,  10
+    CONTROL       "自动检查更新",  IDC_AUTO_CHECK,   "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 160, 48, 100, 12
+    PUSHBUTTON    "检查更新",     IDC_CHECK_UPDATES, 50,  82, 75,  15
+    DEFPUSHBUTTON "关闭",         IDCANCEL,          145, 82, 75,  15
+END
+
