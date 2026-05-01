@@ -4,9 +4,14 @@
 
 #include <memory>
 
+#include "ui/DesktopIndicator.h"
+
 class VirtualDesktopSwitcher;
 class TrayIcon;
-class DesktopIndicator;
+
+namespace SettingsDialog {
+struct Result;
+} // namespace SettingsDialog
 
 class Application {
 private:
@@ -14,6 +19,7 @@ private:
     std::unique_ptr<VirtualDesktopSwitcher> m_switcher;
     std::unique_ptr<TrayIcon>               m_pTrayIcon;
     std::unique_ptr<DesktopIndicator>       m_pOverlay;
+    IndicatorConfig                         m_indicatorCfg;
     int                                     m_lastDesktopIndex = -1;
     bool                                    m_autoCheckUpdates = true;
     UINT                                    m_uTaskbarCreated  = 0;
@@ -27,6 +33,7 @@ private:
     void                    OnDesktopSwitch(WPARAM wParam);
     void                    OnTimerTick();
     static void             OnDestroy(HWND hwnd);
+    void                    ApplySettingsPreview(const struct SettingsDialog::Result &r);
 
 public:
     Application(const Application &)            = delete;

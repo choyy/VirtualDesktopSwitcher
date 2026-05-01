@@ -167,6 +167,7 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         FillCombo(GetDlgItem(hwnd, IDC_FONT), kFontList.data(), kFontList.size(), data->result.fontName, true, false);
 
         SendDlgItemMessageW(hwnd, IDC_SPIN, UDM_SETRANGE, 0, MAKELPARAM(100, 0));
+        SendDlgItemMessageW(hwnd, IDC_SPIN, UDM_SETPOS, 0, data->result.charSpacing);
         return TRUE;
     }
 

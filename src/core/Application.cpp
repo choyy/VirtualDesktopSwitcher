@@ -5,7 +5,6 @@
 #include "core/UpdateChecker.h"
 #include "core/VirtualDesktopSwitcher.h"
 #include "ui/AboutDialog.h"
-#include "ui/DesktopIndicator.h"
 #include "ui/SettingsDialog.h"
 #include "ui/TrayIcon.h"
 #include "util/ConfigIni.h"
@@ -98,15 +97,26 @@ void Application::OnDesktopSwitch(WPARAM wParam) {
 }
 
 void Application::OnTimerTick() {
-    int currentDesktop = m_switcher->GetCurrentDesktopIndex();
-    if (currentDesktop != m_lastDesktopIndex) {
-        SyncDesktopState();
-    }
+    SyncDesktopState();
 }
 
 void Application::OnDestroy(HWND hwnd) {
     KillTimer(hwnd, 1);
     PostQuitMessage(0);
+}
+
+void Application::ApplySettingsPreview(const SettingsDialog::Result &r) {
+    if (m_pOverlay == nullptr) { return; }
+    m_indicatorCfg.currentSymbol = r.currentSymbol;
+    m_indicatorCfg.otherSymbol   = r.otherSymbol;
+    m_indicatorCfg.emptySymbol   = r.emptySymbol;
+    m_indicatorCfg.fontName      = r.fontName;
+    m_indicatorCfg.charSpacing   = r.charSpacing;
+    m_pOverlay->SetCurrentSymbol(r.currentSymbol);
+    m_pOverlay->SetOtherSymbol(r.otherSymbol);
+    m_pOverlay->SetEmptySymbol(r.emptySymbol);
+    m_pOverlay->SetFontName(r.fontName);
+    m_pOverlay->SetCharSpacing(r.charSpacing);
 }
 
 bool Application::Initialize() {
@@ -138,12 +148,17 @@ bool Application::Initialize() {
 
     m_autoCheckUpdates = ReadIniInt(L"General", L"AutoCheckUpdates", 1) != 0;
 
-    // Load saved config first (DesktopIndicator constructor calls LoadConfig)
+    m_indicatorCfg.LoadFromIni();
+
     m_pOverlay = std::make_unique<DesktopIndicator>();
+    m_pOverlay->SetConfig(&m_indicatorCfg);
+    m_pOverlay->SetOnConfigChanged([this]() {
+        m_indicatorCfg.SaveToIni();
+    });
 
     // Initialize tray icon with saved preset
     m_pTrayIcon = std::make_unique<TrayIcon>();
-    m_pTrayIcon->SetActivePositionPreset(m_pOverlay->GetPositionPreset());
+    m_pTrayIcon->SetActivePositionPreset(m_indicatorCfg.positionPreset);
     if (!m_pTrayIcon->Initialize(m_hwnd, hInst)) {
         Log(L"[ERROR] Failed to initialize tray icon");
         return false;
@@ -166,36 +181,36 @@ bool Application::Initialize() {
 
     // Set up tray icon callbacks
     m_pTrayIcon->SetColorCallback([this](const std::wstring &hex) {
-        if (m_pOverlay) { m_pOverlay->SetColor(hex); }
+        if (m_pOverlay) {
+            m_pOverlay->SetColor(hex);
+            m_indicatorCfg.SaveToIni();
+        }
     });
     m_pTrayIcon->SetEditModeCallback([this]() {
         if (m_pOverlay) { m_pOverlay->ToggleEditMode(); }
     });
     m_pTrayIcon->SetPositionCallback([this](int preset) {
-        if (m_pOverlay) { m_pOverlay->SetPositionPreset(preset); }
+        if (m_pOverlay) {
+            m_pOverlay->SetPositionPreset(preset);
+            m_indicatorCfg.SaveToIni();
+        }
     });
     m_pTrayIcon->SetSettingsCallback([this]() {
         if (m_pOverlay == nullptr) { return; }
-        SettingsDialog::Result cur = {
-            .currentSymbol = m_pOverlay->GetCurrentSymbol(),
-            .otherSymbol   = m_pOverlay->GetOtherSymbol(),
-            .emptySymbol   = m_pOverlay->GetEmptySymbol(),
-            .fontName      = m_pOverlay->GetFontName(),
-            .charSpacing   = m_pOverlay->GetCharSpacing()};
 
-        SettingsDialog::Result res = SettingsDialog::Show(m_hwnd, cur, [](const SettingsDialog::Result &preview, void *ctx2) {
-                auto *app2 = static_cast<Application *>(ctx2);
-                app2->m_pOverlay->SetCurrentSymbol(preview.currentSymbol);
-                app2->m_pOverlay->SetOtherSymbol(preview.otherSymbol);
-                app2->m_pOverlay->SetEmptySymbol(preview.emptySymbol);
-                app2->m_pOverlay->SetFontName(preview.fontName);
-                app2->m_pOverlay->SetCharSpacing(preview.charSpacing); }, this);
+        SettingsDialog::Result cur = {
+            .currentSymbol = m_indicatorCfg.currentSymbol,
+            .otherSymbol   = m_indicatorCfg.otherSymbol,
+            .emptySymbol   = m_indicatorCfg.emptySymbol,
+            .fontName      = m_indicatorCfg.fontName,
+            .charSpacing   = m_indicatorCfg.charSpacing};
+
+        SettingsDialog::Result res = SettingsDialog::Show(m_hwnd, cur, [](const SettingsDialog::Result &preview, void *ctx) { static_cast<Application *>(ctx)->ApplySettingsPreview(preview); }, this);
+
         if (res.accepted) {
-            m_pOverlay->SetCurrentSymbol(res.currentSymbol);
-            m_pOverlay->SetOtherSymbol(res.otherSymbol);
-            m_pOverlay->SetEmptySymbol(res.emptySymbol);
-            m_pOverlay->SetFontName(res.fontName);
-            m_pOverlay->SetCharSpacing(res.charSpacing);
+            m_indicatorCfg.SaveToIni();
+        } else {
+            ApplySettingsPreview(cur);
         }
     });
     m_pTrayIcon->SetAboutCallback([this]() {

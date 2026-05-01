@@ -8,9 +8,51 @@
 #include "util/DrawingTextSTB.h"
 #include "util/Utils.h"
 
-DesktopIndicator::DesktopIndicator() {
-    LoadConfig();
+void IndicatorConfig::LoadFromIni() {
+    std::wstring color = ReadIniString(L"Display", L"TextColor", L"#FFA745_#FE869F_#EF7AC8_#A083ED_#43AEFF");
+    if (!color.empty()) { textColor = color; }
+
+    int x = ReadIniInt(L"Display", L"WindowPosX", -1);
+    int y = ReadIniInt(L"Display", L"WindowPosY", -1);
+    if (x >= 0) {
+        windowPos.x    = x;
+        posInitialized = true;
+    }
+    if (y >= 0) {
+        windowPos.y    = y;
+        posInitialized = true;
+    }
+
+    int fs = ReadIniInt(L"Display", L"FontSize", 20);
+    if (fs > 0) { fontSize = fs; }
+
+    currentSymbol = ReadIniSymbol(L"Display", L"CurrentSymbol", currentSymbol);
+    otherSymbol   = ReadIniSymbol(L"Display", L"OtherSymbol", otherSymbol);
+    emptySymbol   = ReadIniSymbol(L"Display", L"EmptySymbol", emptySymbol);
+
+    int sp = ReadIniInt(L"Display", L"CharSpacing", 0);
+    if (sp >= 0) { charSpacing = sp; }
+
+    std::wstring fn = ReadIniString(L"Display", L"FontName", L"Segoe UI Symbol");
+    if (!fn.empty()) { fontName = fn; }
+
+    positionPreset = ReadIniInt(L"Display", L"PositionPreset", -1);
 }
+
+void IndicatorConfig::SaveToIni() const {
+    WriteIniString(L"Display", L"TextColor", textColor);
+    WriteIniInt(L"Display", L"WindowPosX", windowPos.x);
+    WriteIniInt(L"Display", L"WindowPosY", windowPos.y);
+    WriteIniInt(L"Display", L"FontSize", fontSize);
+    WriteIniString(L"Display", L"CurrentSymbol", EncodeSymbol(currentSymbol));
+    WriteIniString(L"Display", L"OtherSymbol", EncodeSymbol(otherSymbol));
+    WriteIniString(L"Display", L"EmptySymbol", EncodeSymbol(emptySymbol));
+    WriteIniInt(L"Display", L"CharSpacing", charSpacing);
+    WriteIniString(L"Display", L"FontName", fontName);
+    WriteIniInt(L"Display", L"PositionPreset", positionPreset);
+}
+
+DesktopIndicator::DesktopIndicator() = default;
 
 DesktopIndicator::~DesktopIndicator() {
     if (m_hwnd != nullptr) {
@@ -18,65 +60,9 @@ DesktopIndicator::~DesktopIndicator() {
     }
 }
 
-void DesktopIndicator::LoadConfig() {
-    std::wstring color = ReadIniString(L"Display", L"TextColor", L"#FFA745_#FE869F_#EF7AC8_#A083ED_#43AEFF");
-    if (!color.empty()) { m_textColor = color; }
-
-    int x = ReadIniInt(L"Display", L"WindowPosX", -1);
-    int y = ReadIniInt(L"Display", L"WindowPosY", -1);
-    if (x >= 0) {
-        m_windowPos.x    = x;
-        m_posInitialized = true;
-    }
-    if (y >= 0) {
-        m_windowPos.y    = y;
-        m_posInitialized = true;
-    }
-
-    int fs = ReadIniInt(L"Display", L"FontSize", 20);
-    if (fs > 0) { m_fontSize = fs; }
-
-    {
-        m_currentSymbol = ReadIniSymbol(L"Display", L"CurrentSymbol", m_currentSymbol);
-    }
-    {
-        m_otherSymbol = ReadIniSymbol(L"Display", L"OtherSymbol", m_otherSymbol);
-    }
-    {
-        m_emptySymbol = ReadIniSymbol(L"Display", L"EmptySymbol", m_emptySymbol);
-    }
-
-    int sp = ReadIniInt(L"Display", L"CharSpacing", 0);
-    if (sp >= 0) { m_charSpacing = sp; }
-
-    std::wstring fn = ReadIniString(L"Display", L"FontName", L"Segoe UI Symbol");
-    if (!fn.empty()) { m_fontName = fn; }
-
-    m_positionPreset = ReadIniInt(L"Display", L"PositionPreset", -1);
-}
-
-void DesktopIndicator::SaveConfig() {
-    WriteIniString(L"Display", L"TextColor", m_textColor);
-    WriteIniInt(L"Display", L"WindowPosX", m_windowPos.x);
-    WriteIniInt(L"Display", L"WindowPosY", m_windowPos.y);
-    WriteIniInt(L"Display", L"FontSize", m_fontSize);
-    WriteIniString(L"Display", L"CurrentSymbol", EncodeSymbol(m_currentSymbol));
-    WriteIniString(L"Display", L"OtherSymbol", EncodeSymbol(m_otherSymbol));
-    WriteIniString(L"Display", L"EmptySymbol", EncodeSymbol(m_emptySymbol));
-    WriteIniInt(L"Display", L"CharSpacing", m_charSpacing);
-    WriteIniString(L"Display", L"FontName", m_fontName);
-    WriteIniInt(L"Display", L"PositionPreset", m_positionPreset);
-}
-
-void DesktopIndicator::SetEmptySymbol(const std::wstring &sym) {
-    m_emptySymbol = sym;
-    SaveConfig();
-    if (m_desktopCount > 0) {
-        RebuildText();
-    }
-}
-
 bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
+    if (m_pCfg == nullptr) { return false; }
+
     WNDCLASSW wc     = {};
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = hInstance;
@@ -96,12 +82,12 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
     SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 
     m_renderer = std::make_unique<FontRenderer>();
-    if (!m_renderer->Init(m_fontName)) {
+    if (!m_renderer->Init(m_pCfg->fontName)) {
         if (!m_renderer->Init(L"Segoe UI")) {
             m_renderer->Init(L"Segoe UI Symbol");
-            m_fontName = L"Segoe UI Symbol";
+            m_pCfg->fontName = L"Segoe UI Symbol";
         } else {
-            m_fontName = L"Segoe UI";
+            m_pCfg->fontName = L"Segoe UI";
         }
     }
 
@@ -122,17 +108,17 @@ void DesktopIndicator::SetDesktopState(int count, int currentIndex, const std::a
 }
 
 void DesktopIndicator::RebuildText() {
-    if (m_desktopCount <= 0) {
+    if (m_pCfg == nullptr || m_desktopCount <= 0) {
         return;
     }
     std::wstring text;
     for (int i = 0; i < m_desktopCount && i < static_cast<int>(kMaxDesktops); ++i) {
         if (i == m_currentDesktop) {
-            text += m_currentSymbol;
+            text += m_pCfg->currentSymbol;
         } else if (m_emptyDesktops.at(i)) {
-            text += m_emptySymbol;
+            text += m_pCfg->emptySymbol;
         } else {
-            text += m_otherSymbol;
+            text += m_pCfg->otherSymbol;
         }
     }
     m_text = text;
@@ -140,9 +126,9 @@ void DesktopIndicator::RebuildText() {
 }
 
 void DesktopIndicator::SetColor(const std::wstring &hexColor) {
-    m_textColor  = hexColor;
-    m_hasPreview = false;
-    SaveConfig();
+    if (m_pCfg == nullptr) { return; }
+    m_pCfg->textColor = hexColor;
+    m_hasPreview      = false;
     Render();
 }
 
@@ -160,38 +146,36 @@ void DesktopIndicator::CancelPreview() {
 }
 
 void DesktopIndicator::SetCurrentSymbol(const std::wstring &sym) {
-    m_currentSymbol = sym;
-    SaveConfig();
-    if (m_desktopCount > 0) {
-        RebuildText();
-    }
+    if (m_pCfg == nullptr) { return; }
+    m_pCfg->currentSymbol = sym;
+    if (m_desktopCount > 0) { RebuildText(); }
 }
 
 void DesktopIndicator::SetOtherSymbol(const std::wstring &sym) {
-    m_otherSymbol = sym;
-    SaveConfig();
-    if (m_desktopCount > 0) {
-        RebuildText();
-    }
+    if (m_pCfg == nullptr) { return; }
+    m_pCfg->otherSymbol = sym;
+    if (m_desktopCount > 0) { RebuildText(); }
+}
+
+void DesktopIndicator::SetEmptySymbol(const std::wstring &sym) {
+    if (m_pCfg == nullptr) { return; }
+    m_pCfg->emptySymbol = sym;
+    if (m_desktopCount > 0) { RebuildText(); }
 }
 
 void DesktopIndicator::SetFontName(const std::wstring &name) {
-    m_fontName = name;
-    if (m_renderer && m_renderer->Init(m_fontName)) {
-        SaveConfig();
-        if (m_desktopCount > 0) {
-            RebuildText();
-        }
+    if (m_pCfg == nullptr) { return; }
+    m_pCfg->fontName = name;
+    if (m_renderer && m_renderer->Init(m_pCfg->fontName)) {
+        if (m_desktopCount > 0) { RebuildText(); }
     }
 }
 
 void DesktopIndicator::SetCharSpacing(int spacing) {
-    spacing       = (spacing < 0) ? 0 : spacing;
-    m_charSpacing = spacing;
-    SaveConfig();
-    if (m_desktopCount > 0) {
-        RebuildText();
-    }
+    if (m_pCfg == nullptr) { return; }
+    spacing             = (spacing < 0) ? 0 : spacing;
+    m_pCfg->charSpacing = spacing;
+    if (m_desktopCount > 0) { RebuildText(); }
 }
 
 void DesktopIndicator::ToggleEditMode() {
@@ -213,13 +197,13 @@ void DesktopIndicator::SetEditMode(bool edit) {
         SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
         ReleaseCapture();
-        SaveConfig();
+        if (m_onConfigChanged) { m_onConfigChanged(); }
     }
     Render();
 }
 
 void DesktopIndicator::SetPositionPreset(int preset) {
-    if (m_hwnd == nullptr) {
+    if (m_hwnd == nullptr || m_pCfg == nullptr) {
         return;
     }
     RECT r;
@@ -233,48 +217,45 @@ void DesktopIndicator::SetPositionPreset(int preset) {
     int workBottom = workArea.bottom;
 
     switch (preset) {
-    case 0: m_windowPos = {.x = 0, .y = -4}; break;
-    case 1: m_windowPos = {.x = (sw - w) / 2, .y = -4}; break;
-    case 2: m_windowPos = {.x = sw - w, .y = -4}; break;
-    case 3: m_windowPos = {.x = 0, .y = workBottom - h + 4}; break;
-    case 4: m_windowPos = {.x = (sw - w) / 2, .y = workBottom - h + 4}; break;
-    case 5: m_windowPos = {.x = sw - w, .y = workBottom - h + 4}; break;
+    case 0: m_pCfg->windowPos = {.x = 0, .y = -4}; break;
+    case 1: m_pCfg->windowPos = {.x = (sw - w) / 2, .y = -4}; break;
+    case 2: m_pCfg->windowPos = {.x = sw - w, .y = -4}; break;
+    case 3: m_pCfg->windowPos = {.x = 0, .y = workBottom - h + 4}; break;
+    case 4: m_pCfg->windowPos = {.x = (sw - w) / 2, .y = workBottom - h + 4}; break;
+    case 5: m_pCfg->windowPos = {.x = sw - w, .y = workBottom - h + 4}; break;
     default: return;
     }
-    m_positionPreset = preset;
-    m_posInitialized = true;
+    m_pCfg->positionPreset = preset;
+    m_pCfg->posInitialized = true;
 
-    if (m_editMode) {
-        SetEditMode(false);
-    }
+    if (m_editMode) { SetEditMode(false); }
 
-    SetWindowPos(m_hwnd, nullptr, m_windowPos.x, m_windowPos.y, 0, 0,
+    SetWindowPos(m_hwnd, nullptr, m_pCfg->windowPos.x, m_pCfg->windowPos.y, 0, 0,
                  SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-    SaveConfig();
 }
 
 void DesktopIndicator::MoveByDelta(int dx, int dy) {
+    if (m_pCfg == nullptr) { return; }
     RECT r;
     GetWindowRect(m_hwnd, &r);
-    m_windowPos.x    = r.left + dx;
-    m_windowPos.y    = r.top + dy;
-    m_posInitialized = true;
-    SetWindowPos(m_hwnd, nullptr, m_windowPos.x, m_windowPos.y, 0, 0,
+    m_pCfg->windowPos.x    = r.left + dx;
+    m_pCfg->windowPos.y    = r.top + dy;
+    m_pCfg->posInitialized = true;
+    SetWindowPos(m_hwnd, nullptr, m_pCfg->windowPos.x, m_pCfg->windowPos.y, 0, 0,
                  SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 void DesktopIndicator::Render() {
-    if (m_hwnd == nullptr) {
+    if (m_hwnd == nullptr || m_pCfg == nullptr) {
         return;
     }
 
-    // Build spaced text
     std::wstring spacedText;
-    if (m_charSpacing > 0 && !m_text.empty()) {
+    if (m_pCfg->charSpacing > 0 && !m_text.empty()) {
         for (size_t i = 0; i < m_text.size(); ++i) {
             spacedText += m_text[i];
             if (i < m_text.size() - 1) {
-                spacedText.append(m_charSpacing, L' ');
+                spacedText.append(m_pCfg->charSpacing, L' ');
             }
         }
     } else {
@@ -282,7 +263,7 @@ void DesktopIndicator::Render() {
     }
 
     int textWidth = 0, textHeight = 0;
-    int effectiveFontSize = m_fontSize * GetDpiScale() / 100;
+    int effectiveFontSize = m_pCfg->fontSize * GetDpiScale() / 100;
     if (m_renderer == nullptr) {
         return;
     }
@@ -314,9 +295,7 @@ void DesktopIndicator::Render() {
     void   *bits = nullptr;
     HBITMAP hDib = CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
     if ((hDib == nullptr) || (bits == nullptr)) {
-        if (hDib != nullptr) {
-            DeleteObject(hDib);
-        }
+        if (hDib != nullptr) { DeleteObject(hDib); }
         DeleteDC(hdcMem);
         ReleaseDC(nullptr, hdcScreen);
         return;
@@ -329,17 +308,17 @@ void DesktopIndicator::Render() {
     auto *pixels      = static_cast<DWORD *>(bits);
     std::fill_n(pixels, totalPixels, clearColor);
 
-    std::wstring colorStr  = m_hasPreview ? m_previewColor : m_textColor;
+    std::wstring colorStr  = m_hasPreview ? m_previewColor : m_pCfg->textColor;
     int          textAreaW = width - padding * 2;
     int          textAreaH = height - padding * 2;
     m_renderer->Render(bits, width, height, padding, padding, textAreaW, textAreaH,
                        spacedText.c_str(), colorStr, effectiveFontSize);
 
-    if (!m_posInitialized) {
-        int sw           = GetSystemMetrics(SM_CXSCREEN);
-        m_windowPos.x    = (sw - width) / 2;
-        m_windowPos.y    = 0;
-        m_posInitialized = true;
+    if (!m_pCfg->posInitialized) {
+        int sw                 = GetSystemMetrics(SM_CXSCREEN);
+        m_pCfg->windowPos.x    = (sw - width) / 2;
+        m_pCfg->windowPos.y    = 0;
+        m_pCfg->posInitialized = true;
     }
 
     BLENDFUNCTION blend       = {};
@@ -347,7 +326,7 @@ void DesktopIndicator::Render() {
     blend.SourceConstantAlpha = 255;
     blend.AlphaFormat         = AC_SRC_ALPHA;
 
-    POINT pos  = {.x = m_windowPos.x, .y = m_windowPos.y};
+    POINT pos  = {.x = m_pCfg->windowPos.x, .y = m_pCfg->windowPos.y};
     SIZE  size = {.cx = width, .cy = height};
     POINT src  = {.x = 0, .y = 0};
 
@@ -401,12 +380,14 @@ LRESULT DesktopIndicator::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         if (m_dragging && ((wp & MK_LBUTTON) != 0u)) {
             POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             ClientToScreen(m_hwnd, &pt);
-            int x         = pt.x - m_dragOffset.x;
-            int y         = pt.y - m_dragOffset.y;
-            m_windowPos.x = x;
-            m_windowPos.y = y;
-            SetWindowPos(m_hwnd, nullptr, x, y, 0, 0,
-                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            if (m_pCfg != nullptr) {
+                m_pCfg->windowPos.x = pt.x - m_dragOffset.x;
+                m_pCfg->windowPos.y = pt.y - m_dragOffset.y;
+            }
+            SetWindowPos(m_hwnd, nullptr,
+                         (m_pCfg != nullptr) ? m_pCfg->windowPos.x : 0,
+                         (m_pCfg != nullptr) ? m_pCfg->windowPos.y : 0,
+                         0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
         return 0;
 
@@ -425,14 +406,14 @@ LRESULT DesktopIndicator::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
 
     case WM_MOUSEWHEEL:
-        if (m_editMode) {
+        if (m_editMode && m_pCfg != nullptr) {
             int delta   = GET_WHEEL_DELTA_WPARAM(wp);
-            int oldSize = m_fontSize;
-            m_fontSize += (delta > 0) ? 4 : -4;
-            m_fontSize = (m_fontSize < 12) ? 12 : (m_fontSize > 300) ? 300
-                                                                     : m_fontSize;
-            if (m_fontSize != oldSize) {
-                SaveConfig();
+            int oldSize = m_pCfg->fontSize;
+            m_pCfg->fontSize += (delta > 0) ? 4 : -4;
+            m_pCfg->fontSize = (m_pCfg->fontSize < 12) ? 12 : (m_pCfg->fontSize > 300) ? 300
+                                                                                       : m_pCfg->fontSize;
+            if (m_pCfg->fontSize != oldSize) {
+                if (m_onConfigChanged) { m_onConfigChanged(); }
                 if (m_desktopCount > 0) { RebuildText(); }
             }
             return 0;
@@ -453,7 +434,6 @@ LRESULT DesktopIndicator::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
 
     case WM_DESTROY:
-        SaveConfig();
         return 0;
     default:
         break;
