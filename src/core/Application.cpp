@@ -243,15 +243,21 @@ bool Application::Initialize() {
         return false;
     }
 
-    SetTimer(m_hwnd, 1, 300, nullptr);
+    SetTimer(m_hwnd, 1, 1000, nullptr);
     return true;
 }
 
 void Application::SyncDesktopState() {
     int desktopCount   = m_switcher->GetDesktopCount();
     int currentDesktop = m_switcher->GetCurrentDesktopIndex();
-    m_lastDesktopIndex = currentDesktop;
-    m_pTrayIcon->UpdateTooltip(BuildTooltipText(desktopCount, currentDesktop));
+
+    bool changed = (currentDesktop != m_lastDesktopIndex) || (desktopCount != m_lastDesktopCount);
+    if (changed) {
+        m_lastDesktopIndex = currentDesktop;
+        m_lastDesktopCount = desktopCount;
+        m_pTrayIcon->UpdateTooltip(BuildTooltipText(desktopCount, currentDesktop));
+    }
+
     if (m_pOverlay) {
         auto emptyMask = m_switcher->GetDesktopEmptyMask();
         m_pOverlay->SetDesktopState(desktopCount, currentDesktop, emptyMask);

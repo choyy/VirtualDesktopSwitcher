@@ -22,6 +22,7 @@ private:
     std::unique_ptr<DesktopIndicator>       m_pOverlay;
     IndicatorConfig                         m_indicatorCfg;
     int                                     m_lastDesktopIndex = -1;
+    int                                     m_lastDesktopCount = 0;
     bool                                    m_autoCheckUpdates = true;
     UINT                                    m_uTaskbarCreated  = 0;
 
