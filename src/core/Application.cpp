@@ -5,6 +5,7 @@
 #include "core/UpdateChecker.h"
 #include "core/VirtualDesktopSwitcher.h"
 #include "ui/AboutDialog.h"
+#include "ui/DesktopIndicator.h"
 #include "ui/SettingsDialog.h"
 #include "ui/TrayIcon.h"
 #include "util/ConfigIni.h"
@@ -107,11 +108,6 @@ void Application::OnDestroy(HWND hwnd) {
 
 void Application::ApplySettingsPreview(const SettingsDialog::Result &r) {
     if (m_pOverlay == nullptr) { return; }
-    m_indicatorCfg.currentSymbol = r.currentSymbol;
-    m_indicatorCfg.otherSymbol   = r.otherSymbol;
-    m_indicatorCfg.emptySymbol   = r.emptySymbol;
-    m_indicatorCfg.fontName      = r.fontName;
-    m_indicatorCfg.charSpacing   = r.charSpacing;
     m_pOverlay->SetCurrentSymbol(r.currentSymbol);
     m_pOverlay->SetOtherSymbol(r.otherSymbol);
     m_pOverlay->SetEmptySymbol(r.emptySymbol);
@@ -119,9 +115,7 @@ void Application::ApplySettingsPreview(const SettingsDialog::Result &r) {
     m_pOverlay->SetCharSpacing(r.charSpacing);
 }
 
-bool Application::Initialize() {
-    m_switcher = std::make_unique<VirtualDesktopSwitcher>();
-
+bool Application::CreateHiddenWindow() {
     HINSTANCE hInst = GetModuleHandle(nullptr);
 
     WNDCLASSW wc     = {};
@@ -138,48 +132,38 @@ bool Application::Initialize() {
                              L"VirtualDesktopSwitcherClass", L"VirtualDesktopSwitcher",
                              WS_POPUP,
                              0, 0, 0, 0, nullptr, nullptr, hInst, nullptr);
-
     if (m_hwnd == nullptr) {
         Log(L"[ERROR] Failed to create window");
         return false;
     }
+
     m_switcher->SetWindowHandle(m_hwnd);
     SetWndUserData(m_hwnd, this);
+    return true;
+}
 
+void Application::LoadConfiguration() {
     m_autoCheckUpdates = ReadIniInt(L"General", L"AutoCheckUpdates", 1) != 0;
-
     m_indicatorCfg.LoadFromIni();
+}
 
+void Application::InitializeOverlay() {
     m_pOverlay = std::make_unique<DesktopIndicator>();
     m_pOverlay->SetConfig(&m_indicatorCfg);
-    m_pOverlay->SetOnConfigChanged([this]() {
-        m_indicatorCfg.SaveToIni();
-    });
+    m_pOverlay->SetOnConfigChanged([this]() { m_indicatorCfg.SaveToIni(); });
+}
 
-    // Initialize tray icon with saved preset
+bool Application::InitializeTrayIcon() {
     m_pTrayIcon = std::make_unique<TrayIcon>();
     m_pTrayIcon->SetActivePositionPreset(m_indicatorCfg.positionPreset);
-    if (!m_pTrayIcon->Initialize(m_hwnd, hInst)) {
+    if (!m_pTrayIcon->Initialize(m_hwnd, GetModuleHandle(nullptr))) {
         Log(L"[ERROR] Failed to initialize tray icon");
         return false;
     }
+    return true;
+}
 
-    // Show current desktop info
-    int desktopCount   = m_switcher->GetDesktopCount();
-    int currentDesktop = m_switcher->GetCurrentDesktopIndex();
-    m_lastDesktopIndex = currentDesktop;
-    m_pTrayIcon->UpdateTooltip(BuildTooltipText(desktopCount, currentDesktop));
-
-    // Initialize desktop overlay
-    if (!m_pOverlay->Initialize(hInst)) {
-        Log(L"[ERROR] Failed to initialize desktop indicator");
-    } else {
-        auto emptyMask = m_switcher->GetDesktopEmptyMask();
-        m_pOverlay->SetDesktopState(desktopCount, currentDesktop, emptyMask);
-        m_pOverlay->Show();
-    }
-
-    // Set up tray icon callbacks
+void Application::SetupTrayCallbacks() {
     m_pTrayIcon->SetColorCallback([this](const std::wstring &hex) {
         if (m_pOverlay) {
             m_pOverlay->SetColor(hex);
@@ -205,7 +189,10 @@ bool Application::Initialize() {
             .fontName      = m_indicatorCfg.fontName,
             .charSpacing   = m_indicatorCfg.charSpacing};
 
-        SettingsDialog::Result res = SettingsDialog::Show(m_hwnd, cur, [](const SettingsDialog::Result &preview, void *ctx) { static_cast<Application *>(ctx)->ApplySettingsPreview(preview); }, this);
+        SettingsDialog::Result res = SettingsDialog::Show(m_hwnd, cur,
+                                                          [this](const SettingsDialog::Result &preview) {
+                                                              ApplySettingsPreview(preview);
+                                                          });
 
         if (res.accepted) {
             m_indicatorCfg.SaveToIni();
@@ -221,24 +208,42 @@ bool Application::Initialize() {
             WriteIniInt(L"General", L"AutoCheckUpdates", m_autoCheckUpdates ? 1 : 0);
         }
     });
+}
 
-    // Register taskbar creation message (for Explorer restart / wake from sleep)
+bool Application::Initialize() {
+    m_switcher = std::make_unique<VirtualDesktopSwitcher>();
+
+    if (!CreateHiddenWindow()) { return false; }
+
+    LoadConfiguration();
+
+    InitializeOverlay();
+
+    if (!InitializeTrayIcon()) { return false; }
+
+    bool overlayOk = m_pOverlay->Initialize(GetModuleHandle(nullptr));
+    if (!overlayOk) {
+        Log(L"[ERROR] Failed to initialize desktop indicator");
+    }
+
+    SyncDesktopState();
+
+    if (overlayOk) { m_pOverlay->Show(); }
+
+    SetupTrayCallbacks();
+
     m_uTaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
 
-    // Check for updates on startup
     if (m_autoCheckUpdates) {
         UpdateChecker::CheckAndDownload(m_hwnd, true);
     }
 
-    // Install keyboard hook
     if (!m_switcher->InstallHook()) {
         Log(L"[ERROR] Failed to install keyboard hook");
         return false;
     }
 
-    // Polling timer to detect desktop switches not triggered by our hook (taskbar, Win+Tab, etc.)
     SetTimer(m_hwnd, 1, 300, nullptr);
-
     return true;
 }
 

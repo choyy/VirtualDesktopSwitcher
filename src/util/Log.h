@@ -10,15 +10,18 @@ inline void Log(const std::wstring &msg) {
         std::wstring p = GetAppDataDir();
         if (p.empty()) { return INVALID_HANDLE_VALUE; }
         p += L"\\log.txt";
-        HANDLE f        = CreateFileW(p.c_str(), GENERIC_READ, FILE_SHARE_READ,
-                                      nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-        bool   truncate = false;
+
+        bool   needsTruncate = false;
+        HANDLE f             = CreateFileW(p.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                                           nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (f != INVALID_HANDLE_VALUE) {
-            truncate = GetFileSize(f, nullptr) > 1024 * 1024;
+            LARGE_INTEGER size;
+            needsTruncate = GetFileSizeEx(f, &size) && size.QuadPart > static_cast<LONGLONG>(1024 * 1024);
             CloseHandle(f);
         }
+
         return CreateFileW(p.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ,
-                           nullptr, truncate ? CREATE_ALWAYS : OPEN_ALWAYS,
+                           nullptr, needsTruncate ? CREATE_ALWAYS : OPEN_ALWAYS,
                            FILE_ATTRIBUTE_NORMAL, nullptr);
     }();
 

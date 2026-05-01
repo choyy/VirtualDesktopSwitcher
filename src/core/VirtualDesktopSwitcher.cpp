@@ -2,9 +2,9 @@
 
 #include <string>
 
+#include "core/VirtualDesktopHelper.h"
 #include "util/Log.h"
 #include "util/Utils.h"
-#include "util/VirtualDesktopHelper.h"
 
 namespace {
 
@@ -65,7 +65,7 @@ LRESULT CALLBACK VirtualDesktopSwitcher::LowLevelKeyboardProc(int nCode, WPARAM 
     }
 
     const auto *pKeyboard  = LParamToPtr<const KBDLLHOOKSTRUCT>(lParam);
-    const bool  altPressed = (static_cast<USHORT>(GetAsyncKeyState(VK_MENU)) & 0x8000u) != 0;
+    const bool  altPressed = (pKeyboard->flags & LLKHF_ALTDOWN) != 0;
 
     if (altPressed && pKeyboard->vkCode >= '1' && pKeyboard->vkCode <= '9') {
         const int desktopIndex = static_cast<int>(pKeyboard->vkCode - '1');
@@ -150,12 +150,7 @@ bool VirtualDesktopSwitcher::TryActivatePreviousWindow(int desktopIndex) {
 
     ActivateWindow(targetHwnd);
 
-    for (int retry = 0; retry < 10; ++retry) {
-        if (GetForegroundWindow() == targetHwnd) { break; }
-        Sleep(10);
-    }
-
-    if (GetForegroundWindow() == targetHwnd) {
+    if (WaitForCondition([targetHwnd]() { return GetForegroundWindow() == targetHwnd; }, 10)) {
         Log(L"[DEBUG] Activated previous window on desktop " + std::to_wstring(desktopIndex) + L": " + GetWindowTitle(targetHwnd));
         return true;
     }
@@ -184,10 +179,7 @@ void VirtualDesktopSwitcher::SwitchToDesktop(int index) {
 
     m_pVDeskHelper->SwitchToDesktop(index);
 
-    for (int retry = 0; retry < 20; ++retry) {
-        if (GetCurrentDesktopIndex() == index) { break; }
-        Sleep(10);
-    }
+    WaitForCondition([this, index]() { return GetCurrentDesktopIndex() == index; }, 20);
 
     if (index == currentIndex) {
         Log(L"[DEBUG] Switched to same desktop " + std::to_wstring(index) + L", no activation needed");

@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <functional>
 #include <string>
 
 namespace SettingsDialog {
@@ -16,7 +17,6 @@ struct Result {
 };
 
 Result Show(HWND parent, const Result &current,
-            void (*preview)(const Result &, void *) = nullptr,
-            void *previewCtx                        = nullptr);
+            std::function<void(const Result &)> preview = nullptr);
 
 } // namespace SettingsDialog

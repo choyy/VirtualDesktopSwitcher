@@ -4,53 +4,8 @@
 
 #include <windowsx.h>
 
-#include "util/ConfigIni.h"
 #include "util/DrawingTextSTB.h"
 #include "util/Utils.h"
-
-void IndicatorConfig::LoadFromIni() {
-    std::wstring color = ReadIniString(L"Display", L"TextColor", L"#FFA745_#FE869F_#EF7AC8_#A083ED_#43AEFF");
-    if (!color.empty()) { textColor = color; }
-
-    int x = ReadIniInt(L"Display", L"WindowPosX", -1);
-    int y = ReadIniInt(L"Display", L"WindowPosY", -1);
-    if (x >= 0) {
-        windowPos.x    = x;
-        posInitialized = true;
-    }
-    if (y >= 0) {
-        windowPos.y    = y;
-        posInitialized = true;
-    }
-
-    int fs = ReadIniInt(L"Display", L"FontSize", 20);
-    if (fs > 0) { fontSize = fs; }
-
-    currentSymbol = ReadIniSymbol(L"Display", L"CurrentSymbol", currentSymbol);
-    otherSymbol   = ReadIniSymbol(L"Display", L"OtherSymbol", otherSymbol);
-    emptySymbol   = ReadIniSymbol(L"Display", L"EmptySymbol", emptySymbol);
-
-    int sp = ReadIniInt(L"Display", L"CharSpacing", 0);
-    if (sp >= 0) { charSpacing = sp; }
-
-    std::wstring fn = ReadIniString(L"Display", L"FontName", L"Segoe UI Symbol");
-    if (!fn.empty()) { fontName = fn; }
-
-    positionPreset = ReadIniInt(L"Display", L"PositionPreset", -1);
-}
-
-void IndicatorConfig::SaveToIni() const {
-    WriteIniString(L"Display", L"TextColor", textColor);
-    WriteIniInt(L"Display", L"WindowPosX", windowPos.x);
-    WriteIniInt(L"Display", L"WindowPosY", windowPos.y);
-    WriteIniInt(L"Display", L"FontSize", fontSize);
-    WriteIniString(L"Display", L"CurrentSymbol", EncodeSymbol(currentSymbol));
-    WriteIniString(L"Display", L"OtherSymbol", EncodeSymbol(otherSymbol));
-    WriteIniString(L"Display", L"EmptySymbol", EncodeSymbol(emptySymbol));
-    WriteIniInt(L"Display", L"CharSpacing", charSpacing);
-    WriteIniString(L"Display", L"FontName", fontName);
-    WriteIniInt(L"Display", L"PositionPreset", positionPreset);
-}
 
 DesktopIndicator::DesktopIndicator() = default;
 
@@ -148,26 +103,26 @@ void DesktopIndicator::CancelPreview() {
 void DesktopIndicator::SetCurrentSymbol(const std::wstring &sym) {
     if (m_pCfg == nullptr) { return; }
     m_pCfg->currentSymbol = sym;
-    if (m_desktopCount > 0) { RebuildText(); }
+    RebuildText();
 }
 
 void DesktopIndicator::SetOtherSymbol(const std::wstring &sym) {
     if (m_pCfg == nullptr) { return; }
     m_pCfg->otherSymbol = sym;
-    if (m_desktopCount > 0) { RebuildText(); }
+    RebuildText();
 }
 
 void DesktopIndicator::SetEmptySymbol(const std::wstring &sym) {
     if (m_pCfg == nullptr) { return; }
     m_pCfg->emptySymbol = sym;
-    if (m_desktopCount > 0) { RebuildText(); }
+    RebuildText();
 }
 
 void DesktopIndicator::SetFontName(const std::wstring &name) {
     if (m_pCfg == nullptr) { return; }
     m_pCfg->fontName = name;
     if (m_renderer && m_renderer->Init(m_pCfg->fontName)) {
-        if (m_desktopCount > 0) { RebuildText(); }
+        RebuildText();
     }
 }
 
@@ -175,7 +130,7 @@ void DesktopIndicator::SetCharSpacing(int spacing) {
     if (m_pCfg == nullptr) { return; }
     spacing             = (spacing < 0) ? 0 : spacing;
     m_pCfg->charSpacing = spacing;
-    if (m_desktopCount > 0) { RebuildText(); }
+    RebuildText();
 }
 
 void DesktopIndicator::ToggleEditMode() {
@@ -414,7 +369,7 @@ LRESULT DesktopIndicator::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
                                                                                        : m_pCfg->fontSize;
             if (m_pCfg->fontSize != oldSize) {
                 if (m_onConfigChanged) { m_onConfigChanged(); }
-                if (m_desktopCount > 0) { RebuildText(); }
+                RebuildText();
             }
             return 0;
         }

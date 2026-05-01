@@ -1,33 +1,9 @@
 #include "UpdateChecker.h"
 
 #include <array>
-#include <cstdlib>
 #include <string>
 
 #include "util/Utils.h"
-
-namespace {
-
-bool IsNewerVersion(const std::string &remote, const std::string &local) {
-    size_t r_pos = 0, l_pos = 0;
-    while (r_pos < remote.size() && l_pos < local.size()) {
-        char   *re = nullptr, *le = nullptr;
-        int32_t rn = strtol(remote.c_str() + r_pos, &re, 10);
-        int32_t ln = strtol(local.c_str() + l_pos, &le, 10);
-
-        if (rn > ln) { return true; }
-        if (rn < ln) { return false; }
-
-        r_pos = re - remote.c_str();
-        l_pos = le - local.c_str();
-
-        if (r_pos < remote.size() && remote[r_pos] == '.') { r_pos++; }
-        if (l_pos < local.size() && local[l_pos] == '.') { l_pos++; }
-    }
-    return r_pos < remote.size();
-}
-
-} // namespace
 
 UpdateChecker::VersionCheckResult UpdateChecker::CheckForNewerVersion() {
     VersionCheckResult            result;

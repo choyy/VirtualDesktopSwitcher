@@ -36,4 +36,7 @@ private:
     static std::wstring FindSystemFontPath(const std::wstring &fontName);
     bool                LoadFontFile(const std::wstring &path);
     void                UnloadFontFile();
+
+    [[nodiscard]] float GetCodepointAdvance(wchar_t codepoint, wchar_t nextCodepoint, float scale) const;
+    [[nodiscard]] int   GetGlyphIndex(wchar_t codepoint) const;
 };

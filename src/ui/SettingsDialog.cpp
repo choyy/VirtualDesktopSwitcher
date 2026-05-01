@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-#include "util/ConfigIni.h"
 #include "util/Utils.h"
 
 namespace {
@@ -148,18 +147,15 @@ void FillCombo(HWND hCmb, const wchar_t *const *items, size_t count, const std::
 }
 
 struct DialogData {
-    SettingsDialog::Result result;
-    void (*preview)(const SettingsDialog::Result &, void *){};
-    void *previewCtx{};
+    SettingsDialog::Result                              result;
+    std::function<void(const SettingsDialog::Result &)> preview;
 };
 
 INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-    auto *data = GetWndUserData<DialogData>(hwnd, DWLP_USER);
-
     switch (msg) {
     case WM_INITDIALOG: {
+        auto *data = LParamToPtr<DialogData>(lp);
         SetWindowLongPtrW(hwnd, DWLP_USER, lp);
-        data = LParamToPtr<DialogData>(lp);
 
         FillCombo(GetDlgItem(hwnd, IDC_CUR_SYM), kSymbolList.data(), kSymbolList.size(), data->result.currentSymbol, false, true);
         FillCombo(GetDlgItem(hwnd, IDC_OTH_SYM), kSymbolList.data(), kSymbolList.size(), data->result.otherSymbol, false, true);
@@ -172,6 +168,7 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 
     case WM_COMMAND: {
+        auto *data = GetWndUserData<DialogData>(hwnd, DWLP_USER);
         if (data == nullptr) {
             return TRUE;
         }
@@ -192,8 +189,8 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     target       = kSymbolList.at(sel);
                 }
             }
-            if (data->preview != nullptr) {
-                data->preview(data->result, data->previewCtx);
+            if (data->preview) {
+                data->preview(data->result);
             }
             return TRUE;
         }
@@ -217,8 +214,8 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     data->result.fontName = buf.data();
                 }
             }
-            if (data->preview != nullptr) {
-                data->preview(data->result, data->previewCtx);
+            if (data->preview) {
+                data->preview(data->result);
             }
             return TRUE;
         }
@@ -229,18 +226,18 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (buf[0] != 0) {
                 (id == IDC_CUR_SYM ? data->result.currentSymbol : id == IDC_OTH_SYM ? data->result.otherSymbol
                                                                                     : data->result.emptySymbol) = buf.data();
-                if (data->preview != nullptr) {
-                    data->preview(data->result, data->previewCtx);
+                if (data->preview) {
+                    data->preview(data->result);
                 }
             }
             return TRUE;
         }
 
-        if (id == IDC_SPACING && code == EN_CHANGE && data->preview != nullptr) {
+        if (id == IDC_SPACING && code == EN_CHANGE && data->preview) {
             std::array<wchar_t, 16> buf{};
             GetDlgItemTextW(hwnd, IDC_SPACING, buf.data(), static_cast<int>(buf.size()));
             data->result.charSpacing = (_wtoi(buf.data()) < 0) ? 0 : _wtoi(buf.data());
-            data->preview(data->result, data->previewCtx);
+            data->preview(data->result);
             return TRUE;
         }
 
@@ -271,27 +268,12 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 } // namespace
 
 SettingsDialog::Result SettingsDialog::Show(HWND parent, const Result &current,
-                                            void (*preview)(const Result &, void *),
-                                            void *previewCtx) {
+                                            std::function<void(const Result &)> preview) {
     auto *hInst = reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(parent, GWLP_HINSTANCE)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
 
     DialogData data;
-    data.result     = current;
-    data.preview    = preview;
-    data.previewCtx = previewCtx;
-
-    std::wstring iniCur = ReadIniSymbol(L"Display", L"CurrentSymbol", current.currentSymbol);
-    std::wstring iniOth = ReadIniSymbol(L"Display", L"OtherSymbol", current.otherSymbol);
-    std::wstring iniEmp = ReadIniSymbol(L"Display", L"EmptySymbol", current.emptySymbol);
-    if (iniCur.size() == 1) {
-        data.result.currentSymbol = iniCur;
-    }
-    if (iniOth.size() == 1) {
-        data.result.otherSymbol = iniOth;
-    }
-    if (iniEmp.size() == 1) {
-        data.result.emptySymbol = iniEmp;
-    }
+    data.result  = current;
+    data.preview = std::move(preview);
 
     DialogBoxParamW(hInst, MAKEINTRESOURCEW(1001), parent, SettingsDlgProc, PtrToLParam(&data));
     return data.result;

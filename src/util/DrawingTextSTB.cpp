@@ -107,6 +107,24 @@ void FontRenderer::Cleanup() {
     UnloadFontFile();
 }
 
+float FontRenderer::GetCodepointAdvance(wchar_t codepoint, wchar_t nextCodepoint, float scale) const {
+    int adv = 0, lsb = 0;
+    stbtt_GetCodepointHMetrics(&m_fontInfo, codepoint, &adv, &lsb);
+    float x = static_cast<float>(adv) * scale;
+    if (nextCodepoint != 0) {
+        int ci = stbtt_FindGlyphIndex(&m_fontInfo, codepoint);
+        int ni = stbtt_FindGlyphIndex(&m_fontInfo, nextCodepoint);
+        if (ci != 0 && ni != 0) {
+            x += static_cast<float>(stbtt_GetGlyphKernAdvance(&m_fontInfo, ci, ni)) * scale;
+        }
+    }
+    return x;
+}
+
+int FontRenderer::GetGlyphIndex(wchar_t codepoint) const {
+    return stbtt_FindGlyphIndex(&m_fontInfo, codepoint);
+}
+
 bool FontRenderer::Measure(const wchar_t *text, int fontSize, int *width, int *height) const {
     if (!m_loaded || text == nullptr || width == nullptr || height == nullptr) {
         return false;
@@ -119,16 +137,8 @@ bool FontRenderer::Measure(const wchar_t *text, int fontSize, int *width, int *h
     float  x   = 0;
     size_t len = wcslen(text);
     for (size_t i = 0; i < len; ++i) {
-        int adv = 0, lsb = 0;
-        stbtt_GetCodepointHMetrics(&m_fontInfo, text[i], &adv, &lsb);
-        x += static_cast<float>(adv) * sc;
-        if (i + 1 < len) {
-            int ni = stbtt_FindGlyphIndex(&m_fontInfo, text[i + 1]);
-            int ci = stbtt_FindGlyphIndex(&m_fontInfo, text[i]);
-            if ((ni != 0) && (ci != 0)) {
-                x += static_cast<float>(stbtt_GetGlyphKernAdvance(&m_fontInfo, ci, ni)) * sc;
-            }
-        }
+        wchar_t next = (i + 1 < len) ? text[i + 1] : 0;
+        x += GetCodepointAdvance(text[i], next, sc);
     }
     *width  = static_cast<int>(x + 1);
     *height = static_cast<int>(static_cast<float>(a - d) * sc + 1);
@@ -181,30 +191,19 @@ void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
     size_t len        = wcslen(text);
 
     for (size_t i = 0; i < len; ++i) {
-        int adv = 0, lsb = 0;
-        stbtt_GetCodepointHMetrics(&m_fontInfo, text[i], &adv, &lsb);
-        int gi = stbtt_FindGlyphIndex(&m_fontInfo, text[i]);
+        wchar_t next = (i + 1 < len) ? text[i + 1] : 0;
+        int     gi   = GetGlyphIndex(text[i]);
         if (gi == 0) {
-            x += static_cast<float>(adv) * sc;
+            x += GetCodepointAdvance(text[i], next, sc);
             continue;
-        }
-
-        int kern = 0;
-        if (i + 1 < len) {
-            int ni = stbtt_FindGlyphIndex(&m_fontInfo, text[i + 1]);
-            if (ni != 0) {
-                kern = static_cast<int>(static_cast<float>(stbtt_GetGlyphKernAdvance(&m_fontInfo, gi, ni)) * sc);
-            }
         }
 
         int            cw = 0, ch = 0, xo = 0, yo = 0;
         unsigned char *bmp = stbtt_GetGlyphBitmap(&m_fontInfo, sc, sc, gi, &cw, &ch, &xo, &yo);
         if (bmp == nullptr) {
-            x += static_cast<float>(adv) * sc + static_cast<float>(kern);
+            x += GetCodepointAdvance(text[i], next, sc);
             continue;
         }
-
-        auto bmpLen = static_cast<size_t>(cw) * static_cast<size_t>(ch);
 
         int px = sx + static_cast<int>(x) + xo;
         int py = bl + yo;
@@ -258,6 +257,6 @@ void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
             }
         }
         stbtt_FreeBitmap(bmp, nullptr);
-        x += static_cast<float>(adv) * sc + static_cast<float>(kern);
+        x += GetCodepointAdvance(text[i], next, sc);
     }
 }

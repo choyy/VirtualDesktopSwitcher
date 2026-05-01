@@ -4,10 +4,11 @@
 
 #include <memory>
 
-#include "ui/DesktopIndicator.h"
+#include "util/IndicatorConfig.h"
 
 class VirtualDesktopSwitcher;
 class TrayIcon;
+class DesktopIndicator;
 
 namespace SettingsDialog {
 struct Result;
@@ -24,7 +25,6 @@ private:
     bool                                    m_autoCheckUpdates = true;
     UINT                                    m_uTaskbarCreated  = 0;
 
-    // 窗口过程函数
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     void                    OnSystemResume();
     void                    SyncDesktopState();
@@ -33,7 +33,14 @@ private:
     void                    OnDesktopSwitch(WPARAM wParam);
     void                    OnTimerTick();
     static void             OnDestroy(HWND hwnd);
-    void                    ApplySettingsPreview(const struct SettingsDialog::Result &r);
+    void                    ApplySettingsPreview(const SettingsDialog::Result &r);
+
+    // Initialize sub-steps
+    bool CreateHiddenWindow();
+    void LoadConfiguration();
+    void InitializeOverlay();
+    bool InitializeTrayIcon();
+    void SetupTrayCallbacks();
 
 public:
     Application(const Application &)            = delete;

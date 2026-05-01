@@ -75,13 +75,12 @@ void TrayIcon::BuildMenu() {
     }
     m_hMenu = CreatePopupMenu();
 
-    HMENU hPosMenu = CreatePopupMenu();
-    AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == 0 ? MF_CHECKED : 0), CMD_POSITION_TOP_LEFT, L"左上");
-    AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == 1 ? MF_CHECKED : 0), CMD_POSITION_TOP_CENTER, L"中上");
-    AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == 2 ? MF_CHECKED : 0), CMD_POSITION_TOP_RIGHT, L"右上");
-    AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == 3 ? MF_CHECKED : 0), CMD_POSITION_BOTTOM_LEFT, L"左下");
-    AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == 4 ? MF_CHECKED : 0), CMD_POSITION_BOTTOM_CENTER, L"中下");
-    AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == 5 ? MF_CHECKED : 0), CMD_POSITION_BOTTOM_RIGHT, L"右下");
+    HMENU            hPosMenu       = CreatePopupMenu();
+    const std::array positionLabels = {L"左上", L"中上", L"右上", L"左下", L"中下", L"右下"};
+    for (int i = 0; i < static_cast<int>(positionLabels.size()); ++i) {
+        AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == i ? MF_CHECKED : 0),
+                    CMD_POSITION_TOP_LEFT + i, positionLabels.at(i));
+    }
     AppendMenuW(hPosMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(hPosMenu, MF_STRING | (m_editModeChecked ? MF_CHECKED : 0), CMD_POSITION_CUSTOM, L"自定义");
     AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hPosMenu), L"显示位置"); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
