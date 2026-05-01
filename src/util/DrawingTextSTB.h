@@ -1,7 +1,6 @@
 // Adapted from Catime (Apache 2.0)
 // Original: https://github.com/vladelaina/Catime
-#ifndef DRAWING_TEXT_STB_H
-#define DRAWING_TEXT_STB_H
+#pragma once
 
 #include <windows.h>
 
@@ -38,5 +37,3 @@ private:
     bool                LoadFontFile(const std::wstring &path);
     void                UnloadFontFile();
 };
-
-#endif

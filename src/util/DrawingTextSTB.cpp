@@ -1,6 +1,5 @@
 // Adapted from Catime (Apache 2.0)
 // Original: https://github.com/vladelaina/Catime
-#define NOMINMAX
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "DrawingTextSTB.h"
 
@@ -8,7 +7,7 @@
 
 #include <cstddef>
 
-#include "util/ColorState.h"
+#include "util/Utils.h"
 
 std::wstring FontRenderer::FindSystemFontPath(const std::wstring &fontName) {
     HKEY hKey = nullptr;

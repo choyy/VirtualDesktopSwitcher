@@ -1,6 +1,5 @@
 #include "VirtualDesktopSwitcher.h"
 
-#include <bit>
 #include <string>
 
 #include "util/Log.h"
@@ -16,7 +15,7 @@ struct EnumContext {
 };
 
 BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
-    auto *ctx = std::bit_cast<EnumContext *>(lParam);
+    auto *ctx = LParamToPtr<EnumContext>(lParam);
 
     if ((IsWindowVisible(hwnd) == 0) || hwnd == ctx->skipWindow) {
         return TRUE;
@@ -38,7 +37,7 @@ BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
 
 HWND FindTopWindowOnCurrentDesktop(const VirtualDesktopHelper *pHelper) {
     EnumContext ctx = {.pHelper = pHelper, .skipWindow = GetForegroundWindow(), .foundWindow = nullptr};
-    EnumWindows(EnumWindowsProc, std::bit_cast<LPARAM>(&ctx));
+    EnumWindows(EnumWindowsProc, PtrToLParam(&ctx));
     return ctx.foundWindow;
 }
 
@@ -65,7 +64,7 @@ LRESULT CALLBACK VirtualDesktopSwitcher::LowLevelKeyboardProc(int nCode, WPARAM 
         return CallNextHookEx(nullptr, nCode, wParam, lParam);
     }
 
-    const auto *pKeyboard  = std::bit_cast<const KBDLLHOOKSTRUCT *>(lParam);
+    const auto *pKeyboard  = LParamToPtr<const KBDLLHOOKSTRUCT>(lParam);
     const bool  altPressed = (static_cast<USHORT>(GetAsyncKeyState(VK_MENU)) & 0x8000u) != 0;
 
     if (altPressed && pKeyboard->vkCode >= '1' && pKeyboard->vkCode <= '9') {

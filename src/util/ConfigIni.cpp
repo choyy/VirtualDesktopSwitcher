@@ -5,7 +5,6 @@
 #include <shlobj.h>
 
 #include <array>
-#include <cstdio>
 
 namespace {
 std::wstring GetOrCreateAppDataDir() {
@@ -91,4 +90,9 @@ std::wstring DecodeSymbol(const std::wstring &str) {
         return {1, static_cast<wchar_t>(code)};
     }
     return str;
+}
+
+std::wstring ReadIniSymbol(const std::wstring &section, const std::wstring &key, const std::wstring &defaultSym) {
+    std::wstring decoded = DecodeSymbol(ReadIniString(section, key, EncodeSymbol(defaultSym)));
+    return (decoded.size() == 1) ? decoded : defaultSym;
 }

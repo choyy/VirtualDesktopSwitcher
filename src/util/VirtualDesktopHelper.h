@@ -51,7 +51,7 @@ public:
 
 class VirtualDesktopHelper {
 private:
-    ComInitializer                                         m_comInit;
+    HRESULT                                                m_comInitResult = E_FAIL;
     Microsoft::WRL::ComPtr<IVirtualDesktopManagerInternal> virtualDesktopManagerInternal;
     Microsoft::WRL::ComPtr<IVirtualDesktopManager>         virtualDesktopManager;
     Microsoft::WRL::ComPtr<IApplicationViewCollection>     viewCollection;
@@ -60,6 +60,13 @@ private:
     [[nodiscard]] bool CheckViaViewCollection(HWND hwnd) const;
     [[nodiscard]] bool CheckViaDesktopManager(HWND hwnd) const;
 
+    static bool InitImmersiveShell(Microsoft::WRL::ComPtr<IUnknown> &shell);
+    static bool InitServiceProvider(Microsoft::WRL::ComPtr<IUnknown> &shell, Microsoft::WRL::ComPtr<IServiceProvider> &sp);
+    bool        InitDesktopManagerInternal(Microsoft::WRL::ComPtr<IServiceProvider> &sp, Microsoft::WRL::ComPtr<IUnknown> &shell);
+    void        VerifyDesktopIID();
+    void        InitViewCollection(Microsoft::WRL::ComPtr<IServiceProvider> &sp);
+    void        InitDesktopManager();
+
 public:
     VirtualDesktopHelper(const VirtualDesktopHelper &)            = delete;
     VirtualDesktopHelper &operator=(const VirtualDesktopHelper &) = delete;
@@ -67,7 +74,7 @@ public:
     VirtualDesktopHelper &operator=(VirtualDesktopHelper &&)      = delete;
 
     VirtualDesktopHelper();
-    ~VirtualDesktopHelper() = default;
+    ~VirtualDesktopHelper();
 
     [[nodiscard]] int                            GetDesktopCount() const;
     [[nodiscard]] int                            GetCurrentDesktopIndex() const;

@@ -4,7 +4,7 @@
 
 #include <array>
 
-#include "util/ColorState.h"
+#include "util/Utils.h"
 
 namespace {
 
@@ -178,28 +178,18 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
     } else if (cmd >= CMD_POSITION_BASE && cmd < CMD_POSITION_CUSTOM) {
         m_activePositionPreset = static_cast<int>(cmd - CMD_POSITION_BASE);
         m_editModeChecked      = false;
-        if (m_positionFn != nullptr) {
-            m_positionFn(m_activePositionPreset, m_positionCtx);
-        }
+        if (m_positionFn) { m_positionFn(m_activePositionPreset); }
     } else if (cmd == CMD_POSITION_CUSTOM) {
         m_editModeChecked      = !m_editModeChecked;
         m_activePositionPreset = -1;
-        if (m_editModeFn != nullptr) {
-            m_editModeFn(m_editModeCtx);
-        }
+        if (m_editModeFn) { m_editModeFn(); }
     } else if (cmd == WM_TRAY_SETTINGS) {
-        if (m_settingsFn != nullptr) {
-            m_settingsFn(m_settingsCtx);
-        }
+        if (m_settingsFn) { m_settingsFn(); }
     } else if (cmd == WM_TRAY_ABOUT) {
-        if (m_aboutFn != nullptr) {
-            m_aboutFn(m_aboutCtx);
-        }
+        if (m_aboutFn) { m_aboutFn(); }
     } else if (cmd >= CMD_COLOR_OPTIONS_BASE && cmd < CMD_COLOR_OPTIONS_BASE + static_cast<UINT>(kPredefinedColors.size())) {
         const int index = static_cast<int>(cmd - CMD_COLOR_OPTIONS_BASE);
-        if (m_colorFn != nullptr) {
-            m_colorFn(kPredefinedColors.at(index), m_colorCtx);
-        }
+        if (m_colorFn) { m_colorFn(kPredefinedColors.at(index)); }
     }
 }
 

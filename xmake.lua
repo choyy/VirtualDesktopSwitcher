@@ -19,6 +19,8 @@ target("VirtualDesktopSwitcher")
 
     add_packages("stb")
 
+    add_defines("NOMINMAX")
+
     on_load(function (target)
         target:add("defines", string.format([[APP_VERSION="%s"]], target:version()))
     end)

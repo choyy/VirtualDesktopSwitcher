@@ -27,30 +27,56 @@ const IID   IID_IVirtualDesktopManagerInternal_Win10   = {.Data1 = 0xF31574D6, .
 const IID   IID_IVirtualDesktop_Win10                  = {.Data1 = 0xFF72FFDD, .Data2 = 0xBE7E, .Data3 = 0x43FC, .Data4 = {0x9C, 0x03, 0xAD, 0x81, 0x68, 0x1E, 0x88, 0xE4}};
 } // namespace
 
-VirtualDesktopHelper::VirtualDesktopHelper() {
-    if (!m_comInit.Succeeded()) {
-        Log(L"[ERROR] CoInitialize failed: 0x" + std::to_wstring(static_cast<uint32_t>(m_comInit.Result())));
+VirtualDesktopHelper::VirtualDesktopHelper() : m_comInitResult(CoInitialize(nullptr)) {
+    if (FAILED(m_comInitResult)) {
+        Log(L"[ERROR] CoInitialize failed: 0x" + std::to_wstring(static_cast<uint32_t>(m_comInitResult)));
         return;
     }
 
     Microsoft::WRL::ComPtr<IUnknown> immersiveShell;
-    HRESULT                          hr = CoCreateInstance(CLSID_ImmersiveShell, nullptr, CLSCTX_LOCAL_SERVER,
-                                                           IID_IUnknown, ComPtrAsVoid(immersiveShell));
-    if (FAILED(hr)) {
-        Log(L"[ERROR] Failed to create IImmersiveShell: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
-        return;
-    }
-    Log(L"[INFO] IImmersiveShell created successfully");
+    if (!InitImmersiveShell(immersiveShell)) { return; }
 
     Microsoft::WRL::ComPtr<IServiceProvider> serviceProvider;
-    hr = immersiveShell.As(&serviceProvider);
+    if (!InitServiceProvider(immersiveShell, serviceProvider)) { return; }
+
+    if (!InitDesktopManagerInternal(serviceProvider, immersiveShell)) { return; }
+
+    VerifyDesktopIID();
+    InitViewCollection(serviceProvider);
+    InitDesktopManager();
+}
+
+VirtualDesktopHelper::~VirtualDesktopHelper() {
+    if (SUCCEEDED(m_comInitResult)) {
+        CoUninitialize();
+    }
+}
+
+bool VirtualDesktopHelper::InitImmersiveShell(Microsoft::WRL::ComPtr<IUnknown> &shell) {
+    HRESULT hr = CoCreateInstance(CLSID_ImmersiveShell, nullptr, CLSCTX_LOCAL_SERVER,
+                                  IID_IUnknown, ComPtrAsVoid(shell));
+    if (FAILED(hr)) {
+        Log(L"[ERROR] Failed to create IImmersiveShell: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
+        return false;
+    }
+    Log(L"[INFO] IImmersiveShell created successfully");
+    return true;
+}
+
+bool VirtualDesktopHelper::InitServiceProvider(Microsoft::WRL::ComPtr<IUnknown>         &shell,
+                                               Microsoft::WRL::ComPtr<IServiceProvider> &sp) {
+    HRESULT hr = shell.As(&sp);
     if (FAILED(hr)) {
         Log(L"[ERROR] Failed to query IServiceProvider: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
-        return;
+        return false;
     }
     Log(L"[INFO] ServiceProvider queried successfully");
+    return true;
+}
 
-    // Try multiple (service GUID, interface IID) combinations for Win10 ~ Win11 compatibility
+bool VirtualDesktopHelper::InitDesktopManagerInternal(Microsoft::WRL::ComPtr<IServiceProvider> &sp,
+                                                      Microsoft::WRL::ComPtr<IUnknown>         &shell) {
+    HRESULT hr = 0;
     struct VdiCombo {
         const IID *service;
         const IID *iid;
@@ -65,75 +91,76 @@ VirtualDesktopHelper::VirtualDesktopHelper() {
         {.service = &CLSID_VirtualDesktopManager, .iid = &IID_IVirtualDesktopManagerInternal_Win11, .win10 = false},
     }};
     for (const auto &c : vdiCombos) {
-        hr = serviceProvider->QueryService(*c.service, *c.iid, ComPtrAsVoid(virtualDesktopManagerInternal));
+        hr = sp->QueryService(*c.service, *c.iid, ComPtrAsVoid(virtualDesktopManagerInternal));
         if (SUCCEEDED(hr) && virtualDesktopManagerInternal != nullptr) {
             m_iidVirtualDesktop = c.win10 ? IID_IVirtualDesktop_Win10 : __uuidof(IVirtualDesktop);
             Log(L"[INFO] IVirtualDesktopManagerInternal created (QueryService)");
-            break;
+            return true;
         }
     }
 
-    if (virtualDesktopManagerInternal == nullptr) {
-        static const std::array<const IID *, 3> qiIIDs = {&IID_IVirtualDesktopManagerInternal_Win10, &IID_IVirtualDesktopManagerInternal_Win11, &IID_IVirtualDesktopManagerInternal_Service};
+    {
+        const std::array<const IID *, 3> qiIIDs = {&IID_IVirtualDesktopManagerInternal_Win10, &IID_IVirtualDesktopManagerInternal_Win11, &IID_IVirtualDesktopManagerInternal_Service};
         for (const auto &iid : qiIIDs) {
-            hr = immersiveShell->QueryInterface(*iid, ComPtrAsVoid(virtualDesktopManagerInternal));
+            hr = shell->QueryInterface(*iid, ComPtrAsVoid(virtualDesktopManagerInternal));
             if (SUCCEEDED(hr) && virtualDesktopManagerInternal != nullptr) {
                 m_iidVirtualDesktop = (iid == &IID_IVirtualDesktopManagerInternal_Win10) ? IID_IVirtualDesktop_Win10 : __uuidof(IVirtualDesktop);
                 Log(L"[INFO] IVirtualDesktopManagerInternal created (QI from immersiveShell)");
-                break;
+                return true;
             }
         }
     }
 
-    if (virtualDesktopManagerInternal == nullptr) {
+    {
         Microsoft::WRL::ComPtr<IUnknown> vdMgr;
         hr = CoCreateInstance(CLSID_VirtualDesktopManager, nullptr, CLSCTX_INPROC_SERVER,
                               IID_IUnknown, ComPtrAsVoid(vdMgr));
         if (SUCCEEDED(hr)) {
-            static const std::array<const IID *, 2> qiIIDs = {&IID_IVirtualDesktopManagerInternal_Win10, &IID_IVirtualDesktopManagerInternal_Win11};
+            const std::array<const IID *, 2> qiIIDs = {&IID_IVirtualDesktopManagerInternal_Win10, &IID_IVirtualDesktopManagerInternal_Win11};
             for (const auto &iid : qiIIDs) {
                 hr = vdMgr->QueryInterface(*iid, ComPtrAsVoid(virtualDesktopManagerInternal));
                 if (SUCCEEDED(hr) && virtualDesktopManagerInternal != nullptr) {
                     m_iidVirtualDesktop = (iid == &IID_IVirtualDesktopManagerInternal_Win10) ? IID_IVirtualDesktop_Win10 : __uuidof(IVirtualDesktop);
                     Log(L"[INFO] IVirtualDesktopManagerInternal created (QI from vdMgr)");
-                    break;
+                    return true;
                 }
             }
         }
     }
 
-    if (virtualDesktopManagerInternal == nullptr) {
-        Log(L"[ERROR] Failed to query IVirtualDesktopManagerInternal");
-        return;
-    }
+    Log(L"[ERROR] Failed to query IVirtualDesktopManagerInternal");
+    return false;
+}
 
-    // Verify the chosen IVirtualDesktop IID
-    {
-        Microsoft::WRL::ComPtr<IVirtualDesktop> testDesktop;
-        if (SUCCEEDED(virtualDesktopManagerInternal->GetCurrentDesktop(&testDesktop))) {
-            Microsoft::WRL::ComPtr<IUnknown> testQI;
-            if (FAILED(testDesktop->QueryInterface(m_iidVirtualDesktop, ComPtrAsVoid(testQI)))) {
-                m_iidVirtualDesktop = (IsEqualGUID(m_iidVirtualDesktop, IID_IVirtualDesktop_Win10) != 0) ? __uuidof(IVirtualDesktop) : IID_IVirtualDesktop_Win10;
-            }
+void VirtualDesktopHelper::VerifyDesktopIID() {
+    Microsoft::WRL::ComPtr<IVirtualDesktop> testDesktop;
+    if (SUCCEEDED(virtualDesktopManagerInternal->GetCurrentDesktop(&testDesktop))) {
+        Microsoft::WRL::ComPtr<IUnknown> testQI;
+        if (FAILED(testDesktop->QueryInterface(m_iidVirtualDesktop, ComPtrAsVoid(testQI)))) {
+            m_iidVirtualDesktop = (IsEqualGUID(m_iidVirtualDesktop, IID_IVirtualDesktop_Win10) != 0) ? __uuidof(IVirtualDesktop) : IID_IVirtualDesktop_Win10;
         }
     }
+}
 
-    hr = serviceProvider->QueryService(IID_IApplicationViewCollection_1903,
-                                       IID_IApplicationViewCollection_1903,
-                                       ComPtrAsVoid(viewCollection));
+void VirtualDesktopHelper::InitViewCollection(Microsoft::WRL::ComPtr<IServiceProvider> &sp) {
+    HRESULT hr = sp->QueryService(IID_IApplicationViewCollection_1903,
+                                  IID_IApplicationViewCollection_1903,
+                                  ComPtrAsVoid(viewCollection));
     if (FAILED(hr)) {
-        hr = serviceProvider->QueryService(IID_IApplicationViewCollection_1809,
-                                           IID_IApplicationViewCollection_1809,
-                                           ComPtrAsVoid(viewCollection));
+        hr = sp->QueryService(IID_IApplicationViewCollection_1809,
+                              IID_IApplicationViewCollection_1809,
+                              ComPtrAsVoid(viewCollection));
     }
     if (SUCCEEDED(hr)) {
         Log(L"[INFO] IApplicationViewCollection created successfully");
     } else {
         Log(L"[ERROR] Failed to query IApplicationViewCollection: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
     }
+}
 
-    hr = CoCreateInstance(CLSID_VirtualDesktopManager, nullptr, CLSCTX_INPROC_SERVER,
-                          IID_IVirtualDesktopManager, ComPtrAsVoid(virtualDesktopManager));
+void VirtualDesktopHelper::InitDesktopManager() {
+    HRESULT hr = CoCreateInstance(CLSID_VirtualDesktopManager, nullptr, CLSCTX_INPROC_SERVER,
+                                  IID_IVirtualDesktopManager, ComPtrAsVoid(virtualDesktopManager));
     if (FAILED(hr)) {
         Log(L"[ERROR] Failed to create IVirtualDesktopManager: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
     } else {

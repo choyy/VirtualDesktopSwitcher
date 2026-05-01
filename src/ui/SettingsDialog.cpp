@@ -1,14 +1,13 @@
-#define NOMINMAX
 #include "SettingsDialog.h"
 
 #include <commctrl.h>
 
 #include <array>
-#include <bit>
 #include <string>
 #include <vector>
 
 #include "util/ConfigIni.h"
+#include "util/Utils.h"
 
 namespace {
 
@@ -85,7 +84,7 @@ struct FontEnumData {
 };
 
 int CALLBACK FontEnumProc(const LOGFONTW *lf, const TEXTMETRICW * /*unused*/, DWORD /*unused*/, LPARAM lParam) {
-    auto *data = std::bit_cast<FontEnumData *>(lParam);
+    auto *data = LParamToPtr<FontEnumData>(lParam);
     bool  dup  = false;
     for (const auto &a : data->added) {
         if (a == &lf->lfFaceName[0]) {
@@ -125,7 +124,7 @@ void PopulateComboWithAllSystemFonts(HWND hCmb, const std::wstring &selectedFont
 
 void FillCombo(HWND hCmb, const wchar_t *const *items, size_t count, const std::wstring &current, bool extraFont, bool editable) {
     for (size_t i = 0; i < count; ++i) {
-        SendMessageW(hCmb, CB_ADDSTRING, 0, std::bit_cast<LPARAM>(items[i]));
+        SendMessageW(hCmb, CB_ADDSTRING, 0, PtrToLParam(items[i]));
     }
     if (extraFont) {
         SendMessageW(hCmb, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"更多字体...")); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
@@ -155,12 +154,12 @@ struct DialogData {
 };
 
 INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-    auto *data = std::bit_cast<DialogData *>(GetWindowLongPtrW(hwnd, DWLP_USER));
+    auto *data = GetWndUserData<DialogData>(hwnd, DWLP_USER);
 
     switch (msg) {
     case WM_INITDIALOG: {
         SetWindowLongPtrW(hwnd, DWLP_USER, lp);
-        data = std::bit_cast<DialogData *>(lp);
+        data = LParamToPtr<DialogData>(lp);
 
         FillCombo(GetDlgItem(hwnd, IDC_CUR_SYM), kSymbolList.data(), kSymbolList.size(), data->result.currentSymbol, false, true);
         FillCombo(GetDlgItem(hwnd, IDC_OTH_SYM), kSymbolList.data(), kSymbolList.size(), data->result.otherSymbol, false, true);
@@ -179,7 +178,7 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         int code = HIWORD(wp);
 
         if (code == CBN_SELCHANGE && id >= IDC_CUR_SYM && id <= IDC_EMP_SYM) {
-            HWND hCmb = std::bit_cast<HWND>(lp);
+            HWND hCmb = reinterpret_cast<HWND>(lp); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
             int  sel  = static_cast<int>(SendMessageW(hCmb, CB_GETCURSEL, 0, 0));
             if (sel == CB_ERR) {
                 return TRUE;
@@ -199,7 +198,7 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
 
         if (id == IDC_FONT && code == CBN_SELCHANGE) {
-            HWND hCmb = std::bit_cast<HWND>(lp);
+            HWND hCmb = reinterpret_cast<HWND>(lp); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
             int  sel  = static_cast<int>(SendMessageW(hCmb, CB_GETCURSEL, 0, 0));
             if (sel == CB_ERR) {
                 return TRUE;
@@ -262,7 +261,7 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
     case WM_CTLCOLORDLG:
     case WM_CTLCOLORSTATIC:
-        return std::bit_cast<INT_PTR>(GetSysColorBrush(COLOR_WINDOW));
+        return PtrToIntPtr(GetSysColorBrush(COLOR_WINDOW));
     default: break;
     }
     return FALSE;
@@ -273,16 +272,16 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 SettingsDialog::Result SettingsDialog::Show(HWND parent, const Result &current,
                                             void (*preview)(const Result &, void *),
                                             void *previewCtx) {
-    auto *hInst = std::bit_cast<HINSTANCE>(GetWindowLongPtrW(parent, GWLP_HINSTANCE));
+    auto *hInst = reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(parent, GWLP_HINSTANCE)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
 
     DialogData data;
     data.result     = current;
     data.preview    = preview;
     data.previewCtx = previewCtx;
 
-    std::wstring iniCur = DecodeSymbol(ReadIniString(L"Display", L"CurrentSymbol", EncodeSymbol(current.currentSymbol)));
-    std::wstring iniOth = DecodeSymbol(ReadIniString(L"Display", L"OtherSymbol", EncodeSymbol(current.otherSymbol)));
-    std::wstring iniEmp = DecodeSymbol(ReadIniString(L"Display", L"EmptySymbol", EncodeSymbol(current.emptySymbol)));
+    std::wstring iniCur = ReadIniSymbol(L"Display", L"CurrentSymbol", current.currentSymbol);
+    std::wstring iniOth = ReadIniSymbol(L"Display", L"OtherSymbol", current.otherSymbol);
+    std::wstring iniEmp = ReadIniSymbol(L"Display", L"EmptySymbol", current.emptySymbol);
     if (iniCur.size() == 1) {
         data.result.currentSymbol = iniCur;
     }
@@ -293,6 +292,6 @@ SettingsDialog::Result SettingsDialog::Show(HWND parent, const Result &current,
         data.result.emptySymbol = iniEmp;
     }
 
-    DialogBoxParamW(hInst, MAKEINTRESOURCEW(1001), parent, SettingsDlgProc, reinterpret_cast<LPARAM>(&data)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    DialogBoxParamW(hInst, MAKEINTRESOURCEW(1001), parent, SettingsDlgProc, PtrToLParam(&data));
     return data.result;
 }

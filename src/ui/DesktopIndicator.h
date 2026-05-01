@@ -44,10 +44,7 @@ public:
     [[nodiscard]] const std::wstring &GetEmptySymbol() const { return m_emptySymbol; }
     [[nodiscard]] const std::wstring &GetFontName() const { return m_fontName; }
     [[nodiscard]] int                 GetCharSpacing() const { return m_charSpacing; }
-    [[nodiscard]] bool                IsAutoCheckUpdates() const { return m_autoCheckUpdates; }
     [[nodiscard]] int                 GetPositionPreset() const { return m_positionPreset; }
-
-    void SetAutoCheckUpdates(bool v);
 
 private:
     HWND                           m_hwnd = nullptr;
@@ -65,13 +62,12 @@ private:
     std::wstring                   m_otherSymbol    = L"\u25CB";
     std::wstring                   m_emptySymbol    = L"\u25CC";
     std::array<bool, kMaxDesktops> m_emptyDesktops{};
-    bool                           m_posInitialized   = false;
-    bool                           m_editMode         = false;
-    int                            m_positionPreset   = -1;
-    bool                           m_autoCheckUpdates = true;
-    bool                           m_dragging         = false;
-    POINT                          m_windowPos        = {.x = 0, .y = 0};
-    POINT                          m_dragOffset       = {.x = 0, .y = 0};
+    bool                           m_posInitialized = false;
+    bool                           m_editMode       = false;
+    int                            m_positionPreset = -1;
+    bool                           m_dragging       = false;
+    POINT                          m_windowPos      = {.x = 0, .y = 0};
+    POINT                          m_dragOffset     = {.x = 0, .y = 0};
 
     void RebuildText();
     void Render();

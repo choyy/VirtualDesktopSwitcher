@@ -1,10 +1,10 @@
-#ifndef TRAY_ICON_H
-#define TRAY_ICON_H
+#pragma once
 
 #include <windows.h>
 
 #include <shellapi.h>
 
+#include <functional>
 #include <string>
 
 constexpr UINT WM_TRAYICON                = WM_USER + 2;
@@ -35,26 +35,11 @@ public:
     [[nodiscard]] bool GetAutoStartStatus() const { return m_autoStartEnabled; }
 
     void SetActivePositionPreset(int preset) { m_activePositionPreset = preset; }
-    void SetEditModeCallback(void (*cb)(void *), void *ctx) {
-        m_editModeFn  = cb;
-        m_editModeCtx = ctx;
-    }
-    void SetPositionCallback(void (*cb)(int, void *), void *ctx) {
-        m_positionFn  = cb;
-        m_positionCtx = ctx;
-    }
-    void SetColorCallback(void (*cb)(const std::wstring &, void *), void *ctx) {
-        m_colorFn  = cb;
-        m_colorCtx = ctx;
-    }
-    void SetSettingsCallback(void (*cb)(void *), void *ctx) {
-        m_settingsFn  = cb;
-        m_settingsCtx = ctx;
-    }
-    void SetAboutCallback(void (*cb)(void *), void *ctx) {
-        m_aboutFn  = cb;
-        m_aboutCtx = ctx;
-    }
+    void SetEditModeCallback(std::function<void()> cb) { m_editModeFn = std::move(cb); }
+    void SetPositionCallback(std::function<void(int)> cb) { m_positionFn = std::move(cb); }
+    void SetColorCallback(std::function<void(const std::wstring &)> cb) { m_colorFn = std::move(cb); }
+    void SetSettingsCallback(std::function<void()> cb) { m_settingsFn = std::move(cb); }
+    void SetAboutCallback(std::function<void()> cb) { m_aboutFn = std::move(cb); }
 
 private:
     NOTIFYICONDATAW m_nid{};
@@ -63,16 +48,11 @@ private:
     bool            m_editModeChecked      = false;
     int             m_activePositionPreset = 1;
 
-    void (*m_editModeFn)(void *)                    = nullptr;
-    void *m_editModeCtx                             = nullptr;
-    void (*m_positionFn)(int, void *)               = nullptr;
-    void *m_positionCtx                             = nullptr;
-    void (*m_colorFn)(const std::wstring &, void *) = nullptr;
-    void *m_colorCtx                                = nullptr;
-    void (*m_settingsFn)(void *)                    = nullptr;
-    void *m_settingsCtx                             = nullptr;
-    void (*m_aboutFn)(void *)                       = nullptr;
-    void *m_aboutCtx                                = nullptr;
+    std::function<void(const std::wstring &)> m_colorFn;
+    std::function<void()>                     m_editModeFn;
+    std::function<void(int)>                  m_positionFn;
+    std::function<void()>                     m_settingsFn;
+    std::function<void()>                     m_aboutFn;
 
     static bool IsAutoStartEnabled();
     static void SetAutoStart(bool enable);
@@ -81,5 +61,3 @@ private:
     void        HandleCommand(WPARAM wParam);
     static void DrawColorSwatch(LPDRAWITEMSTRUCT dis);
 };
-
-#endif

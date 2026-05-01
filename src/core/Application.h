@@ -1,5 +1,4 @@
-#ifndef APPLICATION_H
-#define APPLICATION_H
+#pragma once
 
 #include <windows.h>
 
@@ -16,12 +15,18 @@ private:
     std::unique_ptr<TrayIcon>               m_pTrayIcon;
     std::unique_ptr<DesktopIndicator>       m_pOverlay;
     int                                     m_lastDesktopIndex = -1;
+    bool                                    m_autoCheckUpdates = true;
     UINT                                    m_uTaskbarCreated  = 0;
 
     // 窗口过程函数
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     void                    OnSystemResume();
     void                    SyncDesktopState();
+    void                    OnTrayMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, HWND hwnd);
+    void                    OnMenuSelect(WPARAM wParam, LPARAM lParam);
+    void                    OnDesktopSwitch(WPARAM wParam);
+    void                    OnTimerTick();
+    static void             OnDestroy(HWND hwnd);
 
 public:
     Application(const Application &)            = delete;
@@ -38,5 +43,3 @@ public:
     // 运行消息循环
     static int Run();
 };
-
-#endif // APPLICATION_H

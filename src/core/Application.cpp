@@ -1,15 +1,16 @@
 #include "Application.h"
 
-#include <bit>
 #include <string>
 
+#include "core/UpdateChecker.h"
 #include "core/VirtualDesktopSwitcher.h"
 #include "ui/AboutDialog.h"
 #include "ui/DesktopIndicator.h"
 #include "ui/SettingsDialog.h"
 #include "ui/TrayIcon.h"
-#include "util/ColorState.h"
+#include "util/ConfigIni.h"
 #include "util/Log.h"
+#include "util/Utils.h"
 
 namespace {
 
@@ -28,54 +29,30 @@ Application::~Application() {
 }
 
 LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    auto *pApp = std::bit_cast<Application *>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    auto *pApp = GetWndUserData<Application>(hwnd);
     if (pApp == nullptr) {
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
     }
 
     switch (uMsg) {
     case WM_MEASUREITEM:
-    case WM_DRAWITEM: {
-        pApp->m_pTrayIcon->HandleMessage(hwnd, uMsg, wParam, lParam);
-        return (uMsg == WM_MEASUREITEM) ? TRUE : 0;
-    }
-
+    case WM_DRAWITEM:
     case WM_TRAYICON:
     case WM_COMMAND:
-        pApp->m_pTrayIcon->HandleMessage(hwnd, uMsg, wParam, lParam);
+        pApp->OnTrayMessage(uMsg, wParam, lParam, hwnd);
+        return (uMsg == WM_MEASUREITEM) ? TRUE : 0;
+
+    case WM_MENUSELECT:
+        pApp->OnMenuSelect(wParam, lParam);
         return 0;
 
-    case WM_MENUSELECT: {
-        UINT item  = LOWORD(wParam);
-        UINT flags = HIWORD(wParam);
-        if (flags == 0xFFFF) {
-            if (pApp->m_pOverlay != nullptr) {
-                pApp->m_pOverlay->CancelPreview();
-            }
-        } else if ((flags & MF_POPUP) == 0u) {
-            int colorIdx = static_cast<int>(item - CMD_COLOR_OPTIONS_BASE);
-            if (colorIdx >= 0 && static_cast<size_t>(colorIdx) < kPredefinedColors.size()) {
-                if (pApp->m_pOverlay != nullptr) {
-                    pApp->m_pOverlay->SetColorPreview(kPredefinedColors.at(colorIdx));
-                }
-            }
-        }
+    case WM_SWITCH_DESKTOP:
+        pApp->OnDesktopSwitch(wParam);
         return 0;
-    }
 
-    case WM_SWITCH_DESKTOP: {
-        pApp->m_switcher->SwitchToDesktop(static_cast<int>(wParam));
-        pApp->SyncDesktopState();
+    case WM_TIMER:
+        pApp->OnTimerTick();
         return 0;
-    }
-
-    case WM_TIMER: {
-        int currentDesktop = pApp->m_switcher->GetCurrentDesktopIndex();
-        if (currentDesktop != pApp->m_lastDesktopIndex) {
-            pApp->SyncDesktopState();
-        }
-        return 0;
-    }
 
     case WM_POWERBROADCAST:
         if (wParam == PBT_APMRESUMEAUTOMATIC || wParam == PBT_APMRESUMESUSPEND) {
@@ -84,8 +61,7 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
         return TRUE;
 
     case WM_DESTROY:
-        KillTimer(hwnd, 1);
-        PostQuitMessage(0);
+        Application::OnDestroy(hwnd);
         return 0;
     default:
         break;
@@ -99,12 +75,48 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
+void Application::OnTrayMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, HWND hwnd) {
+    m_pTrayIcon->HandleMessage(hwnd, uMsg, wParam, lParam);
+}
+
+void Application::OnMenuSelect(WPARAM wParam, LPARAM /*lParam*/) {
+    UINT item  = LOWORD(wParam);
+    UINT flags = HIWORD(wParam);
+    if (flags == 0xFFFF) {
+        if (m_pOverlay) { m_pOverlay->CancelPreview(); }
+    } else if ((flags & MF_POPUP) == 0u) {
+        int colorIdx = static_cast<int>(item - CMD_COLOR_OPTIONS_BASE);
+        if (colorIdx >= 0 && static_cast<size_t>(colorIdx) < kPredefinedColors.size()) {
+            if (m_pOverlay) { m_pOverlay->SetColorPreview(kPredefinedColors.at(colorIdx)); }
+        }
+    }
+}
+
+void Application::OnDesktopSwitch(WPARAM wParam) {
+    m_switcher->SwitchToDesktop(static_cast<int>(wParam));
+    SyncDesktopState();
+}
+
+void Application::OnTimerTick() {
+    int currentDesktop = m_switcher->GetCurrentDesktopIndex();
+    if (currentDesktop != m_lastDesktopIndex) {
+        SyncDesktopState();
+    }
+}
+
+void Application::OnDestroy(HWND hwnd) {
+    KillTimer(hwnd, 1);
+    PostQuitMessage(0);
+}
+
 bool Application::Initialize() {
     m_switcher = std::make_unique<VirtualDesktopSwitcher>();
 
+    HINSTANCE hInst = GetModuleHandle(nullptr);
+
     WNDCLASSW wc     = {};
     wc.lpfnWndProc   = WindowProc;
-    wc.hInstance     = GetModuleHandle(nullptr);
+    wc.hInstance     = hInst;
     wc.lpszClassName = L"VirtualDesktopSwitcherClass";
 
     if (RegisterClassW(&wc) == 0) {
@@ -115,13 +127,16 @@ bool Application::Initialize() {
     m_hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED,
                              L"VirtualDesktopSwitcherClass", L"VirtualDesktopSwitcher",
                              WS_POPUP,
-                             0, 0, 0, 0, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
+                             0, 0, 0, 0, nullptr, nullptr, hInst, nullptr);
+
     if (m_hwnd == nullptr) {
         Log(L"[ERROR] Failed to create window");
         return false;
     }
     m_switcher->SetWindowHandle(m_hwnd);
-    SetWindowLongPtrW(m_hwnd, GWLP_USERDATA, std::bit_cast<LONG_PTR>(this));
+    SetWndUserData(m_hwnd, this);
+
+    m_autoCheckUpdates = ReadIniInt(L"General", L"AutoCheckUpdates", 1) != 0;
 
     // Load saved config first (DesktopIndicator constructor calls LoadConfig)
     m_pOverlay = std::make_unique<DesktopIndicator>();
@@ -129,7 +144,7 @@ bool Application::Initialize() {
     // Initialize tray icon with saved preset
     m_pTrayIcon = std::make_unique<TrayIcon>();
     m_pTrayIcon->SetActivePositionPreset(m_pOverlay->GetPositionPreset());
-    if (!m_pTrayIcon->Initialize(m_hwnd, GetModuleHandle(nullptr))) {
+    if (!m_pTrayIcon->Initialize(m_hwnd, hInst)) {
         Log(L"[ERROR] Failed to initialize tray icon");
         return false;
     }
@@ -141,7 +156,7 @@ bool Application::Initialize() {
     m_pTrayIcon->UpdateTooltip(BuildTooltipText(desktopCount, currentDesktop));
 
     // Initialize desktop overlay
-    if (!m_pOverlay->Initialize(GetModuleHandle(nullptr))) {
+    if (!m_pOverlay->Initialize(hInst)) {
         Log(L"[ERROR] Failed to initialize desktop indicator");
     } else {
         auto emptyMask = m_switcher->GetDesktopEmptyMask();
@@ -150,63 +165,54 @@ bool Application::Initialize() {
     }
 
     // Set up tray icon callbacks
-    m_pTrayIcon->SetColorCallback([](const std::wstring &hex, void *ctx) {
-        auto *app = static_cast<Application *>(ctx);
-        if (app->m_pOverlay != nullptr) { app->m_pOverlay->SetColor(hex); }
-    },
-                                  this);
-    m_pTrayIcon->SetEditModeCallback([](void *ctx) {
-        auto *app = static_cast<Application *>(ctx);
-        if (app->m_pOverlay != nullptr) { app->m_pOverlay->ToggleEditMode(); }
-    },
-                                     this);
-    m_pTrayIcon->SetPositionCallback([](int preset, void *ctx) {
-        auto *app = static_cast<Application *>(ctx);
-        if (app->m_pOverlay != nullptr) { app->m_pOverlay->SetPositionPreset(preset); }
-    },
-                                     this);
-    m_pTrayIcon->SetSettingsCallback([](void *ctx) {
-        auto *app = static_cast<Application *>(ctx);
-        if (app->m_pOverlay == nullptr) { return; }
+    m_pTrayIcon->SetColorCallback([this](const std::wstring &hex) {
+        if (m_pOverlay) { m_pOverlay->SetColor(hex); }
+    });
+    m_pTrayIcon->SetEditModeCallback([this]() {
+        if (m_pOverlay) { m_pOverlay->ToggleEditMode(); }
+    });
+    m_pTrayIcon->SetPositionCallback([this](int preset) {
+        if (m_pOverlay) { m_pOverlay->SetPositionPreset(preset); }
+    });
+    m_pTrayIcon->SetSettingsCallback([this]() {
+        if (m_pOverlay == nullptr) { return; }
         SettingsDialog::Result cur = {
-            .currentSymbol = app->m_pOverlay->GetCurrentSymbol(),
-            .otherSymbol   = app->m_pOverlay->GetOtherSymbol(),
-            .emptySymbol   = app->m_pOverlay->GetEmptySymbol(),
-            .fontName      = app->m_pOverlay->GetFontName(),
-            .charSpacing   = app->m_pOverlay->GetCharSpacing()};
+            .currentSymbol = m_pOverlay->GetCurrentSymbol(),
+            .otherSymbol   = m_pOverlay->GetOtherSymbol(),
+            .emptySymbol   = m_pOverlay->GetEmptySymbol(),
+            .fontName      = m_pOverlay->GetFontName(),
+            .charSpacing   = m_pOverlay->GetCharSpacing()};
 
-        SettingsDialog::Result res = SettingsDialog::Show(app->m_hwnd, cur, [](const SettingsDialog::Result &preview, void *ctx2) {
+        SettingsDialog::Result res = SettingsDialog::Show(m_hwnd, cur, [](const SettingsDialog::Result &preview, void *ctx2) {
                 auto *app2 = static_cast<Application *>(ctx2);
                 app2->m_pOverlay->SetCurrentSymbol(preview.currentSymbol);
                 app2->m_pOverlay->SetOtherSymbol(preview.otherSymbol);
                 app2->m_pOverlay->SetEmptySymbol(preview.emptySymbol);
                 app2->m_pOverlay->SetFontName(preview.fontName);
-                app2->m_pOverlay->SetCharSpacing(preview.charSpacing); }, app);
+                app2->m_pOverlay->SetCharSpacing(preview.charSpacing); }, this);
         if (res.accepted) {
-            app->m_pOverlay->SetCurrentSymbol(res.currentSymbol);
-            app->m_pOverlay->SetOtherSymbol(res.otherSymbol);
-            app->m_pOverlay->SetEmptySymbol(res.emptySymbol);
-            app->m_pOverlay->SetFontName(res.fontName);
-            app->m_pOverlay->SetCharSpacing(res.charSpacing);
+            m_pOverlay->SetCurrentSymbol(res.currentSymbol);
+            m_pOverlay->SetOtherSymbol(res.otherSymbol);
+            m_pOverlay->SetEmptySymbol(res.emptySymbol);
+            m_pOverlay->SetFontName(res.fontName);
+            m_pOverlay->SetCharSpacing(res.charSpacing);
         }
-    },
-                                     this);
-    m_pTrayIcon->SetAboutCallback([](void *ctx) {
-        auto *app = static_cast<Application *>(ctx);
-        if (app->m_pOverlay == nullptr) { return; }
-        auto res = AboutDialog::Show(app->m_hwnd, app->m_pOverlay->IsAutoCheckUpdates());
-        if (res.accepted && res.autoCheckUpdates != app->m_pOverlay->IsAutoCheckUpdates()) {
-            app->m_pOverlay->SetAutoCheckUpdates(res.autoCheckUpdates);
+    });
+    m_pTrayIcon->SetAboutCallback([this]() {
+        if (m_pOverlay == nullptr) { return; }
+        auto res = AboutDialog::Show(m_hwnd, m_autoCheckUpdates);
+        if (res.accepted && res.autoCheckUpdates != m_autoCheckUpdates) {
+            m_autoCheckUpdates = res.autoCheckUpdates;
+            WriteIniInt(L"General", L"AutoCheckUpdates", m_autoCheckUpdates ? 1 : 0);
         }
-    },
-                                  this);
+    });
 
     // Register taskbar creation message (for Explorer restart / wake from sleep)
     m_uTaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
 
     // Check for updates on startup
-    if (m_pOverlay != nullptr && m_pOverlay->IsAutoCheckUpdates()) {
-        AboutDialog::CheckAndDownload(m_hwnd, true);
+    if (m_autoCheckUpdates) {
+        UpdateChecker::CheckAndDownload(m_hwnd, true);
     }
 
     // Install keyboard hook

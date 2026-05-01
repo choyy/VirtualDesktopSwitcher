@@ -13,3 +13,4 @@ void         WriteIniString(const std::wstring &section, const std::wstring &key
 void         WriteIniInt(const std::wstring &section, const std::wstring &key, int value);
 std::wstring EncodeSymbol(const std::wstring &sym);
 std::wstring DecodeSymbol(const std::wstring &str);
+std::wstring ReadIniSymbol(const std::wstring &section, const std::wstring &key, const std::wstring &defaultSym);

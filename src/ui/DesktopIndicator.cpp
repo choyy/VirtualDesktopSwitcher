@@ -4,8 +4,6 @@
 
 #include <windowsx.h>
 
-#include <bit>
-
 #include "util/ConfigIni.h"
 #include "util/DrawingTextSTB.h"
 #include "util/Utils.h"
@@ -39,16 +37,13 @@ void DesktopIndicator::LoadConfig() {
     if (fs > 0) { m_fontSize = fs; }
 
     {
-        std::wstring cur = DecodeSymbol(ReadIniString(L"Display", L"CurrentSymbol", EncodeSymbol(m_currentSymbol)));
-        m_currentSymbol  = (cur.size() == 1) ? cur : m_currentSymbol;
+        m_currentSymbol = ReadIniSymbol(L"Display", L"CurrentSymbol", m_currentSymbol);
     }
     {
-        std::wstring oth = DecodeSymbol(ReadIniString(L"Display", L"OtherSymbol", EncodeSymbol(m_otherSymbol)));
-        m_otherSymbol    = (oth.size() == 1) ? oth : m_otherSymbol;
+        m_otherSymbol = ReadIniSymbol(L"Display", L"OtherSymbol", m_otherSymbol);
     }
     {
-        std::wstring emp = DecodeSymbol(ReadIniString(L"Display", L"EmptySymbol", EncodeSymbol(m_emptySymbol)));
-        m_emptySymbol    = (emp.size() == 1) ? emp : m_emptySymbol;
+        m_emptySymbol = ReadIniSymbol(L"Display", L"EmptySymbol", m_emptySymbol);
     }
 
     int sp = ReadIniInt(L"Display", L"CharSpacing", 0);
@@ -57,8 +52,7 @@ void DesktopIndicator::LoadConfig() {
     std::wstring fn = ReadIniString(L"Display", L"FontName", L"Segoe UI Symbol");
     if (!fn.empty()) { m_fontName = fn; }
 
-    m_autoCheckUpdates = ReadIniInt(L"General", L"AutoCheckUpdates", 1) != 0;
-    m_positionPreset   = ReadIniInt(L"Display", L"PositionPreset", -1);
+    m_positionPreset = ReadIniInt(L"Display", L"PositionPreset", -1);
 }
 
 void DesktopIndicator::SaveConfig() {
@@ -71,7 +65,6 @@ void DesktopIndicator::SaveConfig() {
     WriteIniString(L"Display", L"EmptySymbol", EncodeSymbol(m_emptySymbol));
     WriteIniInt(L"Display", L"CharSpacing", m_charSpacing);
     WriteIniString(L"Display", L"FontName", m_fontName);
-    WriteIniInt(L"General", L"AutoCheckUpdates", m_autoCheckUpdates ? 1 : 0);
     WriteIniInt(L"Display", L"PositionPreset", m_positionPreset);
 }
 
@@ -81,11 +74,6 @@ void DesktopIndicator::SetEmptySymbol(const std::wstring &sym) {
     if (m_desktopCount > 0) {
         RebuildText();
     }
-}
-
-void DesktopIndicator::SetAutoCheckUpdates(bool v) {
-    m_autoCheckUpdates = v;
-    SaveConfig();
 }
 
 bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
@@ -104,7 +92,7 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
 
     if (m_hwnd == nullptr) { return false; }
 
-    SetWindowLongPtrW(m_hwnd, GWLP_USERDATA, std::bit_cast<LONG_PTR>(this));
+    SetWndUserData(m_hwnd, this);
     SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 
     m_renderer = std::make_unique<FontRenderer>();
@@ -372,7 +360,7 @@ void DesktopIndicator::Render() {
 }
 
 LRESULT CALLBACK DesktopIndicator::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-    auto *overlay = std::bit_cast<DesktopIndicator *>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    auto *overlay = GetWndUserData<DesktopIndicator>(hwnd);
     if (overlay != nullptr) {
         return overlay->HandleMessage(msg, wp, lp);
     }
