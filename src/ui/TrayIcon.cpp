@@ -216,23 +216,22 @@ void TrayIcon::DrawColorSwatch(LPDRAWITEMSTRUCT dis) {
     }
 
     // Color swatch
-    constexpr int labelW  = 24;
-    const int     totalW  = dis->rcItem.right - dis->rcItem.left;
-    int           swatchW = (totalW - labelW) * 9 / 10;
-    swatchW               = (std::max)(swatchW, 40);
+    constexpr int labelW = 32;
+    constexpr int pad    = 4;
 
     RECT cr = dis->rcItem;
-    cr.left += labelW + 4;
+    cr.left += labelW + pad;
     cr.top += 2;
     cr.bottom -= 2;
-    cr.right = cr.left + swatchW;
+    cr.right = dis->rcItem.right - pad;
 
     DrawSwatchRect(dis->hDC, cr, kPredefinedColors.at(colorIndex));
 
     // Number label
     const std::wstring numStr = std::to_wstring(colorIndex + 1);
     RECT               nr     = dis->rcItem;
-    nr.right                  = nr.left + labelW;
+    nr.left += pad;
+    nr.right = dis->rcItem.left + labelW;
     SetBkMode(dis->hDC, TRANSPARENT);
     SetTextColor(dis->hDC, (isSel != 0) ? GetSysColor(COLOR_HIGHLIGHTTEXT) : GetSysColor(COLOR_MENUTEXT));
     DrawTextW(dis->hDC, numStr.data(), -1, &nr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
