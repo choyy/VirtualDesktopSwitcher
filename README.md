@@ -2,9 +2,9 @@
   <img src="res/icon.png" alt="icon" width="80">
 </p>
 
-<h1 align="center">Windows 11 虚拟桌面切换工具</h1>
+<h1 align="center">Windows 10/11 虚拟桌面切换工具</h1>
 
-> 适用于 Windows 11 的虚拟桌面快速切换工具，通过 `Alt + 1~9` 直达指定桌面，并配有可自定义的桌面状态指示器。
+> 适用于 Windows 10/11 的虚拟桌面快速切换工具，通过 `Alt + 1~9` 直达指定桌面，并配有可自定义的桌面状态指示器。
 
 ![预览](assets/demo.gif)
 
