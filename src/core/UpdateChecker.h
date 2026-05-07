@@ -6,13 +6,9 @@
 
 namespace UpdateChecker {
 
-struct VersionCheckResult {
-    bool        hasUpdate = false;
-    std::string downloadUrl;
-};
-
-VersionCheckResult CheckForNewerVersion();
-void               DownloadUpdate(HWND parent, const std::string &url);
-void               CheckAndDownload(HWND parent, bool silentIfUpToDate = false);
+bool CheckForNewerVersion();
+bool ParseVersionJson(const std::wstring &filePath);
+void DownloadUpdate(HWND parent);
+void CheckAndDownload(HWND parent, bool silentIfUpToDate = false);
 
 } // namespace UpdateChecker

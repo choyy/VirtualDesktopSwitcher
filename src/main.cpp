@@ -2,9 +2,19 @@
 
 #include <commctrl.h>
 
-#include "core/Application.h"
+#include <cstring>
 
-int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR /*lpCmdLine*/, int /*nCmdShow*/) {
+#include "core/Application.h"
+#include "core/UpdateChecker.h"
+
+int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR lpCmdLine, int /*nCmdShow*/) {
+    if (lpCmdLine != nullptr && strstr(lpCmdLine, "--check-updates") != nullptr) {
+        CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        auto hasUpdate = UpdateChecker::CheckForNewerVersion();
+        CoUninitialize();
+        return hasUpdate ? 1 : 0;
+    }
+
     const HRESULT hr = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     if (FAILED(hr)) {
         SetProcessDPIAware();

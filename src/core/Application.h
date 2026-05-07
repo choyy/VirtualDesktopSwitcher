@@ -25,15 +25,18 @@ private:
     int                                     m_lastDesktopCount = 0;
     bool                                    m_autoCheckUpdates = true;
     UINT                                    m_uTaskbarCreated  = 0;
+    HANDLE                                  m_hUpdateProcess   = nullptr;
 
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+    static void CALLBACK    TimerPollUpdateProc(HWND hwnd, UINT uMsg, UINT_PTR id, DWORD dwTime);
     void                    OnSystemResume();
     void                    SyncDesktopState();
     void                    OnTrayMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, HWND hwnd);
     void                    OnMenuSelect(WPARAM wParam, LPARAM lParam);
     void                    OnDesktopSwitch(WPARAM wParam);
     void                    OnTimerTick();
-    static void             OnDestroy(HWND hwnd);
+    void                    PollUpdateProcess();
+    void                    OnDestroy(HWND hwnd);
     void                    ApplySettingsPreview(const SettingsDialog::Result &r);
 
     // Initialize sub-steps

@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include <array>
 #include <string>
 
 #include "core/UpdateChecker.h"
@@ -61,7 +62,7 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
         return TRUE;
 
     case WM_DESTROY:
-        Application::OnDestroy(hwnd);
+        pApp->OnDestroy(hwnd);
         return 0;
     default:
         break;
@@ -101,8 +102,39 @@ void Application::OnTimerTick() {
     SyncDesktopState();
 }
 
+void Application::PollUpdateProcess() {
+    if (m_hUpdateProcess == nullptr || WaitForSingleObject(m_hUpdateProcess, 0) != WAIT_OBJECT_0) {
+        return;
+    }
+
+    DWORD exitCode = 0;
+    GetExitCodeProcess(m_hUpdateProcess, &exitCode);
+    CloseHandle(m_hUpdateProcess);
+    m_hUpdateProcess = nullptr;
+
+    if (exitCode != 1) { return; }
+
+    if (MessageBoxW(m_hwnd, L"发现新版本，是否立即下载？", L"VirtualDesktopSwitcher - 发现更新",
+                    MB_YESNO | MB_ICONQUESTION)
+        == IDYES) {
+        UpdateChecker::DownloadUpdate(m_hwnd);
+    }
+}
+
+void CALLBACK Application::TimerPollUpdateProc(HWND hwnd, UINT /*uMsg*/, UINT_PTR /*idEvent*/, DWORD /*dwTime*/) {
+    auto *pApp = GetWndUserData<Application>(hwnd);
+    if (pApp != nullptr) {
+        pApp->PollUpdateProcess();
+    }
+}
+
 void Application::OnDestroy(HWND hwnd) {
+    if (m_hUpdateProcess != nullptr) {
+        WaitForSingleObject(m_hUpdateProcess, 500);
+        CloseHandle(m_hUpdateProcess);
+    }
     KillTimer(hwnd, 1);
+    KillTimer(hwnd, 2);
     PostQuitMessage(0);
 }
 
@@ -235,7 +267,18 @@ bool Application::Initialize() {
     m_uTaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
 
     if (m_autoCheckUpdates) {
-        UpdateChecker::CheckAndDownload(m_hwnd, true);
+        std::array<wchar_t, MAX_PATH> exePath{};
+        GetModuleFileNameW(nullptr, exePath.data(), static_cast<DWORD>(exePath.size()));
+        std::wstring cmdLine = std::wstring(L"\"") + exePath.data() + L"\" --check-updates";
+
+        PROCESS_INFORMATION pi{};
+        STARTUPINFOW        si = {.cb = sizeof(si)};
+        if (CreateProcessW(exePath.data(), cmdLine.data(), nullptr, nullptr, FALSE,
+                           CREATE_NO_WINDOW | IDLE_PRIORITY_CLASS, nullptr, nullptr, &si, &pi)
+            != 0) {
+            CloseHandle(pi.hThread);
+            m_hUpdateProcess = pi.hProcess;
+        }
     }
 
     if (!m_switcher->InstallHook()) {
@@ -244,6 +287,7 @@ bool Application::Initialize() {
     }
 
     SetTimer(m_hwnd, 1, 1000, nullptr);
+    SetTimer(m_hwnd, 2, 3000, TimerPollUpdateProc);
     return true;
 }
 
