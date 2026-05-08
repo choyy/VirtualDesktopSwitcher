@@ -32,9 +32,20 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         auto *hInst = reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(GetParent(hwnd), GWLP_HINSTANCE)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
 
-        data->hIcon = static_cast<HICON>(LoadImageW(hInst, MAKEINTRESOURCEW(101), IMAGE_ICON, 200, 200, LR_DEFAULTCOLOR));
+        auto ChildRect = [&](int id) {
+            RECT r{}; GetWindowRect(GetDlgItem(hwnd, id), &r);
+            MapWindowPoints(HWND_DESKTOP, hwnd, reinterpret_cast<LPPOINT>(&r), 2); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+            return r;
+        };
+        const RECT rcTitle   = ChildRect(IDC_APP_NAME);
+        const RECT rcVersion = ChildRect(IDC_VERSION);
+        const int  iconSize  = rcVersion.bottom - rcTitle.top;
+        const RECT rcIcon    = ChildRect(IDC_APP_ICON);
+        SetWindowPos(GetDlgItem(hwnd, IDC_APP_ICON), nullptr, rcIcon.left, rcTitle.top, iconSize, iconSize, SWP_NOZORDER);
+
+        data->hIcon = static_cast<HICON>(LoadImageW(hInst, MAKEINTRESOURCEW(101), IMAGE_ICON, iconSize, iconSize, LR_DEFAULTCOLOR));
         if (data->hIcon != nullptr) {
-            SendDlgItemMessageW(hwnd, IDC_APP_ICON, STM_SETICON, HandleToWParam(data->hIcon), 0);
+            SendDlgItemMessageW(hwnd, IDC_APP_ICON, STM_SETIMAGE, IMAGE_ICON, PtrToLParam(data->hIcon));
         }
 
         data->hFont = CreateFontW(-MulDiv(14, static_cast<int>(GetDpiForWindow(hwnd)), 72), 0, 0, 0, FW_NORMAL,
