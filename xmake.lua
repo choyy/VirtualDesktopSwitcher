@@ -8,6 +8,7 @@ add_rules("plugin.compile_commands.autoupdate", {outputdir = "build"})
 add_requires("stb")
 
 target("VirtualDesktopSwitcher")
+    set_arch("x86")
     set_kind("binary")
     set_optimize("smallest")
     set_exceptions("no-cxx")
