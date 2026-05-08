@@ -1,4 +1,5 @@
-﻿#include <windows.h>
+#pragma code_page(65001)
+#include <windows.h>
 
 #define IDC_STATIC      (-1)
 
@@ -17,18 +18,18 @@ CAPTION  "桌面指示器设置"
 FONT     9, "Segoe UI", 400, 0, 0
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 BEGIN
-    LTEXT         "当前桌面符号：", IDC_STATIC,   10, 8,  55, 10
+    LTEXT         "当前桌面符号：", IDC_STATIC,   10, 8,  60, 10
     COMBOBOX      IDC_CUR_SYM,                 70, 7,  170, 120,  CBS_DROPDOWN | WS_TABSTOP | WS_VSCROLL
-    LTEXT         "非空桌面符号：", IDC_STATIC,   10, 26, 55, 10
+    LTEXT         "非空桌面符号：", IDC_STATIC,   10, 26, 60, 10
     COMBOBOX      IDC_OTH_SYM,                 70, 25, 170, 120,  CBS_DROPDOWN | WS_TABSTOP | WS_VSCROLL
-    LTEXT         "空桌面符号：",  IDC_STATIC,   10, 44, 55, 10
+    LTEXT         "空桌面符号：",  IDC_STATIC,   10, 44, 60, 10
     COMBOBOX      IDC_EMP_SYM,                 70, 43, 170, 120,  CBS_DROPDOWN | WS_TABSTOP | WS_VSCROLL
-    LTEXT         "字体：",       IDC_STATIC,   10, 62, 55, 10
+    LTEXT         "字体：",       IDC_STATIC,   10, 62, 60, 10
     COMBOBOX      IDC_FONT,                    70, 61, 170, 120,  CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL
-    LTEXT         "字符间距：",    IDC_STATIC,   10, 82, 55, 10
+    LTEXT         "字符间距：",    IDC_STATIC,   10, 82, 60, 10
     EDITTEXT      IDC_SPACING,                 70, 80, 30, 12,    ES_CENTER | ES_NUMBER | WS_TABSTOP | WS_BORDER
     CONTROL       "",            IDC_SPIN,     "msctls_updown32", UDS_SETBUDDYINT | UDS_AUTOBUDDY | UDS_ALIGNRIGHT | UDS_ARROWKEYS, 0, 0, 0, 0
-    DEFPUSHBUTTON "确定",         IDOK,         70, 104, 55, 14
-    PUSHBUTTON    "取消",         IDCANCEL,     135, 104, 55, 14
+    DEFPUSHBUTTON "确定",         IDOK,         70, 104, 60, 14
+    PUSHBUTTON    "取消",         IDCANCEL,     135, 104, 60, 14
 END
 
