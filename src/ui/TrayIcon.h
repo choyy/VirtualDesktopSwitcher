@@ -4,6 +4,7 @@
 
 #include <shellapi.h>
 
+#include <array>
 #include <functional>
 #include <string>
 
@@ -17,6 +18,9 @@ constexpr UINT CMD_POSITION_BOTTOM_LEFT   = CMD_POSITION_BASE + 3;
 constexpr UINT CMD_POSITION_BOTTOM_CENTER = CMD_POSITION_BASE + 4;
 constexpr UINT CMD_POSITION_BOTTOM_RIGHT  = CMD_POSITION_BASE + 5;
 constexpr UINT CMD_POSITION_CUSTOM        = CMD_POSITION_BASE + 6;
+
+constexpr std::array kPositionLabels      = {L"左上", L"中上", L"右上", L"左下", L"中下", L"右下"};
+constexpr int        kPositionPresetCount = static_cast<int>(kPositionLabels.size());
 
 class TrayIcon {
 public:
@@ -45,7 +49,6 @@ private:
     NOTIFYICONDATAW m_nid{};
     HMENU           m_hMenu                = nullptr;
     bool            m_autoStartEnabled     = false;
-    bool            m_editModeChecked      = false;
     int             m_activePositionPreset = 1;
 
     std::function<void(const std::wstring &)> m_colorFn;

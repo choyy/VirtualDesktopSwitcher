@@ -16,7 +16,7 @@ inline void Log(const std::wstring &msg) {
                                            nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (f != INVALID_HANDLE_VALUE) {
             LARGE_INTEGER size;
-            needsTruncate = GetFileSizeEx(f, &size) && size.QuadPart > static_cast<LONGLONG>(1024 * 1024);
+            needsTruncate = GetFileSizeEx(f, &size) && size.QuadPart > static_cast<LONGLONG>(32 * 1024);
             CloseHandle(f);
         }
 

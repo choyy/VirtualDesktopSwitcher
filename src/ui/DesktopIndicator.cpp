@@ -4,8 +4,30 @@
 
 #include <windowsx.h>
 
+#include "TrayIcon.h"
 #include "util/DrawingTextSTB.h"
 #include "util/Utils.h"
+
+namespace {
+
+POINT CalcPresetPosition(int preset, int w, int h) {
+    int  sw = GetSystemMetrics(SM_CXSCREEN);
+    RECT workArea;
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0);
+    int workBottom = workArea.bottom;
+
+    switch (preset) {
+    case 0: return {.x = 0, .y = -4};
+    case 1: return {.x = (sw - w) / 2, .y = -4};
+    case 2: return {.x = sw - w, .y = -4};
+    case 3: return {.x = 0, .y = workBottom - h + 4};
+    case 4: return {.x = (sw - w) / 2, .y = workBottom - h + 4};
+    case 5: return {.x = sw - w, .y = workBottom - h + 4};
+    default: return {.x = (sw - w) / 2, .y = -4};
+    }
+}
+
+} // namespace
 
 DesktopIndicator::DesktopIndicator() = default;
 
@@ -139,6 +161,9 @@ void DesktopIndicator::ToggleEditMode() {
 
 void DesktopIndicator::SetEditMode(bool edit) {
     m_editMode = edit;
+    if (m_pCfg != nullptr && m_editMode) {
+        m_pCfg->positionPreset = -1;
+    }
     if (m_hwnd == nullptr) { return; }
     auto       exStyle     = static_cast<DWORD>(GetWindowLong(m_hwnd, GWL_EXSTYLE));
     const auto transparent = static_cast<DWORD>(WS_EX_TRANSPARENT);
@@ -161,25 +186,15 @@ void DesktopIndicator::SetPositionPreset(int preset) {
     if (m_hwnd == nullptr || m_pCfg == nullptr) {
         return;
     }
+    if (preset < 0 || preset >= kPositionPresetCount) {
+        return;
+    }
     RECT r;
     GetWindowRect(m_hwnd, &r);
-    int w  = r.right - r.left;
-    int h  = r.bottom - r.top;
-    int sw = GetSystemMetrics(SM_CXSCREEN);
+    int w = r.right - r.left;
+    int h = r.bottom - r.top;
 
-    RECT workArea;
-    SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0);
-    int workBottom = workArea.bottom;
-
-    switch (preset) {
-    case 0: m_pCfg->windowPos = {.x = 0, .y = -4}; break;
-    case 1: m_pCfg->windowPos = {.x = (sw - w) / 2, .y = -4}; break;
-    case 2: m_pCfg->windowPos = {.x = sw - w, .y = -4}; break;
-    case 3: m_pCfg->windowPos = {.x = 0, .y = workBottom - h + 4}; break;
-    case 4: m_pCfg->windowPos = {.x = (sw - w) / 2, .y = workBottom - h + 4}; break;
-    case 5: m_pCfg->windowPos = {.x = sw - w, .y = workBottom - h + 4}; break;
-    default: return;
-    }
+    m_pCfg->windowPos      = CalcPresetPosition(preset, w, h);
     m_pCfg->positionPreset = preset;
     m_pCfg->posInitialized = true;
 
@@ -270,9 +285,7 @@ void DesktopIndicator::Render() {
                        spacedText.c_str(), colorStr, effectiveFontSize);
 
     if (!m_pCfg->posInitialized) {
-        int sw                 = GetSystemMetrics(SM_CXSCREEN);
-        m_pCfg->windowPos.x    = (sw - width) / 2;
-        m_pCfg->windowPos.y    = 0;
+        m_pCfg->windowPos      = CalcPresetPosition(m_pCfg->positionPreset, width, height);
         m_pCfg->posInitialized = true;
     }
 

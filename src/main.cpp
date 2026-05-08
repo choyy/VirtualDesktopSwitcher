@@ -6,6 +6,7 @@
 
 #include "core/Application.h"
 #include "core/UpdateChecker.h"
+#include "util/Log.h"
 
 int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR lpCmdLine, int /*nCmdShow*/) {
     if (lpCmdLine != nullptr && strstr(lpCmdLine, "--check-updates") != nullptr) {
@@ -23,6 +24,8 @@ int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR l
     const INITCOMMONCONTROLSEX icc = {.dwSize = sizeof(icc), .dwICC = ICC_STANDARD_CLASSES};
     InitCommonControlsEx(&icc);
 
+    Log(L"-----------------------------------------------------------------");
+    Log(L"[INFO] Virtual Desktop Switcher start...");
     Application app;
     if (!app.Initialize()) {
         return -1;

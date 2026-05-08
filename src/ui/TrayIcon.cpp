@@ -75,16 +75,14 @@ void TrayIcon::BuildMenu() {
     }
     m_hMenu = CreatePopupMenu();
 
-    HMENU            hPosMenu       = CreatePopupMenu();
-    const std::array positionLabels = {L"左上", L"中上", L"右上", L"左下", L"中下", L"右下"};
-    for (int i = 0; i < static_cast<int>(positionLabels.size()); ++i) {
+    HMENU hPosMenu = CreatePopupMenu();
+    for (int i = 0; i < kPositionPresetCount; ++i) {
         AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == i ? MF_CHECKED : 0),
-                    CMD_POSITION_TOP_LEFT + i, positionLabels.at(i));
+                    CMD_POSITION_TOP_LEFT + i, kPositionLabels.at(i));
     }
     AppendMenuW(hPosMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hPosMenu, MF_STRING | (m_editModeChecked ? MF_CHECKED : 0), CMD_POSITION_CUSTOM, L"自定义");
-    AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hPosMenu), L"显示位置"); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    AppendMenuW(m_hMenu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == -1 ? MF_CHECKED : 0), CMD_POSITION_CUSTOM, L"自定义");
+    AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hPosMenu), L"位置大小"); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     HMENU hColorMenu = CreatePopupMenu();
     for (UINT i = 0; i < static_cast<UINT>(kPredefinedColors.size()); ++i) {
@@ -176,10 +174,8 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
         m_autoStartEnabled = IsAutoStartEnabled();
     } else if (cmd >= CMD_POSITION_BASE && cmd < CMD_POSITION_CUSTOM) {
         m_activePositionPreset = static_cast<int>(cmd - CMD_POSITION_BASE);
-        m_editModeChecked      = false;
         if (m_positionFn) { m_positionFn(m_activePositionPreset); }
     } else if (cmd == CMD_POSITION_CUSTOM) {
-        m_editModeChecked      = !m_editModeChecked;
         m_activePositionPreset = -1;
         if (m_editModeFn) { m_editModeFn(); }
     } else if (cmd == WM_TRAY_SETTINGS) {

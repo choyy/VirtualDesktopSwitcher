@@ -315,8 +315,6 @@ void Application::OnSystemResume() {
 }
 
 int Application::Run() {
-    Log(L"-----------------------------------------------------------------");
-    Log(L"[INFO] Virtual Desktop Switcher start...");
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);

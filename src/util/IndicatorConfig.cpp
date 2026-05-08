@@ -30,7 +30,7 @@ void IndicatorConfig::LoadFromIni() {
     std::wstring fn = ReadIniString(L"Display", L"FontName", L"Segoe UI Symbol");
     if (!fn.empty()) { fontName = fn; }
 
-    positionPreset = ReadIniInt(L"Display", L"PositionPreset", -1);
+    positionPreset = ReadIniInt(L"Display", L"PositionPreset", 1);
 }
 
 void IndicatorConfig::SaveToIni() const {
