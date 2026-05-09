@@ -33,7 +33,8 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         auto *hInst = reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(GetParent(hwnd), GWLP_HINSTANCE)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
 
         auto ChildRect = [&](int id) {
-            RECT r{}; GetWindowRect(GetDlgItem(hwnd, id), &r);
+            RECT r{};
+            GetWindowRect(GetDlgItem(hwnd, id), &r);
             MapWindowPoints(HWND_DESKTOP, hwnd, reinterpret_cast<LPPOINT>(&r), 2); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
             return r;
         };

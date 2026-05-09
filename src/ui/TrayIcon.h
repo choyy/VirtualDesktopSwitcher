@@ -50,6 +50,8 @@ private:
     HMENU           m_hMenu                = nullptr;
     bool            m_autoStartEnabled     = false;
     int             m_activePositionPreset = 1;
+    int             m_menuAveWidth         = 6;
+    int             m_dpi                  = 96;
 
     std::function<void(const std::wstring &)> m_colorFn;
     std::function<void()>                     m_editModeFn;
@@ -60,7 +62,7 @@ private:
     static bool IsAutoStartEnabled();
     static void SetAutoStart(bool enable);
 
-    void        BuildMenu();
-    void        HandleCommand(WPARAM wParam);
-    static void DrawColorSwatch(LPDRAWITEMSTRUCT dis);
+    void BuildMenu();
+    void HandleCommand(WPARAM wParam);
+    void DrawColorSwatch(LPDRAWITEMSTRUCT dis);
 };

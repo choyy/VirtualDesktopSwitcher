@@ -153,8 +153,20 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
     } else if (msg == WM_MEASUREITEM) {
         auto *mis = reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
         if (mis->CtlType == ODT_MENU) {
-            mis->itemHeight = 25;
-            mis->itemWidth  = 160;
+            NONCLIENTMETRICSW ncm = {sizeof(ncm)};
+            SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+            HDC         hdc   = GetDC(hwnd);
+            HFONT       hFont = CreateFontIndirectW(&ncm.lfMenuFont);
+            HGDIOBJ     old   = SelectObject(hdc, hFont);
+            TEXTMETRICW tm{};
+            GetTextMetricsW(hdc, &tm);
+            m_menuAveWidth = tm.tmAveCharWidth;
+            SelectObject(hdc, old);
+            DeleteObject(hFont);
+            ReleaseDC(hwnd, hdc);
+            m_dpi           = GetDpiForWindow(hwnd);
+            mis->itemHeight = tm.tmHeight + ScaleForDpi(2, m_dpi);
+            mis->itemWidth  = ScaleForDpi(100, m_dpi);
         }
     } else if (msg == WM_DRAWITEM) {
         auto *dis = reinterpret_cast<LPDRAWITEMSTRUCT>(lParam); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
@@ -205,20 +217,20 @@ void TrayIcon::DrawColorSwatch(LPDRAWITEMSTRUCT dis) {
     // Check mark
     if (isChk != 0) {
         RECT cr  = dis->rcItem;
-        cr.right = cr.left + GetSystemMetrics(SM_CXMENUCHECK);
+        cr.right = cr.left + ScaleForDpi(GetSystemMetrics(SM_CXMENUCHECK), m_dpi);
         SetTextColor(dis->hDC, (isSel != 0) ? GetSysColor(COLOR_HIGHLIGHTTEXT) : GetSysColor(COLOR_MENUTEXT));
         SetBkMode(dis->hDC, TRANSPARENT);
         DrawTextW(dis->hDC, L"\u2713", -1, &cr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
 
     // Color swatch
-    constexpr int labelW = 32;
-    constexpr int pad    = 4;
+    const int labelW = m_menuAveWidth * 3;
+    const int pad    = ScaleForDpi(3, m_dpi);
 
     RECT cr = dis->rcItem;
     cr.left += labelW + pad;
-    cr.top += 2;
-    cr.bottom -= 2;
+    cr.top += ScaleForDpi(1, m_dpi);
+    cr.bottom -= ScaleForDpi(1, m_dpi);
     cr.right = dis->rcItem.right - pad;
 
     DrawSwatchRect(dis->hDC, cr, kPredefinedColors.at(colorIndex));
