@@ -27,23 +27,34 @@ const IID   IID_IVirtualDesktopManagerInternal_Win10   = {.Data1 = 0xF31574D6, .
 const IID   IID_IVirtualDesktop_Win10                  = {.Data1 = 0xFF72FFDD, .Data2 = 0xBE7E, .Data3 = 0x43FC, .Data4 = {0x9C, 0x03, 0xAD, 0x81, 0x68, 0x1E, 0x88, 0xE4}};
 } // namespace
 
+bool VirtualDesktopHelper::InitCOMServices() {
+    Microsoft::WRL::ComPtr<IUnknown> immersiveShell;
+    if (!InitImmersiveShell(immersiveShell)) { return false; }
+
+    Microsoft::WRL::ComPtr<IServiceProvider> serviceProvider;
+    if (!InitServiceProvider(immersiveShell, serviceProvider)) { return false; }
+
+    if (!InitDesktopManagerInternal(serviceProvider, immersiveShell)) { return false; }
+
+    VerifyDesktopIID();
+    InitViewCollection(serviceProvider);
+    InitDesktopManager();
+    return true;
+}
+
 VirtualDesktopHelper::VirtualDesktopHelper() : m_comInitResult(CoInitialize(nullptr)) {
     if (FAILED(m_comInitResult)) {
         Log(L"[ERROR] CoInitialize failed: 0x" + std::to_wstring(static_cast<uint32_t>(m_comInitResult)));
         return;
     }
+    InitCOMServices();
+}
 
-    Microsoft::WRL::ComPtr<IUnknown> immersiveShell;
-    if (!InitImmersiveShell(immersiveShell)) { return; }
-
-    Microsoft::WRL::ComPtr<IServiceProvider> serviceProvider;
-    if (!InitServiceProvider(immersiveShell, serviceProvider)) { return; }
-
-    if (!InitDesktopManagerInternal(serviceProvider, immersiveShell)) { return; }
-
-    VerifyDesktopIID();
-    InitViewCollection(serviceProvider);
-    InitDesktopManager();
+void VirtualDesktopHelper::Refresh() {
+    virtualDesktopManagerInternal = nullptr;
+    virtualDesktopManager         = nullptr;
+    viewCollection                = nullptr;
+    InitCOMServices();
 }
 
 VirtualDesktopHelper::~VirtualDesktopHelper() {

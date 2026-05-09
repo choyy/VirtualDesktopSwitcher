@@ -169,6 +169,10 @@ void VirtualDesktopSwitcher::ActivateFallbackWindow(int desktopIndex) {
     }
 }
 
+void VirtualDesktopSwitcher::RefreshCOM() {
+    if (m_pVDeskHelper) { m_pVDeskHelper->Refresh(); }
+}
+
 void VirtualDesktopSwitcher::SwitchToDesktop(int index) {
     if (index < 0 || m_pVDeskHelper == nullptr) {
         return;

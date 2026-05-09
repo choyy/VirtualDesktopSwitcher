@@ -57,6 +57,8 @@ private:
     Microsoft::WRL::ComPtr<IApplicationViewCollection>     viewCollection;
     IID                                                    m_iidVirtualDesktop = __uuidof(IVirtualDesktop);
 
+    bool InitCOMServices();
+
     [[nodiscard]] bool CheckViaViewCollection(HWND hwnd) const;
     [[nodiscard]] bool CheckViaDesktopManager(HWND hwnd) const;
 
@@ -76,6 +78,7 @@ public:
     VirtualDesktopHelper();
     ~VirtualDesktopHelper();
 
+    void                                         Refresh();
     [[nodiscard]] int                            GetDesktopCount() const;
     [[nodiscard]] int                            GetCurrentDesktopIndex() const;
     [[nodiscard]] bool                           IsWindowOnCurrentDesktop(HWND hwnd) const;

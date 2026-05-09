@@ -64,5 +64,5 @@ private:
 
     void BuildMenu();
     void HandleCommand(WPARAM wParam);
-    void DrawColorSwatch(LPDRAWITEMSTRUCT dis);
+    void DrawColorSwatch(LPDRAWITEMSTRUCT dis) const;
 };

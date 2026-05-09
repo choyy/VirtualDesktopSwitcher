@@ -8,6 +8,8 @@
 
 namespace {
 
+constexpr auto kRegRunPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+
 constexpr UINT WM_TRAY_EXIT             = WM_USER + 3;
 constexpr UINT WM_TRAY_TOGGLE_AUTOSTART = WM_USER + 4;
 constexpr UINT WM_TRAY_EDIT_MODE        = WM_USER + 5;
@@ -164,7 +166,7 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             SelectObject(hdc, old);
             DeleteObject(hFont);
             ReleaseDC(hwnd, hdc);
-            m_dpi           = GetDpiForWindow(hwnd);
+            m_dpi           = static_cast<int>(GetDpiForWindow(hwnd));
             mis->itemHeight = tm.tmHeight + ScaleForDpi(2, m_dpi);
             mis->itemWidth  = ScaleForDpi(100, m_dpi);
         }
@@ -200,7 +202,7 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
     }
 }
 
-void TrayIcon::DrawColorSwatch(LPDRAWITEMSTRUCT dis) {
+void TrayIcon::DrawColorSwatch(LPDRAWITEMSTRUCT dis) const {
     const int colorIndex = static_cast<int>(dis->itemID - CMD_COLOR_OPTIONS_BASE);
     if (colorIndex < 0 || static_cast<size_t>(colorIndex) >= kPredefinedColors.size()) {
         return;
@@ -259,9 +261,7 @@ void TrayIcon::UpdateTooltip(const std::wstring &tooltip) {
 
 bool TrayIcon::IsAutoStartEnabled() {
     HKEY hKey   = nullptr;
-    LONG result = RegOpenKeyExW(HKEY_CURRENT_USER,
-                                L"Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-                                0, KEY_READ, &hKey);
+    LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, kRegRunPath, 0, KEY_READ, &hKey);
     if (result != ERROR_SUCCESS) {
         return false;
     }
@@ -290,9 +290,7 @@ bool TrayIcon::IsAutoStartEnabled() {
 
 void TrayIcon::SetAutoStart(bool enable) {
     HKEY       hKey   = nullptr;
-    const LONG result = RegOpenKeyExW(HKEY_CURRENT_USER,
-                                      L"Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-                                      0, KEY_WRITE, &hKey);
+    const LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, kRegRunPath, 0, KEY_WRITE, &hKey);
     if (result != ERROR_SUCCESS) {
         return;
     }

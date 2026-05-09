@@ -310,6 +310,7 @@ void Application::SyncDesktopState() {
 
 void Application::OnSystemResume() {
     m_switcher->ReinstallHook();
+    m_switcher->RefreshCOM();
     m_pTrayIcon->Reinitialize();
     SyncDesktopState();
 }
