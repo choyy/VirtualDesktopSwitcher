@@ -113,6 +113,9 @@ bool IsNewerVersion(const std::string &remote, const std::string &local);
 bool DownloadFile(const std::wstring &url, const std::wstring &dest);
 void ShowDownloadFailedDialog(HWND parent);
 
+// System helpers
+bool IsAdminProcess();
+
 // Retry with timeout — returns true if condition met within maxRetries
 template <typename Pred>
 inline bool WaitForCondition(Pred pred, int maxRetries, int intervalMs = 10) {

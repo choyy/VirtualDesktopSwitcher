@@ -58,6 +58,16 @@ bool DownloadFile(const std::wstring &url, const std::wstring &dest) {
     return SUCCEEDED(hr);
 }
 
+bool IsAdminProcess() {
+    HANDLE hToken{};
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken) == 0) { return false; }
+    TOKEN_ELEVATION elev{};
+    DWORD           size = sizeof(elev);
+    bool            ok   = (GetTokenInformation(hToken, TokenElevation, &elev, size, &size) != 0) && elev.TokenIsElevated != 0;
+    CloseHandle(hToken);
+    return ok;
+}
+
 void ShowDownloadFailedDialog(HWND parent) {
     if (MessageBoxW(parent, L"下载失败，是否前往发布页手动下载？", L"错误", MB_YESNO | MB_ICONERROR) == IDYES) {
         ShellExecuteW(parent, L"open", L"https://github.com/choyy/VirtualDesktopSwitcher/releases", nullptr, nullptr, SW_SHOW);

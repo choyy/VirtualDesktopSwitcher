@@ -4,6 +4,7 @@
 
 #include <array>
 
+#include "util/ConfigIni.h"
 #include "util/Utils.h"
 
 namespace {
@@ -15,6 +16,7 @@ constexpr UINT WM_TRAY_TOGGLE_AUTOSTART = WM_USER + 4;
 constexpr UINT WM_TRAY_EDIT_MODE        = WM_USER + 5;
 constexpr UINT WM_TRAY_SETTINGS         = WM_USER + 6;
 constexpr UINT WM_TRAY_ABOUT            = WM_USER + 7;
+constexpr UINT WM_TRAY_RUNAS_ADMIN      = WM_USER + 8;
 
 void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
     const size_t usPos = hex.find(L'_');
@@ -99,6 +101,10 @@ void TrayIcon::BuildMenu() {
 
     AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_SETTINGS, L"设置...");
     AppendMenuW(m_hMenu, MF_SEPARATOR, 0, nullptr);
+
+    bool runAsAdmin = ReadIniInt(L"General", L"RunAsAdmin", 0) != 0;
+    AppendMenuW(m_hMenu, MF_STRING | (runAsAdmin ? MF_CHECKED : MF_UNCHECKED),
+                WM_TRAY_RUNAS_ADMIN, L"以管理员启动");
 
     AppendMenuW(m_hMenu, MF_STRING | (m_autoStartEnabled ? MF_CHECKED : MF_UNCHECKED),
                 WM_TRAY_TOGGLE_AUTOSTART, L"开机自启");
@@ -189,6 +195,15 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
     } else if (cmd >= CMD_POSITION_BASE && cmd < CMD_POSITION_CUSTOM) {
         m_activePositionPreset = static_cast<int>(cmd - CMD_POSITION_BASE);
         if (m_positionFn) { m_positionFn(m_activePositionPreset); }
+    } else if (cmd == WM_TRAY_RUNAS_ADMIN) {
+        bool wasOn = ReadIniInt(L"General", L"RunAsAdmin", 0) != 0;
+        WriteIniInt(L"General", L"RunAsAdmin", wasOn ? 0 : 1);
+        if (!wasOn && !IsAdminProcess()) {
+            std::array<wchar_t, MAX_PATH> exePath{};
+            GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
+            ShellExecuteW(nullptr, L"runas", exePath.data(), nullptr, nullptr, SW_SHOW);
+            PostQuitMessage(0);
+        }
     } else if (cmd == CMD_POSITION_CUSTOM) {
         m_activePositionPreset = -1;
         if (m_editModeFn) { m_editModeFn(); }
