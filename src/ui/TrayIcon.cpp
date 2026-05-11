@@ -11,12 +11,20 @@ namespace {
 
 constexpr auto kRegRunPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
-constexpr UINT WM_TRAY_EXIT             = WM_USER + 3;
-constexpr UINT WM_TRAY_TOGGLE_AUTOSTART = WM_USER + 4;
-constexpr UINT WM_TRAY_EDIT_MODE        = WM_USER + 5;
-constexpr UINT WM_TRAY_SETTINGS         = WM_USER + 6;
-constexpr UINT WM_TRAY_ABOUT            = WM_USER + 7;
-constexpr UINT WM_TRAY_RUNAS_ADMIN      = WM_USER + 8;
+constexpr UINT WM_TRAY_EXIT               = WM_USER + 3;
+constexpr UINT WM_TRAY_TOGGLE_AUTOSTART   = WM_USER + 4;
+constexpr UINT WM_TRAY_EDIT_MODE          = WM_USER + 5;
+constexpr UINT WM_TRAY_SETTINGS           = WM_USER + 6;
+constexpr UINT WM_TRAY_ABOUT              = WM_USER + 7;
+constexpr UINT WM_TRAY_RUNAS_ADMIN        = WM_USER + 8;
+constexpr UINT CMD_POSITION_BASE          = WM_USER + 200;
+constexpr UINT CMD_POSITION_TOP_LEFT      = CMD_POSITION_BASE + 0;
+constexpr UINT CMD_POSITION_TOP_CENTER    = CMD_POSITION_BASE + 1;
+constexpr UINT CMD_POSITION_TOP_RIGHT     = CMD_POSITION_BASE + 2;
+constexpr UINT CMD_POSITION_BOTTOM_LEFT   = CMD_POSITION_BASE + 3;
+constexpr UINT CMD_POSITION_BOTTOM_CENTER = CMD_POSITION_BASE + 4;
+constexpr UINT CMD_POSITION_BOTTOM_RIGHT  = CMD_POSITION_BASE + 5;
+constexpr UINT CMD_POSITION_CUSTOM        = CMD_POSITION_BASE + 6;
 
 void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
     const size_t usPos = hex.find(L'_');
@@ -60,6 +68,91 @@ void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
     SelectObject(hdc, oldB);
     SelectObject(hdc, oldP);
     DeleteObject(hp);
+}
+
+bool RunSchtasks(const wchar_t *args) {
+    std::array<wchar_t, MAX_PATH> sys32{};
+    GetSystemDirectoryW(sys32.data(), static_cast<UINT>(sys32.size()));
+    std::wstring        cmd = std::wstring(sys32.data()) + L"\\schtasks.exe " + args;
+    PROCESS_INFORMATION pi{};
+    STARTUPINFOW        si = {.cb = sizeof(si)};
+    if (CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE,
+                       CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)
+        == 0) {
+        return false;
+    }
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD code = 0;
+    GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return code == 0;
+}
+
+void DeleteRunReg() {
+    HKEY hKey{};
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, kRegRunPath, 0, KEY_WRITE, &hKey) == ERROR_SUCCESS) {
+        RegDeleteValueW(hKey, L"VirtualDesktopSwitcher");
+        RegCloseKey(hKey);
+    }
+}
+
+bool IsAutoStartEnabled() {
+    if (IsAdminProcess()) {
+        return RunSchtasks(L"/query /tn \"VirtualDesktopSwitcher\"");
+    }
+    if (RunSchtasks(L"/query /tn \"VirtualDesktopSwitcher\"")) {
+        return true;
+    }
+    HKEY hKey   = nullptr;
+    LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, kRegRunPath, 0, KEY_READ, &hKey);
+    if (result != ERROR_SUCCESS) { return false; }
+    std::array<wchar_t, MAX_PATH> exePath{};
+    GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
+    std::array<wchar_t, MAX_PATH> value{};
+    auto                          valueSize = static_cast<DWORD>(sizeof(value));
+    result                                  = RegQueryValueExW(hKey, L"VirtualDesktopSwitcher", nullptr, nullptr,
+                                                               reinterpret_cast<LPBYTE>(value.data()), &valueSize); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    RegCloseKey(hKey);
+    if (result != ERROR_SUCCESS) { return false; }
+    std::wstring       registryPath(value.data());
+    const std::wstring currentPath(exePath.data());
+    if (registryPath.length() >= 2 && registryPath.front() == L'"' && registryPath.back() == L'"') {
+        registryPath = registryPath.substr(1, registryPath.length() - 2);
+    }
+    return _wcsicmp(registryPath.c_str(), currentPath.c_str()) == 0;
+}
+
+void SetAutoStart(bool enable) {
+    if (IsAdminProcess()) {
+        if (enable) {
+            std::array<wchar_t, MAX_PATH> exePath{};
+            GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
+            std::wstring args = L"/create /tn \"VirtualDesktopSwitcher\" /tr \\\"";
+            args += exePath.data();
+            args += L"\\\" /sc onlogon /delay 0000:10 /rl highest /f";
+            RunSchtasks(args.c_str());
+            DeleteRunReg();
+        } else {
+            RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
+            DeleteRunReg();
+        }
+        return;
+    }
+    HKEY       hKey   = nullptr;
+    const LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, kRegRunPath, 0, KEY_WRITE, &hKey);
+    if (result != ERROR_SUCCESS) { return; }
+    if (enable) {
+        std::array<wchar_t, MAX_PATH> exePath{};
+        GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
+        const std::wstring quotedPath = L"\"" + std::wstring(exePath.data()) + L"\"";
+        RegSetValueExW(hKey, L"VirtualDesktopSwitcher", 0, REG_SZ,
+                       reinterpret_cast<const BYTE *>(quotedPath.c_str()), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                       static_cast<DWORD>((quotedPath.length() + 1) * sizeof(wchar_t)));
+    } else {
+        DeleteRunReg();
+    }
+    RegCloseKey(hKey);
 }
 
 } // namespace
@@ -197,8 +290,16 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
         if (m_positionFn) { m_positionFn(m_activePositionPreset); }
     } else if (cmd == WM_TRAY_RUNAS_ADMIN) {
         bool wasOn = ReadIniInt(L"General", L"RunAsAdmin", 0) != 0;
-        WriteIniInt(L"General", L"RunAsAdmin", wasOn ? 0 : 1);
+        bool nowOn = !wasOn;
+        WriteIniInt(L"General", L"RunAsAdmin", nowOn ? 1 : 0);
+
+        if (!nowOn && IsAdminProcess()) {
+            // Toggled OFF while admin: clean up schtasks to prevent silent admin auto-start
+            RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
+        }
+
         if (!wasOn && !IsAdminProcess()) {
+            // Toggled ON as non-admin: relaunch with UAC
             std::array<wchar_t, MAX_PATH> exePath{};
             GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
             ShellExecuteW(nullptr, L"runas", exePath.data(), nullptr, nullptr, SW_SHOW);
@@ -272,54 +373,4 @@ bool TrayIcon::Reinitialize() {
 void TrayIcon::UpdateTooltip(const std::wstring &tooltip) {
     wcsncpy_s(m_nid.szTip, tooltip.c_str(), _TRUNCATE);
     Shell_NotifyIconW(NIM_MODIFY, &m_nid);
-}
-
-bool TrayIcon::IsAutoStartEnabled() {
-    HKEY hKey   = nullptr;
-    LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, kRegRunPath, 0, KEY_READ, &hKey);
-    if (result != ERROR_SUCCESS) {
-        return false;
-    }
-
-    std::array<wchar_t, MAX_PATH> exePath{};
-    GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
-
-    std::array<wchar_t, MAX_PATH> value{};
-    auto                          valueSize = static_cast<DWORD>(sizeof(value));
-    result                                  = RegQueryValueExW(hKey, L"VirtualDesktopSwitcher", nullptr, nullptr,
-                                                               reinterpret_cast<LPBYTE>(value.data()), &valueSize); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    RegCloseKey(hKey);
-    if (result != ERROR_SUCCESS) {
-        return false;
-    }
-
-    std::wstring       registryPath(value.data());
-    const std::wstring currentPath(exePath.data());
-
-    if (registryPath.length() >= 2 && registryPath.front() == L'"' && registryPath.back() == L'"') {
-        registryPath = registryPath.substr(1, registryPath.length() - 2);
-    }
-
-    return _wcsicmp(registryPath.c_str(), currentPath.c_str()) == 0;
-}
-
-void TrayIcon::SetAutoStart(bool enable) {
-    HKEY       hKey   = nullptr;
-    const LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, kRegRunPath, 0, KEY_WRITE, &hKey);
-    if (result != ERROR_SUCCESS) {
-        return;
-    }
-
-    if (enable) {
-        std::array<wchar_t, MAX_PATH> exePath{};
-        GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
-        const std::wstring quotedPath = L"\"" + std::wstring(exePath.data()) + L"\"";
-        RegSetValueExW(hKey, L"VirtualDesktopSwitcher", 0, REG_SZ,
-                       reinterpret_cast<const BYTE *>(quotedPath.c_str()), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-                       static_cast<DWORD>((quotedPath.length() + 1) * sizeof(wchar_t)));
-    } else {
-        RegDeleteValueW(hKey, L"VirtualDesktopSwitcher");
-    }
-
-    RegCloseKey(hKey);
 }

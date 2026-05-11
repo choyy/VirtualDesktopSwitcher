@@ -8,16 +8,8 @@
 #include <functional>
 #include <string>
 
-constexpr UINT WM_TRAYICON                = WM_USER + 2;
-constexpr UINT CMD_COLOR_OPTIONS_BASE     = WM_USER + 100;
-constexpr UINT CMD_POSITION_BASE          = WM_USER + 200;
-constexpr UINT CMD_POSITION_TOP_LEFT      = CMD_POSITION_BASE + 0;
-constexpr UINT CMD_POSITION_TOP_CENTER    = CMD_POSITION_BASE + 1;
-constexpr UINT CMD_POSITION_TOP_RIGHT     = CMD_POSITION_BASE + 2;
-constexpr UINT CMD_POSITION_BOTTOM_LEFT   = CMD_POSITION_BASE + 3;
-constexpr UINT CMD_POSITION_BOTTOM_CENTER = CMD_POSITION_BASE + 4;
-constexpr UINT CMD_POSITION_BOTTOM_RIGHT  = CMD_POSITION_BASE + 5;
-constexpr UINT CMD_POSITION_CUSTOM        = CMD_POSITION_BASE + 6;
+constexpr UINT WM_TRAYICON            = WM_USER + 2;
+constexpr UINT CMD_COLOR_OPTIONS_BASE = WM_USER + 100;
 
 constexpr std::array kPositionLabels      = {L"左上", L"中上", L"右上", L"左下", L"中下", L"右下"};
 constexpr int        kPositionPresetCount = static_cast<int>(kPositionLabels.size());
@@ -58,9 +50,6 @@ private:
     std::function<void(int)>                  m_positionFn;
     std::function<void()>                     m_settingsFn;
     std::function<void()>                     m_aboutFn;
-
-    static bool IsAutoStartEnabled();
-    static void SetAutoStart(bool enable);
 
     void BuildMenu();
     void HandleCommand(WPARAM wParam);
