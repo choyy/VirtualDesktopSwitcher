@@ -26,6 +26,11 @@ inline void Log(const std::wstring &msg) {
     }();
 
     if (h == INVALID_HANDLE_VALUE) { return; }
-    auto line = msg + L"\r\n";
-    WriteFile(h, line.c_str(), static_cast<DWORD>(line.size() * sizeof(wchar_t)), nullptr, nullptr);
+    auto wide = msg + L"\r\n";
+    int  len  = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (len > 0) {
+        std::string utf8(len - 1, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), -1, utf8.data(), len, nullptr, nullptr);
+        WriteFile(h, utf8.data(), static_cast<DWORD>(utf8.size()), nullptr, nullptr);
+    }
 }

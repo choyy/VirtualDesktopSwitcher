@@ -35,13 +35,8 @@ private:
     std::unique_ptr<class VirtualDesktopHelper> m_pVDeskHelper;
     HHOOK                                       m_hHook = nullptr;
     HWND                                        m_hwnd  = nullptr;
-    std::array<HWND, kMaxDesktops>              m_desktopLastForeground{};
 
     static VirtualDesktopSwitcher *s_active;
 
     static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
-
-    void               RecordForeground(int desktopIndex);
-    [[nodiscard]] bool TryActivatePreviousWindow(int desktopIndex);
-    void               ActivateFallbackWindow(int desktopIndex);
 };

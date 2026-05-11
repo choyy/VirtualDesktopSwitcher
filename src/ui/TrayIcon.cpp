@@ -159,9 +159,9 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
     } else if (msg == WM_COMMAND) {
         HandleCommand(wParam);
     } else if (msg == WM_MEASUREITEM) {
-        auto *mis = reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+        auto *mis = LParamToPtr<MEASUREITEMSTRUCT>(lParam);
         if (mis->CtlType == ODT_MENU) {
-            NONCLIENTMETRICSW ncm = {sizeof(ncm)};
+            NONCLIENTMETRICSW ncm = {.cbSize = sizeof(ncm)};
             SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
             HDC         hdc   = GetDC(hwnd);
             HFONT       hFont = CreateFontIndirectW(&ncm.lfMenuFont);
@@ -177,7 +177,7 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             mis->itemWidth  = ScaleForDpi(100, m_dpi);
         }
     } else if (msg == WM_DRAWITEM) {
-        auto *dis = reinterpret_cast<LPDRAWITEMSTRUCT>(lParam); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+        auto *dis = LParamToPtr<DRAWITEMSTRUCT>(lParam);
         if (dis->CtlType == ODT_MENU) {
             DrawColorSwatch(dis);
         }

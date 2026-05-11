@@ -1,5 +1,7 @@
 #include "VirtualDesktopSwitcher.h"
 
+#include <dwmapi.h>
+
 #include <string>
 
 #include "core/VirtualDesktopHelper.h"
@@ -8,36 +10,32 @@
 
 namespace {
 
-struct EnumContext {
+struct FindContext {
     const VirtualDesktopHelper *pHelper;
-    HWND                        skipWindow;
     HWND                        foundWindow;
 };
 
-BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
-    auto *ctx = LParamToPtr<EnumContext>(lParam);
-
-    if ((IsWindowVisible(hwnd) == 0) || hwnd == ctx->skipWindow) {
-        return TRUE;
-    }
-    if (GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) {
-        return TRUE;
-    }
-
+BOOL CALLBACK FindTopWndProc(HWND hwnd, LPARAM lParam) {
+    auto *ctx = LParamToPtr<FindContext>(lParam);
+    if (IsWindowVisible(hwnd) == 0) { return TRUE; }
+    if (GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) { return TRUE; }
     std::wstring title(256, L'\0');
-    if (GetWindowTextW(hwnd, title.data(), 256) == 0) {
+    if (GetWindowTextW(hwnd, title.data(), 256) == 0) { return TRUE; }
+
+    BOOL cloaked = FALSE;
+    if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && (cloaked != 0)) {
         return TRUE;
     }
 
-    if (ctx->foundWindow == nullptr && ctx->pHelper != nullptr && ctx->pHelper->IsWindowOnCurrentDesktop(hwnd)) {
+    if (ctx->foundWindow == nullptr && ctx->pHelper->IsWindowOnCurrentDesktop(hwnd)) {
         ctx->foundWindow = hwnd;
     }
     return TRUE;
 }
 
-HWND FindTopWindowOnCurrentDesktop(const VirtualDesktopHelper *pHelper) {
-    EnumContext ctx = {.pHelper = pHelper, .skipWindow = GetForegroundWindow(), .foundWindow = nullptr};
-    EnumWindows(EnumWindowsProc, PtrToLParam(&ctx));
+HWND FindTopOnDesktop(const VirtualDesktopHelper *pHelper) {
+    FindContext ctx = {.pHelper = pHelper, .foundWindow = nullptr};
+    EnumWindows(FindTopWndProc, PtrToLParam(&ctx));
     return ctx.foundWindow;
 }
 
@@ -105,93 +103,33 @@ std::array<bool, kMaxDesktops> VirtualDesktopSwitcher::GetDesktopEmptyMask() con
     return m_pVDeskHelper ? m_pVDeskHelper->GetDesktopEmptyMask() : std::array<bool, kMaxDesktops>{};
 }
 
-void VirtualDesktopSwitcher::RecordForeground(int desktopIndex) {
-    if (desktopIndex < 0 || desktopIndex >= static_cast<int>(kMaxDesktops)) {
-        return;
-    }
-
-    HWND foreground = GetForegroundWindow();
-    if (foreground == nullptr || IsWindow(foreground) == FALSE) {
-        return;
-    }
-
-    if (m_pVDeskHelper->IsWindowOnCurrentDesktop(foreground)) {
-        m_desktopLastForeground.at(desktopIndex) = foreground;
-    } else {
-        m_desktopLastForeground.at(desktopIndex) = nullptr;
-    }
-}
-
-bool VirtualDesktopSwitcher::TryActivatePreviousWindow(int desktopIndex) {
-    if (desktopIndex < 0 || desktopIndex >= static_cast<int>(kMaxDesktops)) {
-        return false;
-    }
-
-    HWND targetHwnd = m_desktopLastForeground.at(desktopIndex);
-    if (targetHwnd == nullptr) {
-        return false;
-    }
-
-    if (IsWindow(targetHwnd) == FALSE) {
-        Log(L"[DEBUG] Window on desktop " + std::to_wstring(desktopIndex) + L" is invalid: " + GetWindowTitle(targetHwnd));
-        m_desktopLastForeground.at(desktopIndex) = nullptr;
-        return false;
-    }
-
-    if (!m_pVDeskHelper->IsWindowOnCurrentDesktop(targetHwnd)) {
-        Log(L"[DEBUG] Window on desktop " + std::to_wstring(desktopIndex) + L" not on current desktop: " + GetWindowTitle(targetHwnd));
-        m_desktopLastForeground.at(desktopIndex) = nullptr;
-        return false;
-    }
-
-    if (IsIconic(targetHwnd) != 0) {
-        ShowWindow(targetHwnd, SW_RESTORE);
-    }
-
-    ActivateWindow(targetHwnd);
-
-    if (WaitForCondition([targetHwnd]() { return GetForegroundWindow() == targetHwnd; }, 10)) {
-        Log(L"[DEBUG] Activated previous window on desktop " + std::to_wstring(desktopIndex) + L": " + GetWindowTitle(targetHwnd));
-        return true;
-    }
-
-    Log(L"[DEBUG] Failed to activate previous window on desktop " + std::to_wstring(desktopIndex) + L": " + GetWindowTitle(targetHwnd));
-    return false;
-}
-
-void VirtualDesktopSwitcher::ActivateFallbackWindow(int desktopIndex) {
-    HWND hwnd = FindTopWindowOnCurrentDesktop(m_pVDeskHelper.get());
-    if (hwnd != nullptr) {
-        Log(L"[DEBUG] Activating fallback window on desktop " + std::to_wstring(desktopIndex) + L": " + GetWindowTitle(hwnd));
-        ActivateWindow(hwnd);
-    } else {
-        Log(L"[DEBUG] No window to activate on desktop " + std::to_wstring(desktopIndex));
-    }
-}
-
 void VirtualDesktopSwitcher::RefreshCOM() {
     if (m_pVDeskHelper) { m_pVDeskHelper->Refresh(); }
 }
 
 void VirtualDesktopSwitcher::SwitchToDesktop(int index) {
-    if (index < 0 || m_pVDeskHelper == nullptr) {
-        return;
-    }
+    if (index < 0 || m_pVDeskHelper == nullptr) { return; }
 
     const int currentIndex = GetCurrentDesktopIndex();
-    RecordForeground(currentIndex);
+    if (index == currentIndex) { return; }
 
     m_pVDeskHelper->SwitchToDesktop(index);
-
     WaitForCondition([this, index]() { return GetCurrentDesktopIndex() == index; }, 20);
 
-    if (index == currentIndex) {
-        Log(L"[DEBUG] Switched to same desktop " + std::to_wstring(index) + L", no activation needed");
-        return;
+    HWND hwnd = FindTopOnDesktop(m_pVDeskHelper.get());
+    if (hwnd == nullptr) {
+        hwnd = GetForegroundWindow();
     }
-
-    if (TryActivatePreviousWindow(index)) {
-        return;
+    if (hwnd != nullptr) {
+        if (IsIconic(hwnd) != 0) { ShowWindow(hwnd, SW_RESTORE); }
+        ActivateWindow(hwnd);
+        if (hwnd != GetShellWindow()) {
+            Log(L"[DEBUG] SwitchToDesktop: index=" + std::to_wstring(index)
+                + L" activated=" + GetWindowTitle(hwnd));
+        } else {
+            Log(L"[DEBUG] SwitchToDesktop: index=" + std::to_wstring(index) + L" empty desktop");
+        }
+    } else {
+        Log(L"[DEBUG] SwitchToDesktop: index=" + std::to_wstring(index) + L" no window");
     }
-    ActivateFallbackWindow(index);
 }

@@ -93,7 +93,7 @@ int CALLBACK FontEnumProc(const LOGFONTW *lf, const TEXTMETRICW * /*unused*/, DW
     }
     if (lf->lfFaceName[0] != L'@' && !dup) {
         data->added.emplace_back(&lf->lfFaceName[0]);
-        SendMessageW(data->hCmb, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(&lf->lfFaceName[0])); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        SendMessageW(data->hCmb, CB_ADDSTRING, 0, PtrToLParam(&lf->lfFaceName[0]));
     }
     return 1;
 }
@@ -104,14 +104,14 @@ void PopulateComboWithAllSystemFonts(HWND hCmb, const std::wstring &selectedFont
     HDC          hdc = GetDC(nullptr);
     LOGFONTW     lf{};
     lf.lfCharSet = DEFAULT_CHARSET;
-    EnumFontFamiliesExW(hdc, &lf, FontEnumProc, reinterpret_cast<LPARAM>(&data), 0); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    EnumFontFamiliesExW(hdc, &lf, FontEnumProc, PtrToLParam(&data), 0);
     ReleaseDC(nullptr, hdc);
 
     int cnt = static_cast<int>(SendMessageW(hCmb, CB_GETCOUNT, 0, 0));
     int sel = 0;
     for (int i = 0; i < cnt; ++i) {
         std::array<wchar_t, 256> buf{};
-        SendMessageW(hCmb, CB_GETLBTEXT, i, reinterpret_cast<LPARAM>(buf.data())); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        SendMessageW(hCmb, CB_GETLBTEXT, i, PtrToLParam(buf.data()));
         if (_wcsicmp(buf.data(), selectedFont.c_str()) == 0) {
             sel = i;
             break;
@@ -126,7 +126,7 @@ void FillCombo(HWND hCmb, const wchar_t *const *items, size_t count, const std::
         SendMessageW(hCmb, CB_ADDSTRING, 0, PtrToLParam(items[i]));
     }
     if (extraFont) {
-        SendMessageW(hCmb, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"更多字体...")); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        SendMessageW(hCmb, CB_ADDSTRING, 0, PtrToLParam(L"更多字体..."));
     }
 
     if (editable) {
@@ -206,7 +206,7 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 data->result.fontName = kFontList.at(sel);
             } else {
                 std::array<wchar_t, 256> buf{};
-                SendMessageW(hCmb, CB_GETLBTEXT, sel, reinterpret_cast<LPARAM>(buf.data())); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                SendMessageW(hCmb, CB_GETLBTEXT, sel, PtrToLParam(buf.data()));
                 buf.back() = 0;
                 if (_wcsicmp(buf.data(), L"更多字体...") == 0) {
                     PopulateComboWithAllSystemFonts(hCmb, data->result.fontName);
