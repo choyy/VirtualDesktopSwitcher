@@ -2,7 +2,6 @@
 
 #include <commctrl.h>
 
-#include <array>
 #include <cstring>
 
 #include "core/Application.h"
@@ -20,9 +19,8 @@ int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR l
     }
 
     if (ReadIniInt(L"General", L"RunAsAdmin", 0) != 0 && !IsAdminProcess()) {
-        std::array<wchar_t, MAX_PATH> exePath{};
-        GetModuleFileNameW(nullptr, exePath.data(), static_cast<DWORD>(exePath.size()));
-        if (reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"runas", exePath.data(), nullptr, nullptr, SW_SHOW)) > 32) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        std::wstring exePath = GetCurrentExePath();
+        if (reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"runas", exePath.c_str(), nullptr, nullptr, SW_SHOW)) > 32) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
             return 0;
         }
     }

@@ -36,6 +36,7 @@ private:
     void                    OnDesktopSwitch(WPARAM wParam);
     void                    OnTimerTick();
     void                    PollUpdateProcess();
+    void                    SpawnUpdateCheckProcess();
     void                    OnDestroy(HWND hwnd);
     void                    ApplySettingsPreview(const SettingsDialog::Result &r);
 

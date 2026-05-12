@@ -27,35 +27,20 @@ constexpr UINT CMD_POSITION_BOTTOM_RIGHT  = CMD_POSITION_BASE + 5;
 constexpr UINT CMD_POSITION_CUSTOM        = CMD_POSITION_BASE + 6;
 
 void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
-    const size_t usPos = hex.find(L'_');
+    std::array<COLORREF, 5> colors{};
+    size_t   colorCount = ParseMultiColorString(hex, colors.data(), 5);
 
-    if (usPos != std::wstring::npos) {
-        const COLORREF startCol = ParseColorString(hex.substr(0, usPos));
-        const COLORREF endCol   = ParseColorString(hex.substr(usPos + 1));
-
+    if (colorCount >= 2) {
         const int sw = rect.right - rect.left;
-        const int rs = GetRValue(startCol);
-        const int gs = GetGValue(startCol);
-        const int bs = GetBValue(startCol);
-        const int re = GetRValue(endCol);
-        const int ge = GetGValue(endCol);
-        const int be = GetBValue(endCol);
-
+        const int sh = rect.bottom - rect.top;
         for (int sx = 0; sx < sw; ++sx) {
-            const float t  = static_cast<float>(sx) / static_cast<float>(sw);
-            const int   rr = static_cast<int>(static_cast<float>(rs) + static_cast<float>(re - rs) * t);
-            const int   gg = static_cast<int>(static_cast<float>(gs) + static_cast<float>(ge - gs) * t);
-            const int   bb = static_cast<int>(static_cast<float>(bs) + static_cast<float>(be - bs) * t);
-
-            HPEN hp   = CreatePen(PS_SOLID, 1, RGB(rr, gg, bb));
-            HPEN oldP = static_cast<HPEN>(SelectObject(hdc, hp));
-            MoveToEx(hdc, rect.left + sx, rect.top, nullptr);
-            LineTo(hdc, rect.left + sx, rect.bottom);
-            SelectObject(hdc, oldP);
-            DeleteObject(hp);
+            COLORREF col = InterpolateGradientColor(colors.data(), colorCount, static_cast<float>(sx) / static_cast<float>(sw));
+            for (int sy = 0; sy < sh; ++sy) {
+                SetPixel(hdc, rect.left + sx, rect.top + sy, col);
+            }
         }
-    } else {
-        HBRUSH hb = CreateSolidBrush(ParseColorString(hex));
+    } else if (colorCount == 1) {
+        HBRUSH hb = CreateSolidBrush(colors[0]);
         FillRect(hdc, &rect, hb);
         DeleteObject(hb);
     }
@@ -107,16 +92,14 @@ bool IsAutoStartEnabled() {
     HKEY hKey   = nullptr;
     LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, kRegRunPath, 0, KEY_READ, &hKey);
     if (result != ERROR_SUCCESS) { return false; }
-    std::array<wchar_t, MAX_PATH> exePath{};
-    GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
+    std::wstring                  currentPath = GetCurrentExePath();
     std::array<wchar_t, MAX_PATH> value{};
     auto                          valueSize = static_cast<DWORD>(sizeof(value));
     result                                  = RegQueryValueExW(hKey, L"VirtualDesktopSwitcher", nullptr, nullptr,
                                                                reinterpret_cast<LPBYTE>(value.data()), &valueSize); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
     RegCloseKey(hKey);
     if (result != ERROR_SUCCESS) { return false; }
-    std::wstring       registryPath(value.data());
-    const std::wstring currentPath(exePath.data());
+    std::wstring registryPath(value.data());
     if (registryPath.length() >= 2 && registryPath.front() == L'"' && registryPath.back() == L'"') {
         registryPath = registryPath.substr(1, registryPath.length() - 2);
     }
@@ -126,10 +109,9 @@ bool IsAutoStartEnabled() {
 void SetAutoStart(bool enable) {
     if (IsAdminProcess()) {
         if (enable) {
-            std::array<wchar_t, MAX_PATH> exePath{};
-            GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
-            std::wstring args = L"/create /tn \"VirtualDesktopSwitcher\" /tr \\\"";
-            args += exePath.data();
+            std::wstring exePath = GetCurrentExePath();
+            std::wstring args    = L"/create /tn \"VirtualDesktopSwitcher\" /tr \\\"";
+            args += exePath;
             args += L"\\\" /sc onlogon /delay 0000:10 /rl highest /f";
             RunSchtasks(args.c_str());
             DeleteRunReg();
@@ -143,9 +125,8 @@ void SetAutoStart(bool enable) {
     const LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, kRegRunPath, 0, KEY_WRITE, &hKey);
     if (result != ERROR_SUCCESS) { return; }
     if (enable) {
-        std::array<wchar_t, MAX_PATH> exePath{};
-        GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
-        const std::wstring quotedPath = L"\"" + std::wstring(exePath.data()) + L"\"";
+        std::wstring       exePath    = GetCurrentExePath();
+        const std::wstring quotedPath = L"\"" + exePath + L"\"";
         RegSetValueExW(hKey, L"VirtualDesktopSwitcher", 0, REG_SZ,
                        reinterpret_cast<const BYTE *>(quotedPath.c_str()), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
                        static_cast<DWORD>((quotedPath.length() + 1) * sizeof(wchar_t)));
@@ -208,9 +189,6 @@ void TrayIcon::BuildMenu() {
 }
 
 bool TrayIcon::Initialize(HWND hwnd, HINSTANCE hInstance) {
-    std::array<wchar_t, MAX_PATH> exePath{};
-    GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
-
     HICON hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(101));
     if (hIcon == nullptr) {
         hIcon = LoadIcon(nullptr, IDI_APPLICATION);
@@ -235,7 +213,8 @@ bool TrayIcon::Initialize(HWND hwnd, HINSTANCE hInstance) {
 }
 
 void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    if (msg == WM_TRAYICON) {
+    switch (msg) {
+    case WM_TRAYICON:
         if (lParam == WM_RBUTTONUP) {
             POINT pt;
             GetCursorPos(&pt);
@@ -249,9 +228,13 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         } else if (lParam == WM_LBUTTONDBLCLK) {
             PostMessage(hwnd, WM_COMMAND, WM_TRAY_TOGGLE_AUTOSTART, 0);
         }
-    } else if (msg == WM_COMMAND) {
+        break;
+
+    case WM_COMMAND:
         HandleCommand(wParam);
-    } else if (msg == WM_MEASUREITEM) {
+        break;
+
+    case WM_MEASUREITEM: {
         auto *mis = LParamToPtr<MEASUREITEMSTRUCT>(lParam);
         if (mis->CtlType == ODT_MENU) {
             NONCLIENTMETRICSW ncm = {.cbSize = sizeof(ncm)};
@@ -269,52 +252,75 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             mis->itemHeight = tm.tmHeight + ScaleForDpi(2, m_dpi);
             mis->itemWidth  = ScaleForDpi(100, m_dpi);
         }
-    } else if (msg == WM_DRAWITEM) {
+        break;
+    }
+
+    case WM_DRAWITEM: {
         auto *dis = LParamToPtr<DRAWITEMSTRUCT>(lParam);
         if (dis->CtlType == ODT_MENU) {
             DrawColorSwatch(dis);
         }
+        break;
+    }
+    default:
+        break;
     }
 }
 
 void TrayIcon::HandleCommand(WPARAM wParam) {
     const UINT cmd = LOWORD(wParam);
 
-    if (cmd == WM_TRAY_EXIT) {
+    switch (cmd) {
+    case WM_TRAY_EXIT:
         PostQuitMessage(0);
-    } else if (cmd == WM_TRAY_TOGGLE_AUTOSTART) {
-        SetAutoStart(!IsAutoStartEnabled());
-        m_autoStartEnabled = IsAutoStartEnabled();
-    } else if (cmd >= CMD_POSITION_BASE && cmd < CMD_POSITION_CUSTOM) {
-        m_activePositionPreset = static_cast<int>(cmd - CMD_POSITION_BASE);
-        if (m_positionFn) { m_positionFn(m_activePositionPreset); }
-    } else if (cmd == WM_TRAY_RUNAS_ADMIN) {
+        break;
+
+    case WM_TRAY_TOGGLE_AUTOSTART: {
+        bool newState = !IsAutoStartEnabled();
+        SetAutoStart(newState);
+        m_autoStartEnabled = newState;
+        break;
+    }
+
+    case WM_TRAY_RUNAS_ADMIN: {
         bool wasOn = ReadIniInt(L"General", L"RunAsAdmin", 0) != 0;
         bool nowOn = !wasOn;
         WriteIniInt(L"General", L"RunAsAdmin", nowOn ? 1 : 0);
 
         if (!nowOn && IsAdminProcess()) {
-            // Toggled OFF while admin: clean up schtasks to prevent silent admin auto-start
             RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
         }
 
         if (!wasOn && !IsAdminProcess()) {
-            // Toggled ON as non-admin: relaunch with UAC
-            std::array<wchar_t, MAX_PATH> exePath{};
-            GetModuleFileNameW(nullptr, exePath.data(), MAX_PATH);
-            ShellExecuteW(nullptr, L"runas", exePath.data(), nullptr, nullptr, SW_SHOW);
+            std::wstring exePath = GetCurrentExePath();
+            ShellExecuteW(nullptr, L"runas", exePath.c_str(), nullptr, nullptr, SW_SHOW);
             PostQuitMessage(0);
         }
-    } else if (cmd == CMD_POSITION_CUSTOM) {
+        break;
+    }
+
+    case CMD_POSITION_CUSTOM:
         m_activePositionPreset = -1;
         if (m_editModeFn) { m_editModeFn(); }
-    } else if (cmd == WM_TRAY_SETTINGS) {
+        break;
+
+    case WM_TRAY_SETTINGS:
         if (m_settingsFn) { m_settingsFn(); }
-    } else if (cmd == WM_TRAY_ABOUT) {
+        break;
+
+    case WM_TRAY_ABOUT:
         if (m_aboutFn) { m_aboutFn(); }
-    } else if (cmd >= CMD_COLOR_OPTIONS_BASE && cmd < CMD_COLOR_OPTIONS_BASE + static_cast<UINT>(kPredefinedColors.size())) {
-        const int index = static_cast<int>(cmd - CMD_COLOR_OPTIONS_BASE);
-        if (m_colorFn) { m_colorFn(kPredefinedColors.at(index)); }
+        break;
+
+    default:
+        if (cmd >= CMD_POSITION_BASE && cmd < CMD_POSITION_CUSTOM) {
+            m_activePositionPreset = static_cast<int>(cmd - CMD_POSITION_BASE);
+            if (m_positionFn) { m_positionFn(m_activePositionPreset); }
+        } else if (cmd >= CMD_COLOR_OPTIONS_BASE && cmd < CMD_COLOR_OPTIONS_BASE + static_cast<UINT>(kPredefinedColors.size())) {
+            const int index = static_cast<int>(cmd - CMD_COLOR_OPTIONS_BASE);
+            if (m_colorFn) { m_colorFn(kPredefinedColors.at(index)); }
+        }
+        break;
     }
 }
 

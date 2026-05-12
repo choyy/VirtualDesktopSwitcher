@@ -155,23 +155,7 @@ void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
     }
 
     std::array<COLORREF, 5> colors{};
-    size_t                  colorCount = 0;
-    size_t                  pos        = colorStr.find(L'_');
-    if (pos != std::wstring::npos) {
-        size_t start = 0;
-        while (start < colorStr.size() && colorCount < 5) {
-            size_t end = colorStr.find(L'_', start);
-            if (end == std::wstring::npos) {
-                colors.at(colorCount++) = ParseColorString(colorStr.substr(start));
-                break;
-            }
-            colors.at(colorCount++) = ParseColorString(colorStr.substr(start, end - start));
-            start                   = end + 1;
-        }
-    } else {
-        colors.at(0) = ParseColorString(colorStr);
-        colorCount   = 1;
-    }
+    size_t                  colorCount = ParseMultiColorString(colorStr, colors.data(), colors.size());
 
     float sc = stbtt_ScaleForPixelHeight(&m_fontInfo, static_cast<float>(fontSize));
     int   a = 0, d = 0;
@@ -223,30 +207,10 @@ void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
                     continue;
                 }
 
-                int rr = 0, gg = 0, bb = 0;
-                if (isGradient) {
-                    float t    = static_cast<float>(dx) / static_cast<float>(bufWidth);
-                    t          = (t < 0.0f) ? 0.0f : (t > 1.0f) ? 1.0f
-                                                                : t;
-                    int   segs = static_cast<int>(colorCount) - 1;
-                    float segT = t * static_cast<float>(segs);
-                    int   idx  = static_cast<int>(segT);
-                    if (idx >= segs) {
-                        idx  = segs - 1;
-                        segT = 1.0f;
-                    } else {
-                        segT -= static_cast<float>(idx);
-                    }
-                    float s = 1.0f - segT;
-                    rr      = static_cast<int>(GetRValue(colors.at(idx)) * s + GetRValue(colors.at(idx + 1)) * segT);
-                    gg      = static_cast<int>(GetGValue(colors.at(idx)) * s + GetGValue(colors.at(idx + 1)) * segT);
-                    bb      = static_cast<int>(GetBValue(colors.at(idx)) * s + GetBValue(colors.at(idx + 1)) * segT);
-                } else {
-                    COLORREF c = colors.at(0);
-                    rr         = GetRValue(c);
-                    gg         = GetGValue(c);
-                    bb         = GetBValue(c);
-                }
+                COLORREF pixelColor = isGradient
+                                          ? InterpolateGradientColor(colors.data(), colorCount, static_cast<float>(dx) / static_cast<float>(bufWidth))
+                                          : colors.at(0);
+                int      rr = GetRValue(pixelColor), gg = GetGValue(pixelColor), bb = GetBValue(pixelColor);
 
                 auto *pixels        = static_cast<DWORD *>(bits);
                 auto &pix           = pixels[sy * bufWidth + dx];

@@ -211,6 +211,7 @@ void DesktopIndicator::MoveByDelta(int dx, int dy) {
     m_pCfg->windowPos.x    = r.left + dx;
     m_pCfg->windowPos.y    = r.top + dy;
     m_pCfg->posInitialized = true;
+    m_pCfg->positionPreset = -1;
     SetWindowPos(m_hwnd, nullptr, m_pCfg->windowPos.x, m_pCfg->windowPos.y, 0, 0,
                  SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
@@ -363,6 +364,7 @@ LRESULT DesktopIndicator::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         if (m_dragging) {
             m_dragging = false;
             ReleaseCapture();
+            if (m_pCfg != nullptr) { m_pCfg->positionPreset = -1; }
         }
         return 0;
 

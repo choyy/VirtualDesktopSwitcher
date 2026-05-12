@@ -107,6 +107,8 @@ void Application::PollUpdateProcess() {
         return;
     }
 
+    KillTimer(m_hwnd, 2);
+
     DWORD exitCode = 0;
     GetExitCodeProcess(m_hUpdateProcess, &exitCode);
     CloseHandle(m_hUpdateProcess);
@@ -118,6 +120,21 @@ void Application::PollUpdateProcess() {
                     MB_YESNO | MB_ICONQUESTION)
         == IDYES) {
         UpdateChecker::DownloadUpdate(m_hwnd);
+    }
+}
+
+void Application::SpawnUpdateCheckProcess() {
+    std::wstring exePath = GetCurrentExePath();
+    std::wstring cmdLine = L"\"" + exePath + L"\" --check-updates";
+
+    PROCESS_INFORMATION pi{};
+    STARTUPINFOW        si = {.cb = sizeof(si)};
+    if (CreateProcessW(exePath.c_str(), cmdLine.data(), nullptr, nullptr, FALSE,
+                       CREATE_NO_WINDOW | IDLE_PRIORITY_CLASS, nullptr, nullptr, &si, &pi)
+        != 0) {
+        CloseHandle(pi.hThread);
+        m_hUpdateProcess = pi.hProcess;
+        SetTimer(m_hwnd, 2, 3000, TimerPollUpdateProc);
     }
 }
 
@@ -267,18 +284,7 @@ bool Application::Initialize() {
     m_uTaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
 
     if (m_autoCheckUpdates) {
-        std::array<wchar_t, MAX_PATH> exePath{};
-        GetModuleFileNameW(nullptr, exePath.data(), static_cast<DWORD>(exePath.size()));
-        std::wstring cmdLine = std::wstring(L"\"") + exePath.data() + L"\" --check-updates";
-
-        PROCESS_INFORMATION pi{};
-        STARTUPINFOW        si = {.cb = sizeof(si)};
-        if (CreateProcessW(exePath.data(), cmdLine.data(), nullptr, nullptr, FALSE,
-                           CREATE_NO_WINDOW | IDLE_PRIORITY_CLASS, nullptr, nullptr, &si, &pi)
-            != 0) {
-            CloseHandle(pi.hThread);
-            m_hUpdateProcess = pi.hProcess;
-        }
+        SpawnUpdateCheckProcess();
     }
 
     if (!m_switcher->InstallHook()) {
@@ -287,7 +293,6 @@ bool Application::Initialize() {
     }
 
     SetTimer(m_hwnd, 1, 1000, nullptr);
-    SetTimer(m_hwnd, 2, 3000, TimerPollUpdateProc);
     return true;
 }
 

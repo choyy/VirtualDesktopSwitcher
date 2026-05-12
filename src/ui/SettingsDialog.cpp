@@ -175,84 +175,74 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         int id   = LOWORD(wp);
         int code = HIWORD(wp);
 
-        if (code == CBN_SELCHANGE && id >= IDC_CUR_SYM && id <= IDC_EMP_SYM) {
-            HWND hCmb = reinterpret_cast<HWND>(lp); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
-            int  sel  = static_cast<int>(SendMessageW(hCmb, CB_GETCURSEL, 0, 0));
-            if (sel == CB_ERR) {
-                return TRUE;
-            }
+        auto SymbolField = [&]() -> std::wstring & {
+            if (id == IDC_CUR_SYM) { return data->result.currentSymbol; }
+            if (id == IDC_OTH_SYM) { return data->result.otherSymbol; }
+            return data->result.emptySymbol;
+        };
+        auto ApplyPreview = [&] { if (data->preview) { data->preview(data->result); } };
+        auto ReadSpacing  = [&] { return static_cast<int>(GetDlgItemInt(hwnd, IDC_SPACING, nullptr, FALSE)); };
 
-            if (id != IDC_FONT) {
+        switch (id) {
+        case IDC_CUR_SYM:
+        case IDC_OTH_SYM:
+        case IDC_EMP_SYM:
+            if (code == CBN_SELCHANGE) {
+                HWND hCmb = reinterpret_cast<HWND>(lp); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+                int  sel  = static_cast<int>(SendMessageW(hCmb, CB_GETCURSEL, 0, 0));
                 if (sel >= 0 && static_cast<size_t>(sel) < kSymbolList.size()) {
-                    auto &target = (id == IDC_CUR_SYM) ? data->result.currentSymbol : (id == IDC_OTH_SYM) ? data->result.otherSymbol
-                                                                                                          : data->result.emptySymbol;
-                    target       = kSymbolList.at(sel);
+                    SymbolField() = kSymbolList.at(sel);
+                    ApplyPreview();
+                }
+            } else if (code == CBN_EDITCHANGE) {
+                std::array<wchar_t, 8> buf{};
+                GetDlgItemTextW(hwnd, id, buf.data(), static_cast<int>(buf.size()));
+                if (buf[0] != 0) {
+                    SymbolField() = std::wstring(buf.data());
+                    ApplyPreview();
                 }
             }
-            if (data->preview) {
-                data->preview(data->result);
-            }
-            return TRUE;
-        }
+            break;
 
-        if (id == IDC_FONT && code == CBN_SELCHANGE) {
-            HWND hCmb = reinterpret_cast<HWND>(lp); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
-            int  sel  = static_cast<int>(SendMessageW(hCmb, CB_GETCURSEL, 0, 0));
-            if (sel == CB_ERR) {
-                return TRUE;
-            }
+        case IDC_FONT:
+            if (code == CBN_SELCHANGE) {
+                HWND hCmb = reinterpret_cast<HWND>(lp); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+                int  sel  = static_cast<int>(SendMessageW(hCmb, CB_GETCURSEL, 0, 0));
+                if (sel == CB_ERR) { break; }
 
-            if (sel >= 0 && static_cast<size_t>(sel) < kFontList.size()) {
-                data->result.fontName = kFontList.at(sel);
-            } else {
-                std::array<wchar_t, 256> buf{};
-                SendMessageW(hCmb, CB_GETLBTEXT, sel, PtrToLParam(buf.data()));
-                buf.back() = 0;
-                if (_wcsicmp(buf.data(), L"更多字体...") == 0) {
-                    PopulateComboWithAllSystemFonts(hCmb, data->result.fontName);
+                if (static_cast<size_t>(sel) < kFontList.size()) {
+                    data->result.fontName = kFontList.at(sel);
                 } else {
-                    data->result.fontName = buf.data();
+                    std::array<wchar_t, 256> buf{};
+                    SendMessageW(hCmb, CB_GETLBTEXT, sel, reinterpret_cast<LPARAM>(buf.data())); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                    if (wcscmp(buf.data(), L"更多字体...") == 0) {
+                        PopulateComboWithAllSystemFonts(hCmb, data->result.fontName);
+                    } else {
+                        data->result.fontName = buf.data();
+                    }
                 }
+                ApplyPreview();
             }
-            if (data->preview) {
-                data->preview(data->result);
+            break;
+
+        case IDC_SPACING:
+            if (code == EN_CHANGE) {
+                data->result.charSpacing = ReadSpacing();
+                ApplyPreview();
             }
-            return TRUE;
-        }
+            break;
 
-        if (code == CBN_EDITCHANGE && id >= IDC_CUR_SYM && id <= IDC_EMP_SYM) {
-            std::array<wchar_t, 8> buf{};
-            GetDlgItemTextW(hwnd, id, buf.data(), static_cast<int>(buf.size()));
-            if (buf[0] != 0) {
-                (id == IDC_CUR_SYM ? data->result.currentSymbol : id == IDC_OTH_SYM ? data->result.otherSymbol
-                                                                                    : data->result.emptySymbol) = buf.data();
-                if (data->preview) {
-                    data->preview(data->result);
-                }
-            }
-            return TRUE;
-        }
-
-        if (id == IDC_SPACING && code == EN_CHANGE && data->preview) {
-            std::array<wchar_t, 16> buf{};
-            GetDlgItemTextW(hwnd, IDC_SPACING, buf.data(), static_cast<int>(buf.size()));
-            data->result.charSpacing = (_wtoi(buf.data()) < 0) ? 0 : _wtoi(buf.data());
-            data->preview(data->result);
-            return TRUE;
-        }
-
-        if (id == IDCANCEL) {
-            EndDialog(hwnd, id);
-            return TRUE;
-        }
-
-        if (id == IDOK) {
-            std::array<wchar_t, 16> buf{};
-            GetDlgItemTextW(hwnd, IDC_SPACING, buf.data(), static_cast<int>(buf.size()));
-            data->result.charSpacing = (_wtoi(buf.data()) < 0) ? 0 : _wtoi(buf.data());
+        case IDOK:
+            data->result.charSpacing = ReadSpacing();
             data->result.accepted    = true;
             EndDialog(hwnd, id);
-            return TRUE;
+            break;
+
+        case IDCANCEL:
+            EndDialog(hwnd, id);
+            break;
+        default:
+            break;
         }
         return TRUE;
     }

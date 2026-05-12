@@ -41,6 +41,15 @@ inline constexpr std::array<const wchar_t *, 29> kPredefinedColors = {
 };
 
 COLORREF ParseColorString(const std::wstring &colorStr);
+size_t   ParseMultiColorString(const std::wstring &colorStr, COLORREF *outColors, size_t maxColors);
+COLORREF InterpolateGradientColor(const COLORREF *colors, size_t colorCount, float t);
+
+// Executable path helper
+inline std::wstring GetCurrentExePath() {
+    std::array<wchar_t, MAX_PATH> buf{};
+    GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
+    return buf.data();
+}
 
 // Win32 pointer cast helpers — replace std::bit_cast with proper reinterpret_cast
 
