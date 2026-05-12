@@ -55,6 +55,10 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
         pApp->OnTimerTick();
         return 0;
 
+    case WM_DISPLAYCHANGE:
+        pApp->OnDisplayChange();
+        return 0;
+
     case WM_POWERBROADCAST:
         if (wParam == PBT_APMRESUMEAUTOMATIC || wParam == PBT_APMRESUMESUSPEND) {
             pApp->OnSystemResume();
@@ -311,6 +315,10 @@ void Application::SyncDesktopState() {
         auto emptyMask = m_switcher->GetDesktopEmptyMask();
         m_pOverlay->SetDesktopState(desktopCount, currentDesktop, emptyMask);
     }
+}
+
+void Application::OnDisplayChange() {
+    if (m_pOverlay) { m_pOverlay->Rebuild(); }
 }
 
 void Application::OnSystemResume() {

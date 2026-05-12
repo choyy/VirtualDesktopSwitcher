@@ -214,7 +214,7 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     data->result.fontName = kFontList.at(sel);
                 } else {
                     std::array<wchar_t, 256> buf{};
-                    SendMessageW(hCmb, CB_GETLBTEXT, sel, reinterpret_cast<LPARAM>(buf.data())); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                    SendMessageW(hCmb, CB_GETLBTEXT, sel, PtrToLParam(buf.data()));
                     if (wcscmp(buf.data(), L"更多字体...") == 0) {
                         PopulateComboWithAllSystemFonts(hCmb, data->result.fontName);
                     } else {

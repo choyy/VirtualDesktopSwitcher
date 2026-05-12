@@ -83,29 +83,8 @@ inline INT_PTR PtrToIntPtr(T value) {
     return reinterpret_cast<INT_PTR>(value); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 }
 
-inline int CalcScalePercent(int dpi) {
-    return (dpi * 100 + 48) / 96;
-}
-
-inline int GetDpiScale() {
-    static int scale = [] {
-        HDC       hdc = GetDC(nullptr);
-        const int dpi = GetDeviceCaps(hdc, LOGPIXELSY);
-        ReleaseDC(nullptr, hdc);
-        return CalcScalePercent(dpi);
-    }();
-    return scale;
-}
-
-inline int GetWindowDpi(HWND hwnd) {
-    HDC       hdc = GetDC(hwnd);
-    const int dpi = GetDeviceCaps(hdc, LOGPIXELSY);
-    ReleaseDC(hwnd, hdc);
-    return dpi;
-}
-
 inline int ScaleForDpi(int value, int dpi) {
-    return value * CalcScalePercent(dpi) / 100;
+    return value * (dpi * 100 + 48) / 96 / 100;
 }
 
 // Window activation helper

@@ -30,6 +30,7 @@ private:
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     static void CALLBACK    TimerPollUpdateProc(HWND hwnd, UINT uMsg, UINT_PTR id, DWORD dwTime);
     void                    OnSystemResume();
+    void                    OnDisplayChange();
     void                    SyncDesktopState();
     void                    OnTrayMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, HWND hwnd);
     void                    OnMenuSelect(WPARAM wParam, LPARAM lParam);

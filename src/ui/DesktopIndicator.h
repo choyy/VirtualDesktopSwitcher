@@ -8,11 +8,20 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "util/IndicatorConfig.h"
 #include "util/Utils.h"
 
 class FontRenderer;
+
+struct MonitorLayer {
+    HWND hwnd{};
+    RECT monitor{}; // rcMonitor
+    RECT work{};    // rcWork (excluding taskbar)
+    int  dpi{};     // LOGPIXELSY
+    bool isPrimary = false;
+};
 
 class DesktopIndicator {
 public:
@@ -40,12 +49,13 @@ public:
     void ToggleEditMode();
     void SetEditMode(bool edit);
     void SetPositionPreset(int preset);
+    void Rebuild();
+    HWND CreateMonitorWindow(HINSTANCE hInst);
 
     [[nodiscard]] bool IsEditMode() const { return m_editMode; }
-    [[nodiscard]] HWND GetWindowHandle() const { return m_hwnd; }
 
 private:
-    HWND                           m_hwnd = nullptr;
+    std::vector<MonitorLayer>      m_layers;
     std::unique_ptr<FontRenderer>  m_renderer;
     IndicatorConfig               *m_pCfg = nullptr;
     std::function<void()>          m_onConfigChanged;
@@ -64,5 +74,5 @@ private:
     void MoveByDelta(int dx, int dy);
 
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
-    LRESULT                 HandleMessage(UINT msg, WPARAM wp, LPARAM lp);
+    LRESULT                 HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 };

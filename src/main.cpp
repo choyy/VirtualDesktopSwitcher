@@ -20,7 +20,7 @@ int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR l
 
     if (ReadIniInt(L"General", L"RunAsAdmin", 0) != 0 && !IsAdminProcess()) {
         std::wstring exePath = GetCurrentExePath();
-        if (reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"runas", exePath.c_str(), nullptr, nullptr, SW_SHOW)) > 32) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        if (PtrToIntPtr(ShellExecuteW(nullptr, L"runas", exePath.c_str(), nullptr, nullptr, SW_SHOW)) > 32) {
             return 0;
         }
     }

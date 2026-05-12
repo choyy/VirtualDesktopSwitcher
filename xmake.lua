@@ -1,4 +1,4 @@
-set_version("1.1.4")
+set_version("1.2.0")
 set_encodings("utf-8")
 set_languages("c++20")
 
@@ -18,7 +18,7 @@ target("VirtualDesktopSwitcher")
 
     add_defines("NOMINMAX")
     add_ldflags("/SUBSYSTEM:WINDOWS")
-    add_syslinks("shell32", "user32", "gdi32", "advapi32", "comctl32", "ole32", "dwmapi")
+    add_syslinks("shell32", "user32", "gdi32", "advapi32", "comctl32", "ole32", "dwmapi", "shcore")
 
     add_packages("stb")
 
