@@ -28,7 +28,7 @@ constexpr UINT CMD_POSITION_CUSTOM        = CMD_POSITION_BASE + 6;
 
 void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
     std::array<COLORREF, 5> colors{};
-    size_t   colorCount = ParseMultiColorString(hex, colors.data(), 5);
+    size_t                  colorCount = ParseMultiColorString(hex, colors.data(), 5);
 
     if (colorCount >= 2) {
         const int sw = rect.right - rect.left;
@@ -272,6 +272,8 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
 
     switch (cmd) {
     case WM_TRAY_EXIT:
+        DeleteRunReg();
+        RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
         PostQuitMessage(0);
         break;
 
