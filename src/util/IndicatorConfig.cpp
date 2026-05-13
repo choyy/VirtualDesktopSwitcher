@@ -32,6 +32,7 @@ void IndicatorConfig::LoadFromIni() {
 
     positionPreset = ReadIniInt(L"Display", L"PositionPreset", 1);
     showMode       = static_cast<ShowMode>(ReadIniInt(L"Display", L"ShowMode", 0));
+    animMode       = ReadIniInt(L"Display", L"AnimMode", 1);
 }
 
 void IndicatorConfig::SaveToIni() const {
@@ -46,4 +47,5 @@ void IndicatorConfig::SaveToIni() const {
     WriteIniString(L"Display", L"FontName", fontName);
     WriteIniInt(L"Display", L"PositionPreset", positionPreset);
     WriteIniInt(L"Display", L"ShowMode", static_cast<int>(showMode));
+    WriteIniInt(L"Display", L"AnimMode", animMode);
 }

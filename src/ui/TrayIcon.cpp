@@ -19,6 +19,7 @@ constexpr UINT WM_TRAY_EDIT_MODE        = WM_USER + 5;
 constexpr UINT WM_TRAY_SETTINGS         = WM_USER + 6;
 constexpr UINT WM_TRAY_ABOUT            = WM_USER + 7;
 constexpr UINT WM_TRAY_RUNAS_ADMIN      = WM_USER + 8;
+constexpr UINT WM_TRAY_ANIM_MODE        = WM_USER + 9;
 constexpr UINT CMD_SHOW_MODE_BASE       = WM_USER + 300;
 constexpr UINT CMD_SHOW_MODE_CUSTOM     = CMD_SHOW_MODE_BASE + static_cast<UINT>(ShowMode::Count);
 constexpr UINT CMD_POSITION_BASE        = WM_USER + 200;
@@ -180,6 +181,9 @@ void TrayIcon::BuildMenu() {
         mii.wID           = CMD_COLOR_OPTIONS_BASE + i;
         InsertMenuItemW(hColorMenu, i, TRUE, &mii);
     }
+    AppendMenuW(hColorMenu, MF_SEPARATOR, 0, nullptr);
+    bool animOn = ReadIniInt(L"Display", L"AnimMode", 1) != 0;
+    AppendMenuW(hColorMenu, MF_STRING | (animOn ? MF_CHECKED : 0), WM_TRAY_ANIM_MODE, L"色环呼吸");
     AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hColorMenu), L"颜色"); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_SETTINGS, L"设置...");
@@ -322,6 +326,13 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
     case WM_TRAY_ABOUT:
         if (m_aboutFn) { m_aboutFn(); }
         break;
+
+    case WM_TRAY_ANIM_MODE: {
+        bool nowOn = ReadIniInt(L"Display", L"AnimMode", 1) == 0;
+        WriteIniInt(L"Display", L"AnimMode", nowOn ? 1 : 0);
+        if (m_animModeFn) { m_animModeFn(nowOn); }
+        break;
+    }
 
     default:
         if (cmd >= CMD_SHOW_MODE_BASE && cmd < CMD_SHOW_MODE_CUSTOM) {

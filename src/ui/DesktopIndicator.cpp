@@ -2,6 +2,7 @@
 // Original: https://github.com/vladelaina/Catime
 #include "DesktopIndicator.h"
 
+#include <cmath>
 #include <shellscalingapi.h>
 #include <windowsx.h>
 
@@ -14,6 +15,7 @@
 namespace {
 
 constexpr UINT_PTR kAutoHideTimerId = 100;
+constexpr UINT_PTR kAnimTimerId     = 101;
 
 struct EnumCtx {
     std::vector<MonitorLayer> *vec;
@@ -63,6 +65,47 @@ POINT CalcPresetPos(int preset, RECT mon, RECT work, int w, int h) {
     case 5: return {mon.left + (monW - w) / 2, work.bottom - h + 4};
     case 6: return {mon.left + monW - w, work.bottom - h + 4};
     default: return {mon.left + (monW - w) / 2, mon.top - 4};
+    }
+}
+
+void RGBToHSV(COLORREF rgb, float &h, float &s, float &v) {
+    float r  = GetRValue(rgb) / 255.0f;
+    float g  = GetGValue(rgb) / 255.0f;
+    float b  = GetBValue(rgb) / 255.0f;
+    float mx = (std::max)({r, g, b});
+    float mn = (std::min)({r, g, b});
+    float d  = mx - mn;
+    v        = mx;
+    s        = (mx > 0.001f) ? d / mx : 0.0f;
+    if (d < 0.001f) {
+        h = 0.0f;
+        return;
+    }
+    if (std::fabs(mx - r) < 0.001f) {
+        h = 60.0f * fmod((g - b) / d, 6.0f);
+    } else if (std::fabs(mx - g) < 0.001f) {
+        h = 60.0f * ((b - r) / d + 2.0f);
+    } else {
+        h = 60.0f * ((r - g) / d + 4.0f);
+    }
+    if (h < 0) { h += 360.0f; }
+}
+
+COLORREF HSVToRGB(float h, float s, float v) {
+    h = fmod(h, 360.0f);
+    if (h < 0) { h += 360.0f; }
+    int   i = static_cast<int>(h / 60.0f) % 6;
+    float f = h / 60.0f - static_cast<float>(i);
+    float p = v * (1.0f - s);
+    float q = v * (1.0f - s * f);
+    float t = v * (1.0f - s * (1.0f - f));
+    switch (i) {
+    case 0: return RGB(static_cast<int>(v * 255), static_cast<int>(t * 255), static_cast<int>(p * 255));
+    case 1: return RGB(static_cast<int>(q * 255), static_cast<int>(v * 255), static_cast<int>(p * 255));
+    case 2: return RGB(static_cast<int>(p * 255), static_cast<int>(v * 255), static_cast<int>(t * 255));
+    case 3: return RGB(static_cast<int>(p * 255), static_cast<int>(q * 255), static_cast<int>(v * 255));
+    case 4: return RGB(static_cast<int>(t * 255), static_cast<int>(p * 255), static_cast<int>(v * 255));
+    default: return RGB(static_cast<int>(v * 255), static_cast<int>(p * 255), static_cast<int>(q * 255));
     }
 }
 
@@ -167,6 +210,7 @@ void DesktopIndicator::SetShowMode(ShowMode mode) {
     if (!m_layers.empty()) { KillTimer(m_layers[0].hwnd, kAutoHideTimerId); }
     if (mode == ShowMode::AlwaysHide) {
         for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_HIDE); }
+        if (!m_layers.empty()) { KillTimer(m_layers[0].hwnd, kAnimTimerId); }
     } else {
         for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
         if (mode >= ShowMode::Show1s) { ShowTemporarily(); }
@@ -180,6 +224,27 @@ void CALLBACK DesktopIndicator::AutoHideTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR
     if (overlay != nullptr) {
         for (auto &l : overlay->m_layers) { ShowWindow(l.hwnd, SW_HIDE); }
     }
+}
+
+void DesktopIndicator::SetAnimMode(bool on) {
+    if (m_pCfg == nullptr) { return; }
+    m_pCfg->animMode = on ? 1 : 0;
+    if (!m_layers.empty()) {
+        if (on) {
+            SetTimer(m_layers[0].hwnd, kAnimTimerId, 50, AnimTimer);
+        } else {
+            KillTimer(m_layers[0].hwnd, kAnimTimerId);
+        }
+    }
+    Render();
+}
+
+void CALLBACK DesktopIndicator::AnimTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR /*idEvent*/, DWORD /*dwTime*/) {
+    auto *overlay = GetWndUserData<DesktopIndicator>(hwnd);
+    if (overlay == nullptr || overlay->m_pCfg == nullptr || overlay->m_pCfg->animMode == 0) { return; }
+    if (overlay->m_pCfg->showMode == ShowMode::AlwaysHide) { return; }
+    if (overlay->m_pCfg->showMode >= ShowMode::Show1s && IsWindowVisible(hwnd) == 0) { return; }
+    overlay->Render();
 }
 
 void DesktopIndicator::RebuildText() {
@@ -333,8 +398,32 @@ void DesktopIndicator::Render() {
 
     if (m_renderer == nullptr) { return; }
 
-    std::wstring colorStr = m_hasPreview ? m_previewColor : m_pCfg->textColor;
-    int          padding  = 8;
+    std::wstring colorStr;
+    if (m_hasPreview) {
+        colorStr = m_previewColor;
+    } else if (m_pCfg->animMode != 0) {
+        std::array<COLORREF, 5> colors{};
+        size_t                  cnt = ParseMultiColorString(m_pCfg->textColor, colors.data(), 5);
+        if (cnt > 0) {
+            ULONGLONG ms     = GetTickCount64();
+            auto      hueOff = static_cast<float>(fmod(static_cast<double>(ms) / 12000.0 * 360.0, 360.0));
+            colorStr.clear();
+            for (size_t i = 0; i < cnt; ++i) {
+                float h{}, s{}, v{};
+                RGBToHSV(colors.at(i), h, s, v);
+                COLORREF               c = HSVToRGB(h + hueOff, s, v);
+                std::array<wchar_t, 8> buf{};
+                swprintf_s(buf.data(), buf.size(), L"#%02X%02X%02X", GetRValue(c), GetGValue(c), GetBValue(c)); // NOLINT
+                if (i > 0) { colorStr += L'_'; }
+                colorStr += buf.data();
+            }
+        } else {
+            colorStr = m_pCfg->textColor;
+        }
+    } else {
+        colorStr = m_pCfg->textColor;
+    }
+    int padding = 8;
 
     BLENDFUNCTION blend       = {};
     blend.BlendOp             = AC_SRC_OVER;
@@ -440,6 +529,9 @@ void DesktopIndicator::Rebuild() {
             SetWindowPos(l.hwnd, nullptr, pos.x, pos.y, 0, 0,
                          SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
+    }
+    if (m_pCfg != nullptr && m_pCfg->animMode != 0 && m_pCfg->showMode != ShowMode::AlwaysHide && !m_layers.empty()) {
+        SetTimer(m_layers[0].hwnd, kAnimTimerId, 50, AnimTimer);
     }
 }
 

@@ -33,6 +33,7 @@ public:
     void SetSettingsCallback(std::function<void()> cb) { m_settingsFn = std::move(cb); }
     void SetAboutCallback(std::function<void()> cb) { m_aboutFn = std::move(cb); }
     void SetShowModeCallback(std::function<void(int)> cb) { m_showModeFn = std::move(cb); }
+    void SetAnimModeCallback(std::function<void(bool)> cb) { m_animModeFn = std::move(cb); }
 
 private:
     NOTIFYICONDATAW m_nid{};
@@ -48,6 +49,7 @@ private:
     std::function<void()>                     m_settingsFn;
     std::function<void()>                     m_aboutFn;
     std::function<void(int)>                  m_showModeFn;
+    std::function<void(bool)>                 m_animModeFn;
 
     void BuildMenu();
     void HandleCommand(WPARAM wParam);

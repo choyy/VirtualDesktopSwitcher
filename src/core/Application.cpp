@@ -264,6 +264,9 @@ void Application::SetupTrayCallbacks() {
     m_pTrayIcon->SetShowModeCallback([this](int mode) {
         if (m_pOverlay) { m_pOverlay->SetShowMode(static_cast<ShowMode>(mode)); }
     });
+    m_pTrayIcon->SetAnimModeCallback([this](bool on) {
+        if (m_pOverlay) { m_pOverlay->SetAnimMode(on); }
+    });
 }
 
 bool Application::Initialize() {
@@ -284,7 +287,10 @@ bool Application::Initialize() {
 
     SyncDesktopState();
 
-    if (overlayOk) { m_pOverlay->SetShowMode(m_indicatorCfg.showMode); }
+    if (overlayOk) {
+        m_pOverlay->SetShowMode(m_indicatorCfg.showMode);
+        if (m_indicatorCfg.animMode != 0) { m_pOverlay->SetAnimMode(true); }
+    }
 
     SetupTrayCallbacks();
 

@@ -31,6 +31,7 @@ struct IndicatorConfig {
     bool         posInitialized = false;
     int          positionPreset = -1;
     ShowMode     showMode       = ShowMode::AlwaysShow;
+    int          animMode       = 1;
 
     void LoadFromIni();
     void SaveToIni() const;
