@@ -14,6 +14,8 @@
 
 namespace {
 
+constexpr UINT_PTR kAutoHideTimerId = 100;
+
 struct EnumCtx {
     std::vector<MonitorLayer> *vec;
     DesktopIndicator          *self;
@@ -149,6 +151,35 @@ void DesktopIndicator::SetDesktopState(int count, int currentIndex,
     m_currentDesktop = currentIndex;
     m_emptyDesktops  = emptyDesktops;
     RebuildText();
+}
+
+void DesktopIndicator::ShowTemporarily() {
+    if (m_pCfg == nullptr || m_pCfg->showMode < ShowMode::Show1s || m_layers.empty()) { return; }
+    for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
+    KillTimer(m_layers[0].hwnd, kAutoHideTimerId);
+    int ms = (m_pCfg->showMode == ShowMode::Show1s) ? 1000 : 3000;
+    SetTimer(m_layers[0].hwnd, kAutoHideTimerId, ms, AutoHideTimer);
+}
+
+void DesktopIndicator::SetShowMode(ShowMode mode) {
+    if (m_pCfg == nullptr) { return; }
+    m_pCfg->showMode = mode;
+    if (!m_layers.empty()) { KillTimer(m_layers[0].hwnd, kAutoHideTimerId); }
+    if (mode == ShowMode::AlwaysHide) {
+        for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_HIDE); }
+    } else {
+        for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
+        if (mode >= ShowMode::Show1s) { ShowTemporarily(); }
+    }
+    if (m_onConfigChanged) { m_onConfigChanged(); }
+}
+
+void CALLBACK DesktopIndicator::AutoHideTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR /*idEvent*/, DWORD /*dwTime*/) {
+    KillTimer(hwnd, kAutoHideTimerId);
+    auto *overlay = GetWndUserData<DesktopIndicator>(hwnd);
+    if (overlay != nullptr) {
+        for (auto &l : overlay->m_layers) { ShowWindow(l.hwnd, SW_HIDE); }
+    }
 }
 
 void DesktopIndicator::RebuildText() {
@@ -393,6 +424,9 @@ void DesktopIndicator::Rebuild() {
 
     if (wasVisible) {
         for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
+        if (m_pCfg != nullptr && m_pCfg->showMode >= ShowMode::Show1s) {
+            ShowTemporarily();
+        }
     }
     Render();
     Log(L"[INFO] Rebuild done: " + std::to_wstring(m_layers.size()) + L" layers");

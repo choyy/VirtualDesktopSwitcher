@@ -50,6 +50,8 @@ public:
     void SetEditMode(bool edit);
     void SetPositionPreset(int preset);
     void Rebuild();
+    void SetShowMode(ShowMode mode);
+    void ShowTemporarily();
     HWND CreateMonitorWindow(HINSTANCE hInst);
 
     [[nodiscard]] bool IsEditMode() const { return m_editMode; }
@@ -74,6 +76,7 @@ private:
     void ApplyPresetPosition();
     void MoveByDelta(int dx, int dy);
 
+    static void CALLBACK    AutoHideTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
     LRESULT                 HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 };

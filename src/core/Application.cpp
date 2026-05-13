@@ -261,6 +261,9 @@ void Application::SetupTrayCallbacks() {
             WriteIniInt(L"General", L"AutoCheckUpdates", m_autoCheckUpdates ? 1 : 0);
         }
     });
+    m_pTrayIcon->SetShowModeCallback([this](int mode) {
+        if (m_pOverlay) { m_pOverlay->SetShowMode(static_cast<ShowMode>(mode)); }
+    });
 }
 
 bool Application::Initialize() {
@@ -281,7 +284,7 @@ bool Application::Initialize() {
 
     SyncDesktopState();
 
-    if (overlayOk) { m_pOverlay->Show(); }
+    if (overlayOk) { m_pOverlay->SetShowMode(m_indicatorCfg.showMode); }
 
     SetupTrayCallbacks();
 
@@ -309,6 +312,7 @@ void Application::SyncDesktopState() {
         m_lastDesktopIndex = currentDesktop;
         m_lastDesktopCount = desktopCount;
         m_pTrayIcon->UpdateTooltip(BuildTooltipText(desktopCount, currentDesktop));
+        if (m_pOverlay) { m_pOverlay->ShowTemporarily(); }
     }
 
     if (m_pOverlay) {

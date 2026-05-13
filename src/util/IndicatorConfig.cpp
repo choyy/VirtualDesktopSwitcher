@@ -31,6 +31,7 @@ void IndicatorConfig::LoadFromIni() {
     if (!fn.empty()) { fontName = fn; }
 
     positionPreset = ReadIniInt(L"Display", L"PositionPreset", 1);
+    showMode       = static_cast<ShowMode>(ReadIniInt(L"Display", L"ShowMode", 0));
 }
 
 void IndicatorConfig::SaveToIni() const {
@@ -44,4 +45,5 @@ void IndicatorConfig::SaveToIni() const {
     WriteIniInt(L"Display", L"CharSpacing", charSpacing);
     WriteIniString(L"Display", L"FontName", fontName);
     WriteIniInt(L"Display", L"PositionPreset", positionPreset);
+    WriteIniInt(L"Display", L"ShowMode", static_cast<int>(showMode));
 }

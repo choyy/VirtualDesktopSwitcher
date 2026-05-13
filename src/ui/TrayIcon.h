@@ -36,6 +36,7 @@ public:
     void SetColorCallback(std::function<void(const std::wstring &)> cb) { m_colorFn = std::move(cb); }
     void SetSettingsCallback(std::function<void()> cb) { m_settingsFn = std::move(cb); }
     void SetAboutCallback(std::function<void()> cb) { m_aboutFn = std::move(cb); }
+    void SetShowModeCallback(std::function<void(int)> cb) { m_showModeFn = std::move(cb); }
 
 private:
     NOTIFYICONDATAW m_nid{};
@@ -50,6 +51,7 @@ private:
     std::function<void(int)>                  m_positionFn;
     std::function<void()>                     m_settingsFn;
     std::function<void()>                     m_aboutFn;
+    std::function<void(int)>                  m_showModeFn;
 
     void BuildMenu();
     void HandleCommand(WPARAM wParam);

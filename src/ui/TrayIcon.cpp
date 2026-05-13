@@ -4,6 +4,8 @@
 
 #include <array>
 
+#include "util/IndicatorConfig.h"
+
 #include "util/ConfigIni.h"
 #include "util/Utils.h"
 
@@ -17,6 +19,8 @@ constexpr UINT WM_TRAY_EDIT_MODE          = WM_USER + 5;
 constexpr UINT WM_TRAY_SETTINGS           = WM_USER + 6;
 constexpr UINT WM_TRAY_ABOUT              = WM_USER + 7;
 constexpr UINT WM_TRAY_RUNAS_ADMIN        = WM_USER + 8;
+constexpr UINT CMD_SHOW_MODE_BASE         = WM_USER + 300;
+constexpr UINT CMD_SHOW_MODE_CUSTOM       = CMD_SHOW_MODE_BASE + static_cast<UINT>(ShowMode::Count);
 constexpr UINT CMD_POSITION_BASE          = WM_USER + 200;
 constexpr UINT CMD_POSITION_TOP_LEFT      = CMD_POSITION_BASE + 0;
 constexpr UINT CMD_POSITION_TOP_CENTER    = CMD_POSITION_BASE + 1;
@@ -152,6 +156,15 @@ void TrayIcon::BuildMenu() {
         DestroyMenu(m_hMenu);
     }
     m_hMenu = CreatePopupMenu();
+
+    HMENU            hShowMenu  = CreatePopupMenu();
+    const std::array showLabels = {L"总是显示", L"总是隐藏", L"切换后显示1s", L"切换后显示3s"};
+    int              curShow    = ReadIniInt(L"Display", L"ShowMode", 0);
+    for (int i = 0; i < static_cast<int>(showLabels.size()); ++i) {
+        AppendMenuW(hShowMenu, MF_STRING | (curShow == i ? MF_CHECKED : 0),
+                    CMD_SHOW_MODE_BASE + i, showLabels.at(i));
+    }
+    AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hShowMenu), L"显示模式"); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     HMENU hPosMenu = CreatePopupMenu();
     for (int i = 0; i < kPositionPresetCount; ++i) {
@@ -315,7 +328,11 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
         break;
 
     default:
-        if (cmd >= CMD_POSITION_BASE && cmd < CMD_POSITION_CUSTOM) {
+        if (cmd >= CMD_SHOW_MODE_BASE && cmd < CMD_SHOW_MODE_CUSTOM) {
+            int mode = static_cast<int>(cmd - CMD_SHOW_MODE_BASE);
+            WriteIniInt(L"Display", L"ShowMode", mode);
+            if (m_showModeFn) { m_showModeFn(mode); }
+        } else if (cmd >= CMD_POSITION_BASE && cmd < CMD_POSITION_CUSTOM) {
             m_activePositionPreset = static_cast<int>(cmd - CMD_POSITION_BASE);
             if (m_positionFn) { m_positionFn(m_activePositionPreset); }
         } else if (cmd >= CMD_COLOR_OPTIONS_BASE && cmd < CMD_COLOR_OPTIONS_BASE + static_cast<UINT>(kPredefinedColors.size())) {
