@@ -20,6 +20,7 @@ constexpr UINT WM_TRAY_SETTINGS         = WM_USER + 6;
 constexpr UINT WM_TRAY_ABOUT            = WM_USER + 7;
 constexpr UINT WM_TRAY_RUNAS_ADMIN      = WM_USER + 8;
 constexpr UINT WM_TRAY_ANIM_MODE        = WM_USER + 9;
+constexpr UINT WM_TRAY_TOGGLE_SHOW      = WM_USER + 10;
 constexpr UINT CMD_SHOW_MODE_BASE       = WM_USER + 300;
 constexpr UINT CMD_SHOW_MODE_CUSTOM     = CMD_SHOW_MODE_BASE + static_cast<UINT>(ShowMode::Count);
 constexpr UINT CMD_POSITION_BASE        = WM_USER + 200;
@@ -239,7 +240,7 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             TrackPopupMenu(m_hMenu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, nullptr);
             PostMessage(hwnd, WM_NULL, 0, 0);
         } else if (lParam == WM_LBUTTONDBLCLK) {
-            PostMessage(hwnd, WM_COMMAND, WM_TRAY_TOGGLE_AUTOSTART, 0);
+            PostMessage(hwnd, WM_COMMAND, WM_TRAY_TOGGLE_SHOW, 0);
         }
         break;
 
@@ -331,6 +332,16 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
         bool nowOn = ReadIniInt(L"Display", L"AnimMode", 1) == 0;
         WriteIniInt(L"Display", L"AnimMode", nowOn ? 1 : 0);
         if (m_animModeFn) { m_animModeFn(nowOn); }
+        break;
+    }
+
+    case WM_TRAY_TOGGLE_SHOW: {
+        int mode    = ReadIniInt(L"Display", L"ShowMode", 0);
+        int newMode = (mode == static_cast<int>(ShowMode::AlwaysHide))
+                          ? static_cast<int>(ShowMode::AlwaysShow)
+                          : static_cast<int>(ShowMode::AlwaysHide);
+        WriteIniInt(L"Display", L"ShowMode", newMode);
+        if (m_showModeFn) { m_showModeFn(newMode); }
         break;
     }
 
