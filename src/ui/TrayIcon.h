@@ -4,15 +4,11 @@
 
 #include <shellapi.h>
 
-#include <array>
 #include <functional>
 #include <string>
 
 constexpr UINT WM_TRAYICON            = WM_USER + 2;
 constexpr UINT CMD_COLOR_OPTIONS_BASE = WM_USER + 100;
-
-constexpr std::array kPositionLabels      = {L"左上", L"中上", L"右上", L"左下", L"中下", L"右下"};
-constexpr int        kPositionPresetCount = static_cast<int>(kPositionLabels.size());
 
 class TrayIcon {
 public:

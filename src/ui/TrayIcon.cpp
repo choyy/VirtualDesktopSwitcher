@@ -13,22 +13,19 @@ namespace {
 
 constexpr auto kRegRunPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
-constexpr UINT WM_TRAY_EXIT               = WM_USER + 3;
-constexpr UINT WM_TRAY_TOGGLE_AUTOSTART   = WM_USER + 4;
-constexpr UINT WM_TRAY_EDIT_MODE          = WM_USER + 5;
-constexpr UINT WM_TRAY_SETTINGS           = WM_USER + 6;
-constexpr UINT WM_TRAY_ABOUT              = WM_USER + 7;
-constexpr UINT WM_TRAY_RUNAS_ADMIN        = WM_USER + 8;
-constexpr UINT CMD_SHOW_MODE_BASE         = WM_USER + 300;
-constexpr UINT CMD_SHOW_MODE_CUSTOM       = CMD_SHOW_MODE_BASE + static_cast<UINT>(ShowMode::Count);
-constexpr UINT CMD_POSITION_BASE          = WM_USER + 200;
-constexpr UINT CMD_POSITION_TOP_LEFT      = CMD_POSITION_BASE + 0;
-constexpr UINT CMD_POSITION_TOP_CENTER    = CMD_POSITION_BASE + 1;
-constexpr UINT CMD_POSITION_TOP_RIGHT     = CMD_POSITION_BASE + 2;
-constexpr UINT CMD_POSITION_BOTTOM_LEFT   = CMD_POSITION_BASE + 3;
-constexpr UINT CMD_POSITION_BOTTOM_CENTER = CMD_POSITION_BASE + 4;
-constexpr UINT CMD_POSITION_BOTTOM_RIGHT  = CMD_POSITION_BASE + 5;
-constexpr UINT CMD_POSITION_CUSTOM        = CMD_POSITION_BASE + 6;
+constexpr UINT WM_TRAY_EXIT             = WM_USER + 3;
+constexpr UINT WM_TRAY_TOGGLE_AUTOSTART = WM_USER + 4;
+constexpr UINT WM_TRAY_EDIT_MODE        = WM_USER + 5;
+constexpr UINT WM_TRAY_SETTINGS         = WM_USER + 6;
+constexpr UINT WM_TRAY_ABOUT            = WM_USER + 7;
+constexpr UINT WM_TRAY_RUNAS_ADMIN      = WM_USER + 8;
+constexpr UINT CMD_SHOW_MODE_BASE       = WM_USER + 300;
+constexpr UINT CMD_SHOW_MODE_CUSTOM     = CMD_SHOW_MODE_BASE + static_cast<UINT>(ShowMode::Count);
+constexpr UINT CMD_POSITION_BASE        = WM_USER + 200;
+constexpr UINT CMD_POSITION_CUSTOM      = CMD_POSITION_BASE + static_cast<int>(PositionPreset::Count) + 1;
+
+constexpr std::array kPositionLabels = {L"左上", L"中上", L"右上", L"中央", L"左下", L"中下", L"右下"};
+constexpr std::array kShowModeLabels = {L"总是显示", L"总是隐藏", L"切换后显示1s", L"切换后显示3s"};
 
 void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
     std::array<COLORREF, 5> colors{};
@@ -157,19 +154,18 @@ void TrayIcon::BuildMenu() {
     }
     m_hMenu = CreatePopupMenu();
 
-    HMENU            hShowMenu  = CreatePopupMenu();
-    const std::array showLabels = {L"总是显示", L"总是隐藏", L"切换后显示1s", L"切换后显示3s"};
-    int              curShow    = ReadIniInt(L"Display", L"ShowMode", 0);
-    for (int i = 0; i < static_cast<int>(showLabels.size()); ++i) {
+    HMENU hShowMenu = CreatePopupMenu();
+    int   curShow   = ReadIniInt(L"Display", L"ShowMode", 0);
+    for (int i = 0; i < static_cast<int>(kShowModeLabels.size()); ++i) {
         AppendMenuW(hShowMenu, MF_STRING | (curShow == i ? MF_CHECKED : 0),
-                    CMD_SHOW_MODE_BASE + i, showLabels.at(i));
+                    CMD_SHOW_MODE_BASE + i, kShowModeLabels.at(i));
     }
     AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hShowMenu), L"显示模式"); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     HMENU hPosMenu = CreatePopupMenu();
-    for (int i = 0; i < kPositionPresetCount; ++i) {
+    for (int i = 0; i < static_cast<int>(PositionPreset::Count); ++i) {
         AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == i ? MF_CHECKED : 0),
-                    CMD_POSITION_TOP_LEFT + i, kPositionLabels.at(i));
+                    CMD_POSITION_BASE + i, kPositionLabels.at(i));
     }
     AppendMenuW(hPosMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == -1 ? MF_CHECKED : 0), CMD_POSITION_CUSTOM, L"自定义");

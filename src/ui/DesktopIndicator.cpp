@@ -7,7 +7,6 @@
 
 #include <algorithm>
 
-#include "TrayIcon.h"
 #include "util/DrawingTextSTB.h"
 #include "util/Log.h"
 #include "util/Utils.h"
@@ -59,9 +58,10 @@ POINT CalcPresetPos(int preset, RECT mon, RECT work, int w, int h) {
     case 0: return {mon.left, mon.top - 4};
     case 1: return {mon.left + (monW - w) / 2, mon.top - 4};
     case 2: return {mon.left + monW - w, mon.top - 4};
-    case 3: return {mon.left, work.bottom - h + 4};
-    case 4: return {mon.left + (monW - w) / 2, work.bottom - h + 4};
-    case 5: return {mon.left + monW - w, work.bottom - h + 4};
+    case 3: return {mon.left + (monW - w) / 2, (work.top + work.bottom - h) / 2};
+    case 4: return {mon.left, work.bottom - h + 4};
+    case 5: return {mon.left + (monW - w) / 2, work.bottom - h + 4};
+    case 6: return {mon.left + monW - w, work.bottom - h + 4};
     default: return {mon.left + (monW - w) / 2, mon.top - 4};
     }
 }
@@ -278,7 +278,7 @@ void DesktopIndicator::SetEditMode(bool edit) {
 
 void DesktopIndicator::SetPositionPreset(int preset) {
     if (m_pCfg == nullptr || m_renderer == nullptr) { return; }
-    if (preset < 0 || preset >= kPositionPresetCount) { return; }
+    if (preset < 0 || preset >= static_cast<int>(PositionPreset::Count)) { return; }
 
     Log(L"[INFO] SetPositionPreset: preset=" + std::to_wstring(preset));
     m_pCfg->positionPreset = preset;
@@ -291,7 +291,7 @@ void DesktopIndicator::SetPositionPreset(int preset) {
 void DesktopIndicator::ApplyPresetPosition() {
     if (m_pCfg == nullptr || m_renderer == nullptr) { return; }
     int preset = m_pCfg->positionPreset;
-    if (preset < 0 || preset >= kPositionPresetCount) { return; }
+    if (preset < 0 || preset >= static_cast<int>(PositionPreset::Count)) { return; }
 
     auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
     int  padding    = 8;

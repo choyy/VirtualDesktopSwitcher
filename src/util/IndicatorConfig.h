@@ -10,6 +10,15 @@ enum class ShowMode : std::uint8_t { AlwaysShow = 0,
                                      Show3s     = 3,
                                      Count      = 4 };
 
+enum class PositionPreset : std::uint8_t { TopLeft,
+                                           TopCenter,
+                                           TopRight,
+                                           Center,
+                                           BottomLeft,
+                                           BottomCenter,
+                                           BottomRight,
+                                           Count };
+
 struct IndicatorConfig {
     std::wstring textColor      = L"#FFA745_#FE869F_#EF7AC8_#A083ED_#43AEFF";
     std::wstring fontName       = L"Segoe UI Symbol";
