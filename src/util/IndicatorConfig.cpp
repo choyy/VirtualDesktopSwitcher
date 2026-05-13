@@ -31,7 +31,6 @@ void IndicatorConfig::LoadFromIni() {
     if (!fn.empty()) { fontName = fn; }
 
     positionPreset = ReadIniInt(L"Display", L"PositionPreset", 1);
-    if (posInitialized) { positionPreset = -1; }
 }
 
 void IndicatorConfig::SaveToIni() const {

@@ -71,6 +71,7 @@ private:
 
     void RebuildText();
     void Render();
+    void ApplyPresetPosition();
     void MoveByDelta(int dx, int dy);
 
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);

@@ -118,6 +118,20 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
     }
 
     Log(L"[INFO] DesktopIndicator initialized: " + std::to_wstring(m_layers.size()) + L" layers");
+
+    if (m_pCfg->posInitialized && !m_layers.empty()) {
+        if (m_pCfg->positionPreset >= 0) {
+            SetPositionPreset(m_pCfg->positionPreset);
+        } else {
+            for (auto &l : m_layers) {
+                POINT pos = {m_pCfg->windowPos.x + (l.monitor.left - m_layers[0].monitor.left),
+                             m_pCfg->windowPos.y + (l.monitor.top - m_layers[0].monitor.top)};
+                SetWindowPos(l.hwnd, nullptr, pos.x, pos.y, 0, 0,
+                             SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+        }
+    }
+
     RebuildText();
     return !m_layers.empty();
 }
@@ -149,6 +163,7 @@ void DesktopIndicator::RebuildText() {
     }
     m_text = text;
     Render();
+    if (m_pCfg->positionPreset >= 0) { ApplyPresetPosition(); }
 }
 
 void DesktopIndicator::SetColor(const std::wstring &hexColor) {
@@ -234,13 +249,21 @@ void DesktopIndicator::SetPositionPreset(int preset) {
     if (m_pCfg == nullptr || m_renderer == nullptr) { return; }
     if (preset < 0 || preset >= kPositionPresetCount) { return; }
 
-    auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
-    int  padding    = 8;
-
     Log(L"[INFO] SetPositionPreset: preset=" + std::to_wstring(preset));
     m_pCfg->positionPreset = preset;
     m_pCfg->posInitialized = true;
     if (m_editMode) { SetEditMode(false); }
+
+    ApplyPresetPosition();
+}
+
+void DesktopIndicator::ApplyPresetPosition() {
+    if (m_pCfg == nullptr || m_renderer == nullptr) { return; }
+    int preset = m_pCfg->positionPreset;
+    if (preset < 0 || preset >= kPositionPresetCount) { return; }
+
+    auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
+    int  padding    = 8;
 
     for (auto &l : m_layers) {
         int fs = ScaleForDpi(m_pCfg->fontSize, l.dpi);
@@ -331,8 +354,9 @@ void DesktopIndicator::Render() {
         m_renderer->Render(bits, w, h, padding, padding, w - padding * 2, h - padding * 2,
                            spacedtext.c_str(), colorStr, fontSize);
 
-        POINT pos  = {m_pCfg->windowPos.x + (l.monitor.left - m_layers[0].monitor.left),
-                      m_pCfg->windowPos.y + (l.monitor.top - m_layers[0].monitor.top)};
+        RECT wr;
+        GetWindowRect(l.hwnd, &wr);
+        POINT pos  = {wr.left, wr.top};
         SIZE  size = {w, h};
         POINT src  = {0, 0};
         UpdateLayeredWindow(l.hwnd, hdcScreen, &pos, &size, hdcMem, &src, 0, &blend, ULW_ALPHA);
@@ -351,7 +375,8 @@ void DesktopIndicator::Rebuild() {
         if (IsWindowVisible(l.hwnd) != 0) { wasVisible = true; }
         DestroyWindow(l.hwnd);
     }
-    int savedPreset = (m_pCfg != nullptr) ? m_pCfg->positionPreset : -1;
+    int   savedPreset = (m_pCfg != nullptr) ? m_pCfg->positionPreset : -1;
+    POINT savedWndPos = (m_pCfg != nullptr) ? m_pCfg->windowPos : POINT{0, 0};
     m_layers.clear();
     m_editMode = false;
     m_dragging = false;
@@ -371,7 +396,17 @@ void DesktopIndicator::Rebuild() {
     }
     Render();
     Log(L"[INFO] Rebuild done: " + std::to_wstring(m_layers.size()) + L" layers");
-    if (savedPreset >= 0) { SetPositionPreset(savedPreset); }
+    if (savedPreset >= 0) {
+        SetPositionPreset(savedPreset);
+    } else if (m_pCfg->posInitialized && !m_layers.empty()) {
+        m_pCfg->windowPos = savedWndPos;
+        for (auto &l : m_layers) {
+            POINT pos = {savedWndPos.x + (l.monitor.left - m_layers[0].monitor.left),
+                         savedWndPos.y + (l.monitor.top - m_layers[0].monitor.top)};
+            SetWindowPos(l.hwnd, nullptr, pos.x, pos.y, 0, 0,
+                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    }
 }
 
 LRESULT CALLBACK DesktopIndicator::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
