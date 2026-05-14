@@ -5,16 +5,18 @@
 #include <string>
 
 #include "core/UpdateChecker.h"
+#include "util/Lang.h"
 #include "util/Utils.h"
 
 namespace {
 
-constexpr int IDC_AUTO_CHECK    = 201;
-constexpr int IDC_CHECK_UPDATES = 202;
-constexpr int IDC_HOMEPAGE      = 102;
-constexpr int IDC_VERSION       = 103;
-constexpr int IDC_APP_ICON      = 104;
-constexpr int IDC_APP_NAME      = 105;
+constexpr int IDC_AUTO_CHECK      = 201;
+constexpr int IDC_CHECK_UPDATES   = 202;
+constexpr int IDC_HOMEPAGE        = 102;
+constexpr int IDC_VERSION         = 103;
+constexpr int IDC_APP_ICON        = 104;
+constexpr int IDC_APP_NAME        = 105;
+constexpr int IDC_STATIC_HOMEPAGE = 203;
 
 struct AboutData {
     AboutDialog::Result result;
@@ -44,6 +46,13 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         const RECT rcIcon    = ChildRect(IDC_APP_ICON);
         SetWindowPos(GetDlgItem(hwnd, IDC_APP_ICON), nullptr, rcIcon.left, rcTitle.top, iconSize, iconSize, SWP_NOZORDER);
 
+        SetWindowTextW(hwnd, Lang::Get(L"About.Caption"));
+        SetDlgItemTextW(hwnd, IDC_APP_NAME, Lang::Get(L"About.Title"));
+        SetDlgItemTextW(hwnd, IDC_STATIC_HOMEPAGE, Lang::Get(L"About.LabelHomepage"));
+        SetDlgItemTextW(hwnd, IDC_AUTO_CHECK, Lang::Get(L"About.AutoCheck"));
+        SetDlgItemTextW(hwnd, IDC_CHECK_UPDATES, Lang::Get(L"About.BtnCheckUpdates"));
+        SetDlgItemTextW(hwnd, IDCANCEL, Lang::Get(L"About.BtnClose"));
+
         data->hIcon = static_cast<HICON>(LoadImageW(hInst, MAKEINTRESOURCEW(101), IMAGE_ICON, iconSize, iconSize, LR_DEFAULTCOLOR));
         if (data->hIcon != nullptr) {
             SendDlgItemMessageW(hwnd, IDC_APP_ICON, STM_SETIMAGE, IMAGE_ICON, PtrToLParam(data->hIcon));
@@ -57,7 +66,7 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SendDlgItemMessageW(hwnd, IDC_APP_NAME, WM_SETFONT, HandleToWParam(data->hFont), TRUE);
         }
 
-        std::wstring verStr = L"版本：" + Utf8ToWide(APP_VERSION);
+        std::wstring verStr = std::wstring(Lang::Get(L"About.VersionPrefix")) + Utf8ToWide(APP_VERSION);
         SetDlgItemTextW(hwnd, IDC_VERSION, verStr.c_str());
 
         if (data->result.autoCheckUpdates) {

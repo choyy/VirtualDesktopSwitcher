@@ -7,6 +7,7 @@
 #include "util/IndicatorConfig.h"
 
 #include "util/ConfigIni.h"
+#include "util/Lang.h"
 #include "util/Utils.h"
 
 namespace {
@@ -26,8 +27,22 @@ constexpr UINT CMD_SHOW_MODE_CUSTOM     = CMD_SHOW_MODE_BASE + static_cast<UINT>
 constexpr UINT CMD_POSITION_BASE        = WM_USER + 200;
 constexpr UINT CMD_POSITION_CUSTOM      = CMD_POSITION_BASE + static_cast<int>(PositionPreset::Count) + 1;
 
-constexpr std::array kPositionLabels = {L"左上", L"中上", L"右上", L"中央", L"左下", L"中下", L"右下"};
-constexpr std::array kShowModeLabels = {L"总是显示", L"总是隐藏", L"切换后显示1s", L"切换后显示3s"};
+constexpr std::array kShowModeKeys = {
+    L"Menu.AlwaysShow",
+    L"Menu.AlwaysHide",
+    L"Menu.Show1s",
+    L"Menu.Show3s",
+};
+
+constexpr std::array kPositionKeys = {
+    L"Menu.TopLeft",
+    L"Menu.TopCenter",
+    L"Menu.TopRight",
+    L"Menu.Center",
+    L"Menu.BottomLeft",
+    L"Menu.BottomCenter",
+    L"Menu.BottomRight",
+};
 
 void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
     std::array<COLORREF, 5> colors{};
@@ -158,20 +173,20 @@ void TrayIcon::BuildMenu() {
 
     HMENU hShowMenu = CreatePopupMenu();
     int   curShow   = ReadIniInt(L"Display", L"ShowMode", 0);
-    for (int i = 0; i < static_cast<int>(kShowModeLabels.size()); ++i) {
+    for (int i = 0; i < std::size(kShowModeKeys); ++i) {
         AppendMenuW(hShowMenu, MF_STRING | (curShow == i ? MF_CHECKED : 0),
-                    CMD_SHOW_MODE_BASE + i, kShowModeLabels.at(i));
+                    CMD_SHOW_MODE_BASE + i, Lang::Get(kShowModeKeys.at(i)));
     }
-    AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hShowMenu), L"显示模式"); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hShowMenu), Lang::Get(L"Menu.ShowMode")); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     HMENU hPosMenu = CreatePopupMenu();
     for (int i = 0; i < static_cast<int>(PositionPreset::Count); ++i) {
         AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == i ? MF_CHECKED : 0),
-                    CMD_POSITION_BASE + i, kPositionLabels.at(i));
+                    CMD_POSITION_BASE + i, Lang::Get(kPositionKeys.at(i)));
     }
     AppendMenuW(hPosMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == -1 ? MF_CHECKED : 0), CMD_POSITION_CUSTOM, L"自定义");
-    AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hPosMenu), L"位置大小"); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == -1 ? MF_CHECKED : 0), CMD_POSITION_CUSTOM, Lang::Get(L"Menu.Custom"));
+    AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hPosMenu), Lang::Get(L"Menu.PositionSize")); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     HMENU hColorMenu = CreatePopupMenu();
     for (UINT i = 0; i < static_cast<UINT>(kPredefinedColors.size()); ++i) {
@@ -184,22 +199,28 @@ void TrayIcon::BuildMenu() {
     }
     AppendMenuW(hColorMenu, MF_SEPARATOR, 0, nullptr);
     bool animOn = ReadIniInt(L"Display", L"AnimMode", 1) != 0;
-    AppendMenuW(hColorMenu, MF_STRING | (animOn ? MF_CHECKED : 0), WM_TRAY_ANIM_MODE, L"色环呼吸");
-    AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hColorMenu), L"颜色"); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    AppendMenuW(hColorMenu, MF_STRING | (animOn ? MF_CHECKED : 0), WM_TRAY_ANIM_MODE, Lang::Get(L"Menu.BreathingRing"));
+    AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hColorMenu), Lang::Get(L"Menu.Color")); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
-    AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_SETTINGS, L"设置...");
+    AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_SETTINGS, Lang::Get(L"Menu.Settings"));
     AppendMenuW(m_hMenu, MF_SEPARATOR, 0, nullptr);
+
+    HMENU hLangMenu = CreatePopupMenu();
+    AppendMenuW(hLangMenu, MF_STRING | (Lang::Current() == LangType::Chinese ? MF_CHECKED : 0), WM_TRAY_LANG_CHINESE, Lang::Get(L"Menu.LangChinese"));
+    AppendMenuW(hLangMenu, MF_STRING | (Lang::Current() == LangType::English ? MF_CHECKED : 0), WM_TRAY_LANG_ENGLISH, Lang::Get(L"Menu.LangEnglish"));
+    AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hLangMenu), Lang::Get(L"Menu.Language")); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     bool runAsAdmin = ReadIniInt(L"General", L"RunAsAdmin", 0) != 0;
     AppendMenuW(m_hMenu, MF_STRING | (runAsAdmin ? MF_CHECKED : MF_UNCHECKED),
-                WM_TRAY_RUNAS_ADMIN, L"以管理员启动");
+                WM_TRAY_RUNAS_ADMIN, Lang::Get(L"Menu.RunAsAdmin"));
 
     AppendMenuW(m_hMenu, MF_STRING | (m_autoStartEnabled ? MF_CHECKED : MF_UNCHECKED),
-                WM_TRAY_TOGGLE_AUTOSTART, L"开机自启");
+                WM_TRAY_TOGGLE_AUTOSTART, Lang::Get(L"Menu.AutoStart"));
+
     AppendMenuW(m_hMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_ABOUT, L"关于...");
+    AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_ABOUT, Lang::Get(L"Menu.About"));
     AppendMenuW(m_hMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_EXIT, L"退出");
+    AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_EXIT, Lang::Get(L"Menu.Exit"));
 }
 
 bool TrayIcon::Initialize(HWND hwnd, HINSTANCE hInstance) {
@@ -215,7 +236,7 @@ bool TrayIcon::Initialize(HWND hwnd, HINSTANCE hInstance) {
     m_nid.uCallbackMessage = WM_TRAYICON;
     m_nid.hIcon            = hIcon;
 
-    UpdateTooltip(L"虚拟桌面切换器");
+    UpdateTooltip(Lang::Get(L"Tray.DefaultTip"));
 
     if (Shell_NotifyIconW(NIM_ADD, &m_nid) == 0) {
         return false;
@@ -322,6 +343,18 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
 
     case WM_TRAY_SETTINGS:
         if (m_settingsFn) { m_settingsFn(); }
+        break;
+
+    case WM_TRAY_LANG_CHINESE:
+        Lang::Set(LangType::Chinese);
+        WriteIniInt(L"General", L"Language", 0);
+        UpdateTooltip(Lang::Get(L"Tray.DefaultTip"));
+        break;
+
+    case WM_TRAY_LANG_ENGLISH:
+        Lang::Set(LangType::English);
+        WriteIniInt(L"General", L"Language", 1);
+        UpdateTooltip(Lang::Get(L"Tray.DefaultTip"));
         break;
 
     case WM_TRAY_ABOUT:

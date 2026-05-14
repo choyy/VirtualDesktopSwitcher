@@ -10,13 +10,14 @@
 #include "ui/SettingsDialog.h"
 #include "ui/TrayIcon.h"
 #include "util/ConfigIni.h"
+#include "util/Lang.h"
 #include "util/Log.h"
 #include "util/Utils.h"
 
 namespace {
 
 std::wstring BuildTooltipText(int desktopCount, int currentDesktop) {
-    return L"虚拟桌面切换器\n桌面：" + std::to_wstring(desktopCount) + L" | 当前：" + std::to_wstring(currentDesktop + 1);
+    return std::wstring(Lang::Get(L"Tray.DefaultTip")) + L"\n" + Lang::Get(L"Tooltip.Desktops") + std::to_wstring(desktopCount) + L" | " + Lang::Get(L"Tooltip.Current") + std::to_wstring(currentDesktop + 1);
 }
 
 } // namespace
@@ -120,7 +121,7 @@ void Application::PollUpdateProcess() {
 
     if (exitCode != 1) { return; }
 
-    if (MessageBoxW(m_hwnd, L"发现新版本，是否立即下载？", L"VirtualDesktopSwitcher - 发现更新",
+    if (MessageBoxW(m_hwnd, Lang::Get(L"Update.FoundMsg"), Lang::Get(L"Update.FoundTitle"),
                     MB_YESNO | MB_ICONQUESTION)
         == IDYES) {
         UpdateChecker::DownloadUpdate(m_hwnd);
@@ -271,6 +272,7 @@ void Application::SetupTrayCallbacks() {
 
 bool Application::Initialize() {
     m_switcher = std::make_unique<VirtualDesktopSwitcher>();
+    Lang::Init();
 
     if (!CreateHiddenWindow()) { return false; }
 

@@ -6,16 +6,22 @@
 #include <string>
 #include <vector>
 
+#include "util/Lang.h"
 #include "util/Utils.h"
 
 namespace {
 
-constexpr int IDC_CUR_SYM = 101;
-constexpr int IDC_OTH_SYM = 102;
-constexpr int IDC_FONT    = 103;
-constexpr int IDC_SPACING = 104;
-constexpr int IDC_SPIN    = 105;
-constexpr int IDC_EMP_SYM = 106;
+constexpr int IDC_CUR_SYM    = 101;
+constexpr int IDC_OTH_SYM    = 102;
+constexpr int IDC_FONT       = 103;
+constexpr int IDC_SPACING    = 104;
+constexpr int IDC_SPIN       = 105;
+constexpr int IDC_EMP_SYM    = 106;
+constexpr int IDC_ST_CUR_SYM = 107;
+constexpr int IDC_ST_OTH_SYM = 108;
+constexpr int IDC_ST_EMP_SYM = 109;
+constexpr int IDC_ST_FONT    = 110;
+constexpr int IDC_ST_SPACING = 111;
 
 constexpr std::array kSymbolList = {
     L"\u00B7",
@@ -126,7 +132,7 @@ void FillCombo(HWND hCmb, const wchar_t *const *items, size_t count, const std::
         SendMessageW(hCmb, CB_ADDSTRING, 0, PtrToLParam(items[i]));
     }
     if (extraFont) {
-        SendMessageW(hCmb, CB_ADDSTRING, 0, PtrToLParam(L"更多字体..."));
+        SendMessageW(hCmb, CB_ADDSTRING, 0, PtrToLParam(Lang::Get(L"Settings.MoreFonts")));
     }
 
     if (editable) {
@@ -156,6 +162,15 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_INITDIALOG: {
         auto *data = LParamToPtr<DialogData>(lp);
         SetWindowLongPtrW(hwnd, DWLP_USER, lp);
+
+        SetWindowTextW(hwnd, Lang::Get(L"Settings.Caption"));
+        SetDlgItemTextW(hwnd, IDC_ST_CUR_SYM, Lang::Get(L"Settings.LabelCurSym"));
+        SetDlgItemTextW(hwnd, IDC_ST_OTH_SYM, Lang::Get(L"Settings.LabelOthSym"));
+        SetDlgItemTextW(hwnd, IDC_ST_EMP_SYM, Lang::Get(L"Settings.LabelEmpSym"));
+        SetDlgItemTextW(hwnd, IDC_ST_FONT, Lang::Get(L"Settings.LabelFont"));
+        SetDlgItemTextW(hwnd, IDC_ST_SPACING, Lang::Get(L"Settings.LabelSpacing"));
+        SetDlgItemTextW(hwnd, IDOK, Lang::Get(L"Settings.BtnOK"));
+        SetDlgItemTextW(hwnd, IDCANCEL, Lang::Get(L"Settings.BtnCancel"));
 
         FillCombo(GetDlgItem(hwnd, IDC_CUR_SYM), kSymbolList.data(), kSymbolList.size(), data->result.currentSymbol, false, true);
         FillCombo(GetDlgItem(hwnd, IDC_OTH_SYM), kSymbolList.data(), kSymbolList.size(), data->result.otherSymbol, false, true);
@@ -215,7 +230,7 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 } else {
                     std::array<wchar_t, 256> buf{};
                     SendMessageW(hCmb, CB_GETLBTEXT, sel, PtrToLParam(buf.data()));
-                    if (wcscmp(buf.data(), L"更多字体...") == 0) {
+                    if (wcscmp(buf.data(), Lang::Get(L"Settings.MoreFonts")) == 0) {
                         PopulateComboWithAllSystemFonts(hCmb, data->result.fontName);
                     } else {
                         data->result.fontName = buf.data();

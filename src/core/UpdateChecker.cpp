@@ -3,6 +3,7 @@
 #include <array>
 #include <string>
 
+#include "util/Lang.h"
 #include "util/Utils.h"
 
 namespace {
@@ -65,7 +66,7 @@ void UpdateChecker::DownloadUpdate(HWND parent) {
     std::wstring dest = std::wstring(userProfile.data()) + L"\\Desktop\\VirtualDesktopSwitcher.exe";
 
     if (DownloadFile(L"https://github.com/choyy/VirtualDesktopSwitcher/releases/latest/download/VirtualDesktopSwitcher.exe", dest)) {
-        MessageBoxW(parent, (L"已下载到：\n" + dest).c_str(), L"VirtualDesktopSwitcher - 下载完成", MB_OK | MB_ICONINFORMATION);
+        MessageBoxW(parent, (std::wstring(Lang::Get(L"Update.DownloadedMsg")) + dest).c_str(), Lang::Get(L"Update.DownloadedTitle"), MB_OK | MB_ICONINFORMATION);
     } else {
         ShowDownloadFailedDialog(parent);
     }
@@ -73,10 +74,10 @@ void UpdateChecker::DownloadUpdate(HWND parent) {
 
 void UpdateChecker::CheckAndDownload(HWND parent, bool silentIfUpToDate) {
     if (CheckForNewerVersion()) {
-        if (MessageBoxW(parent, L"发现新版本，是否立即下载？", L"VirtualDesktopSwitcher - 发现更新", MB_YESNO | MB_ICONQUESTION) == IDYES) {
+        if (MessageBoxW(parent, Lang::Get(L"Update.FoundMsg"), Lang::Get(L"Update.FoundTitle"), MB_YESNO | MB_ICONQUESTION) == IDYES) {
             DownloadUpdate(parent);
         }
     } else if (!silentIfUpToDate) {
-        MessageBoxW(parent, L"您已使用最新版本。", L"VirtualDesktopSwitcher - 无需更新", MB_OK | MB_ICONINFORMATION);
+        MessageBoxW(parent, Lang::Get(L"Update.NoUpdateMsg"), Lang::Get(L"Update.NoUpdateTitle"), MB_OK | MB_ICONINFORMATION);
     }
 }

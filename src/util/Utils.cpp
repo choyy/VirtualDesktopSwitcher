@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "util/Lang.h"
+
 void ActivateWindow(HWND hwnd) {
     HWND        foreHwnd     = GetForegroundWindow();
     DWORD       foreThreadId = 0;
@@ -71,7 +73,7 @@ bool IsAdminProcess() {
 }
 
 void ShowDownloadFailedDialog(HWND parent) {
-    if (MessageBoxW(parent, L"下载失败，是否前往发布页手动下载？", L"错误", MB_YESNO | MB_ICONERROR) == IDYES) {
+    if (MessageBoxW(parent, Lang::Get(L"Download.FailedMsg"), Lang::Get(L"Download.FailedTitle"), MB_YESNO | MB_ICONERROR) == IDYES) {
         ShellExecuteW(parent, L"open", L"https://github.com/choyy/VirtualDesktopSwitcher/releases", nullptr, nullptr, SW_SHOW);
     }
 }
