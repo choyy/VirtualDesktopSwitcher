@@ -101,9 +101,6 @@ void DeleteRunReg() {
 }
 
 bool IsAutoStartEnabled() {
-    if (IsAdminProcess()) {
-        return RunSchtasks(L"/query /tn \"VirtualDesktopSwitcher\"");
-    }
     if (RunSchtasks(L"/query /tn \"VirtualDesktopSwitcher\"")) {
         return true;
     }
