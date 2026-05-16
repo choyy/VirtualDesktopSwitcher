@@ -17,11 +17,11 @@ constexpr int IDC_APP_NAME        = 105;
 constexpr int IDC_STATIC_HOMEPAGE = 203;
 
 struct AboutData {
-    AboutDialog::Result result;
-    HWND                hHomepage    = nullptr;
-    RECT                homepageRect = {};
-    HICON               hIcon        = nullptr;
-    HFONT               hFont        = nullptr;
+    bool  autoCheckUpdates = false;
+    HWND  hHomepage        = nullptr;
+    RECT  homepageRect     = {};
+    HICON hIcon            = nullptr;
+    HFONT hFont            = nullptr;
 };
 
 INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -67,7 +67,7 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         std::wstring verStr = std::wstring(Lang::Get(L"About.VersionPrefix")) + Utf8ToWide(APP_VERSION);
         SetDlgItemTextW(hwnd, IDC_VERSION, verStr.c_str());
 
-        if (data->result.autoCheckUpdates) {
+        if (data->autoCheckUpdates) {
             SendDlgItemMessageW(hwnd, IDC_AUTO_CHECK, BM_SETCHECK, BST_CHECKED, 0);
         }
 
@@ -93,8 +93,7 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         if (id == IDOK || id == IDCANCEL) {
             if (data != nullptr) {
-                data->result.autoCheckUpdates = SendDlgItemMessageW(hwnd, IDC_AUTO_CHECK, BM_GETCHECK, 0, 0) == BST_CHECKED;
-                data->result.accepted         = TRUE;
+                data->autoCheckUpdates = SendDlgItemMessageW(hwnd, IDC_AUTO_CHECK, BM_GETCHECK, 0, 0) == BST_CHECKED;
             }
             EndDialog(hwnd, id);
             return TRUE;
@@ -134,12 +133,12 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 } // namespace
 
-AboutDialog::Result AboutDialog::Show(HWND parent, bool currentAutoCheck) {
+bool AboutDialog::Show(HWND parent, bool currentAutoCheck) {
     auto     *hInst = reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(parent, GWLP_HINSTANCE)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
     AboutData data;
-    data.result.autoCheckUpdates = currentAutoCheck;
+    data.autoCheckUpdates = currentAutoCheck;
     DialogBoxParamW(hInst, MAKEINTRESOURCEW(1000), parent, AboutDlgProc, PtrToLParam(&data));
     if (data.hIcon != nullptr) { DestroyIcon(data.hIcon); }
     if (data.hFont != nullptr) { DeleteObject(data.hFont); }
-    return data.result;
+    return data.autoCheckUpdates;
 }

@@ -8,9 +8,9 @@
 #include <string>
 
 constexpr UINT WM_TRAYICON            = WM_USER + 2;
-constexpr UINT CMD_COLOR_OPTIONS_BASE = WM_USER + 100;
 constexpr UINT WM_TRAY_LANG_CHINESE   = WM_USER + 50;
 constexpr UINT WM_TRAY_LANG_ENGLISH   = WM_USER + 51;
+constexpr UINT CMD_COLOR_OPTIONS_BASE = WM_USER + 100;
 
 class TrayIcon {
 public:

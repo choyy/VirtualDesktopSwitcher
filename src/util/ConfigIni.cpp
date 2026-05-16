@@ -1,5 +1,3 @@
-// Adapted from Catime (Apache 2.0)
-// Original: https://github.com/vladelaina/Catime
 #include "ConfigIni.h"
 
 #include <shlobj.h>

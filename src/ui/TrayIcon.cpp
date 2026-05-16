@@ -280,8 +280,8 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             DeleteObject(hFont);
             ReleaseDC(hwnd, hdc);
             m_dpi           = static_cast<int>(GetDpiForWindow(hwnd));
-            mis->itemHeight = tm.tmHeight + ScaleForDpi(2, m_dpi);
-            mis->itemWidth  = ScaleForDpi(100, m_dpi);
+            mis->itemHeight = tm.tmHeight + MulDiv(2, m_dpi, 96);
+            mis->itemWidth  = MulDiv(100, m_dpi, 96);
         }
         break;
     }
@@ -415,7 +415,7 @@ void TrayIcon::DrawColorSwatch(LPDRAWITEMSTRUCT dis) const {
     // Check mark
     if (isChk != 0) {
         RECT cr  = dis->rcItem;
-        cr.right = cr.left + ScaleForDpi(GetSystemMetrics(SM_CXMENUCHECK), m_dpi);
+        cr.right = cr.left + MulDiv(GetSystemMetrics(SM_CXMENUCHECK), m_dpi, 96);
         SetTextColor(dis->hDC, (isSel != 0) ? GetSysColor(COLOR_HIGHLIGHTTEXT) : GetSysColor(COLOR_MENUTEXT));
         SetBkMode(dis->hDC, TRANSPARENT);
         DrawTextW(dis->hDC, L"\u2713", -1, &cr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -423,12 +423,12 @@ void TrayIcon::DrawColorSwatch(LPDRAWITEMSTRUCT dis) const {
 
     // Color swatch
     const int labelW = m_menuAveWidth * 3;
-    const int pad    = ScaleForDpi(3, m_dpi);
+    const int pad    = MulDiv(3, m_dpi, 96);
 
     RECT cr = dis->rcItem;
     cr.left += labelW + pad;
-    cr.top += ScaleForDpi(1, m_dpi);
-    cr.bottom -= ScaleForDpi(1, m_dpi);
+    cr.top += MulDiv(1, m_dpi, 96);
+    cr.bottom -= MulDiv(1, m_dpi, 96);
     cr.right = dis->rcItem.right - pad;
 
     DrawSwatchRect(dis->hDC, cr, kPredefinedColors.at(colorIndex));

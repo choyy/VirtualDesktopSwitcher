@@ -126,7 +126,10 @@ void VirtualDesktopSwitcher::SwitchToDesktop(int index) {
     if (index == currentIndex) { return; }
 
     m_pVDeskHelper->SwitchToDesktop(index);
-    WaitForCondition([this, index]() { return GetCurrentDesktopIndex() == index; }, 20);
+    for (int retry = 0; retry < 20; ++retry) {
+        if (GetCurrentDesktopIndex() == index) { break; }
+        Sleep(10);
+    }
 
     HWND hwnd = FindTopOnDesktop(m_pVDeskHelper.get());
     if (hwnd == nullptr) {

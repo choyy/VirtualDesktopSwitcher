@@ -1,5 +1,3 @@
-// Adapted from Catime (Apache 2.0) - config_ini.h
-// Original: https://github.com/vladelaina/Catime
 #pragma once
 
 #include <string>

@@ -5,10 +5,11 @@
 #include <array>
 #include <string>
 
+// --- Constants ---
+
 constexpr size_t kMaxDesktops = 9;
 
-// Predefined color palette (29 colors, supports gradient notation like "#FFA745_#FE869F")
-inline constexpr std::array<const wchar_t *, 29> kPredefinedColors = {
+constexpr std::array kPredefinedColors = {
     L"#FFFFFF",
     L"#E3E3E5",
     L"#000000",
@@ -40,18 +41,27 @@ inline constexpr std::array<const wchar_t *, 29> kPredefinedColors = {
     L"#FFA745_#FE869F_#EF7AC8_#A083ED_#43AEFF",
 };
 
+// --- Color Parsing ---
+
 COLORREF ParseColorString(const std::wstring &colorStr);
 size_t   ParseMultiColorString(const std::wstring &colorStr, COLORREF *outColors, size_t maxColors);
 COLORREF InterpolateGradientColor(const COLORREF *colors, size_t colorCount, float t);
 
-// Executable path helper
+// --- System & Window Helpers ---
+
 inline std::wstring GetCurrentExePath() {
     std::array<wchar_t, MAX_PATH> buf{};
     GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
     return buf.data();
 }
 
-// Win32 pointer cast helpers — replace std::bit_cast with proper reinterpret_cast
+bool         IsAdminProcess();
+void         ActivateWindow(HWND hwnd);
+std::wstring GetWindowTitle(HWND hwnd);
+
+std::wstring Utf8ToWide(const std::string &str);
+
+// --- Win32 Cast Helpers ---
 
 template <typename T>
 inline T *GetWndUserData(HWND hwnd, int index = GWLP_USERDATA) {
@@ -81,35 +91,4 @@ inline WPARAM HandleToWParam(T handle) {
 template <typename T>
 inline INT_PTR PtrToIntPtr(T value) {
     return reinterpret_cast<INT_PTR>(value); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-}
-
-inline int ScaleForDpi(int value, int dpi) {
-    return value * (dpi * 100 + 48) / 96 / 100;
-}
-
-// Window activation helper
-void         ActivateWindow(HWND hwnd);
-std::wstring GetWindowTitle(HWND hwnd);
-
-// String conversion
-std::wstring Utf8ToWide(const std::string &str);
-
-// Version comparison
-bool IsNewerVersion(const std::string &remote, const std::string &local);
-
-// Network download helpers
-bool DownloadFile(const std::wstring &url, const std::wstring &dest);
-void ShowDownloadFailedDialog(HWND parent);
-
-// System helpers
-bool IsAdminProcess();
-
-// Retry with timeout — returns true if condition met within maxRetries
-template <typename Pred>
-inline bool WaitForCondition(Pred pred, int maxRetries, int intervalMs = 10) {
-    for (int retry = 0; retry < maxRetries; ++retry) {
-        if (pred()) { return true; }
-        Sleep(intervalMs);
-    }
-    return false;
 }

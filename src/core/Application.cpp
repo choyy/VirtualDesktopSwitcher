@@ -262,9 +262,9 @@ void Application::SetupTrayCallbacks() {
     });
     m_pTrayIcon->SetAboutCallback([this]() {
         if (m_pOverlay == nullptr) { return; }
-        auto res = AboutDialog::Show(m_hwnd, m_autoCheckUpdates);
-        if (res.accepted && res.autoCheckUpdates != m_autoCheckUpdates) {
-            m_autoCheckUpdates = res.autoCheckUpdates;
+        bool autoCheckUpdates = AboutDialog::Show(m_hwnd, m_autoCheckUpdates);
+        if (autoCheckUpdates != m_autoCheckUpdates) {
+            m_autoCheckUpdates = autoCheckUpdates;
             WriteIniInt(L"General", L"AutoCheckUpdates", m_autoCheckUpdates ? 1 : 0);
         }
     });

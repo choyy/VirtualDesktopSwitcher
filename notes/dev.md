@@ -1,3 +1,13 @@
+# xmake.lua
+
+以下编译参数是为了减小二进制体积：
+
+```xmake
+    set_optimize("smallest")
+    set_exceptions("no-cxx") -- 禁用 C++ 异常
+    add_cxflags("/GR-") -- 禁用 C++ RTTI
+```
+
 # 激活顶层窗口
 
 ## 方案

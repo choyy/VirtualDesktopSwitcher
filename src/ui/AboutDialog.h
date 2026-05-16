@@ -4,11 +4,6 @@
 
 namespace AboutDialog {
 
-struct Result {
-    bool autoCheckUpdates = false;
-    bool accepted         = false;
-};
-
-Result Show(HWND parent, bool currentAutoCheck);
+bool Show(HWND parent, bool currentAutoCheck);
 
 } // namespace AboutDialog

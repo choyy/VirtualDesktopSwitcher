@@ -180,7 +180,7 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
         }
     }
     if (!m_pCfg->posInitialized && !m_layers.empty()) {
-        int  fs = ScaleForDpi(m_pCfg->fontSize, m_layers[0].dpi);
+        int  fs = MulDiv(m_pCfg->fontSize, m_layers[0].dpi, 96);
         int  tw = 0, th = 0;
         auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
         m_renderer->Measure(spacedtext.c_str(), fs, &tw, &th);
@@ -373,7 +373,7 @@ void DesktopIndicator::ApplyPresetPosition() {
     int  padding    = 8;
 
     for (auto &l : m_layers) {
-        int fs = ScaleForDpi(m_pCfg->fontSize, l.dpi);
+        int fs = MulDiv(m_pCfg->fontSize, l.dpi, 96);
         int tw = 0, th = 0;
         m_renderer->Measure(spacedtext.c_str(), fs, &tw, &th);
         int w = (std::max)(tw + padding * 2, 50);
@@ -445,7 +445,7 @@ void DesktopIndicator::Render() {
     HDC hdcMem    = (hdcScreen != nullptr) ? CreateCompatibleDC(hdcScreen) : nullptr;
 
     for (auto &l : m_layers) {
-        int fontSize = ScaleForDpi(m_pCfg->fontSize, l.dpi);
+        int fontSize = MulDiv(m_pCfg->fontSize, l.dpi, 96);
         int textW = 0, textH = 0;
         m_renderer->Measure(spacedtext.c_str(), fontSize, &textW, &textH);
         int w = (std::max)(textW + padding * 2, 50);

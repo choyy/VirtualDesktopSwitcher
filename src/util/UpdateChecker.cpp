@@ -4,9 +4,49 @@
 #include <string>
 
 #include "util/Lang.h"
-#include "util/Utils.h"
 
 namespace {
+
+bool DownloadFile(const std::wstring &url, const std::wstring &dest) {
+    using URLDownloadToFileW_t = HRESULT(WINAPI *)(LPUNKNOWN, LPCWSTR, LPCWSTR, DWORD, LPUNKNOWN);
+    HMODULE hUrlmon            = LoadLibraryW(L"urlmon.dll");
+    if (hUrlmon == nullptr) { return false; }
+
+    auto pDownload = reinterpret_cast<URLDownloadToFileW_t>(GetProcAddress(hUrlmon, "URLDownloadToFileW")); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    if (pDownload == nullptr) {
+        FreeLibrary(hUrlmon);
+        return false;
+    }
+
+    HRESULT hr = pDownload(nullptr, url.c_str(), dest.c_str(), 0, nullptr);
+    FreeLibrary(hUrlmon);
+    return SUCCEEDED(hr);
+}
+
+void ShowDownloadFailedDialog(HWND parent) {
+    if (MessageBoxW(parent, Lang::Get(L"Download.FailedMsg"), Lang::Get(L"Download.FailedTitle"), MB_YESNO | MB_ICONERROR) == IDYES) {
+        ShellExecuteW(parent, L"open", L"https://github.com/choyy/VirtualDesktopSwitcher/releases", nullptr, nullptr, SW_SHOW);
+    }
+}
+
+bool IsNewerVersion(const std::string &remote, const std::string &local) {
+    size_t r_pos = 0, l_pos = 0;
+    while (r_pos < remote.size() && l_pos < local.size()) {
+        char   *re = nullptr, *le = nullptr;
+        int32_t rn = strtol(remote.c_str() + r_pos, &re, 10);
+        int32_t ln = strtol(local.c_str() + l_pos, &le, 10);
+
+        if (rn > ln) { return true; }
+        if (rn < ln) { return false; }
+
+        r_pos = re - remote.c_str();
+        l_pos = le - local.c_str();
+
+        if (r_pos < remote.size() && remote[r_pos] == '.') { r_pos++; }
+        if (l_pos < local.size() && local[l_pos] == '.') { l_pos++; }
+    }
+    return r_pos < remote.size();
+}
 
 std::string ExtractTag(const std::string &json) {
     auto key = json.find("\"tag_name\"");
