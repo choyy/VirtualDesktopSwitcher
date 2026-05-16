@@ -198,7 +198,9 @@ bool Application::CreateHiddenWindow() {
 
 void Application::LoadConfiguration() {
     m_autoCheckUpdates = ReadIniInt(L"General", L"AutoCheckUpdates", 1) != 0;
+    m_modKey           = ReadIniInt(L"General", L"ModKey", 0);
     m_indicatorCfg.LoadFromIni();
+    VirtualDesktopSwitcher::SetModKey(static_cast<ModKey>(m_modKey));
 }
 
 void Application::InitializeOverlay() {
@@ -241,7 +243,8 @@ void Application::SetupTrayCallbacks() {
             .otherSymbol   = m_indicatorCfg.otherSymbol,
             .emptySymbol   = m_indicatorCfg.emptySymbol,
             .fontName      = m_indicatorCfg.fontName,
-            .charSpacing   = m_indicatorCfg.charSpacing};
+            .charSpacing   = m_indicatorCfg.charSpacing,
+            .modKey        = m_modKey};
 
         SettingsDialog::Result res = SettingsDialog::Show(m_hwnd, cur,
                                                           [this](const SettingsDialog::Result &preview) {
@@ -250,6 +253,11 @@ void Application::SetupTrayCallbacks() {
 
         if (res.accepted) {
             m_indicatorCfg.SaveToIni();
+            if (res.modKey != m_modKey) {
+                m_modKey = res.modKey;
+                WriteIniInt(L"General", L"ModKey", m_modKey);
+                VirtualDesktopSwitcher::SetModKey(static_cast<ModKey>(m_modKey));
+            }
         } else {
             ApplySettingsPreview(cur);
         }

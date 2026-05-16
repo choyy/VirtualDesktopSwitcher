@@ -13,6 +13,7 @@ struct Result {
     std::wstring emptySymbol;
     std::wstring fontName;
     int          charSpacing = 0;
+    int          modKey      = 0;
     bool         accepted    = false;
 };
 

@@ -22,6 +22,15 @@ constexpr int IDC_ST_OTH_SYM = 108;
 constexpr int IDC_ST_EMP_SYM = 109;
 constexpr int IDC_ST_FONT    = 110;
 constexpr int IDC_ST_SPACING = 111;
+constexpr int IDC_ST_MODKEY  = 112;
+constexpr int IDC_MODKEY_ALT = 113;
+
+constexpr std::array kModkeyIds = {
+    IDC_MODKEY_ALT,
+    IDC_MODKEY_ALT + 1,
+    IDC_MODKEY_ALT + 2,
+    IDC_MODKEY_ALT + 3,
+};
 
 constexpr std::array kSymbolList = {
     L"\u00B7",
@@ -169,8 +178,11 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SetDlgItemTextW(hwnd, IDC_ST_EMP_SYM, Lang::Get(L"Settings.LabelEmpSym"));
         SetDlgItemTextW(hwnd, IDC_ST_FONT, Lang::Get(L"Settings.LabelFont"));
         SetDlgItemTextW(hwnd, IDC_ST_SPACING, Lang::Get(L"Settings.LabelSpacing"));
+        SetDlgItemTextW(hwnd, IDC_ST_MODKEY, Lang::Get(L"Settings.ModKey"));
         SetDlgItemTextW(hwnd, IDOK, Lang::Get(L"Settings.BtnOK"));
         SetDlgItemTextW(hwnd, IDCANCEL, Lang::Get(L"Settings.BtnCancel"));
+
+        SendDlgItemMessageW(hwnd, kModkeyIds.at(data->result.modKey), BM_SETCHECK, BST_CHECKED, 0);
 
         FillCombo(GetDlgItem(hwnd, IDC_CUR_SYM), kSymbolList.data(), kSymbolList.size(), data->result.currentSymbol, false, true);
         FillCombo(GetDlgItem(hwnd, IDC_OTH_SYM), kSymbolList.data(), kSymbolList.size(), data->result.otherSymbol, false, true);
@@ -247,11 +259,18 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             break;
 
-        case IDOK:
+        case IDOK: {
             data->result.charSpacing = ReadSpacing();
             data->result.accepted    = true;
+            for (size_t i = 0; i < kModkeyIds.size(); ++i) {
+                if (SendDlgItemMessageW(hwnd, kModkeyIds.at(i), BM_GETCHECK, 0, 0) == BST_CHECKED) {
+                    data->result.modKey = static_cast<int>(i);
+                    break;
+                }
+            }
             EndDialog(hwnd, id);
             break;
+        }
 
         case IDCANCEL:
             EndDialog(hwnd, id);

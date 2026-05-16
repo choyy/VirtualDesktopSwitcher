@@ -16,25 +16,35 @@
 #define IDC_ST_EMP_SYM  109
 #define IDC_ST_FONT     110
 #define IDC_ST_SPACING  111
+#define IDC_ST_MODKEY   112
+#define IDC_MODKEY_ALT  113
+#define IDC_MODKEY_CTRL 114
+#define IDC_MODKEY_CTRLALT 115
+#define IDC_MODKEY_ALTSHIFT 116
 
-IDD_SETTINGS DIALOGEX 0, 0, 290, 130
+IDD_SETTINGS DIALOGEX 0, 0, 275, 155
 STYLE        DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION      "Desktop Indicator Settings"
 FONT         9, "Segoe UI", 400, 0, 0
 LANGUAGE     LANG_NEUTRAL, SUBLANG_NEUTRAL
 BEGIN
-    LTEXT         "Current Desktop Symbol:",       IDC_ST_CUR_SYM,    10,   8, 110, 10
-    COMBOBOX      IDC_CUR_SYM,                     130,   7, 150, 120, CBS_DROPDOWN | WS_TABSTOP | WS_VSCROLL
-    LTEXT         "Non-empty Desktop Symbol:",      IDC_ST_OTH_SYM,   10,  26, 110, 10
-    COMBOBOX      IDC_OTH_SYM,                     130,  25, 150, 120, CBS_DROPDOWN | WS_TABSTOP | WS_VSCROLL
-    LTEXT         "Empty Desktop Symbol:",          IDC_ST_EMP_SYM,   10,  44, 110, 10
-    COMBOBOX      IDC_EMP_SYM,                     130,  43, 150, 120, CBS_DROPDOWN | WS_TABSTOP | WS_VSCROLL
-    LTEXT         "Font:",                          IDC_ST_FONT,      10,  62, 110, 10
-    COMBOBOX      IDC_FONT,                        130,  61, 150, 120, CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL
-    LTEXT         "Spacing:",                       IDC_ST_SPACING,   10,  82, 110, 10
-    EDITTEXT      IDC_SPACING,                     130,  80,  30,  12, ES_CENTER | ES_NUMBER | WS_TABSTOP | WS_BORDER
-    CONTROL       "",                               IDC_SPIN,        "msctls_updown32", UDS_SETBUDDYINT | UDS_AUTOBUDDY | UDS_ALIGNRIGHT | UDS_ARROWKEYS, 0, 0, 0, 0
-    DEFPUSHBUTTON "OK",                             IDOK,             80, 104,  60, 14
-    PUSHBUTTON    "Cancel",                         IDCANCEL,        155, 104,  60, 14
+    LTEXT           "Current Desktop Symbol:",      IDC_ST_CUR_SYM,    10,   8, 110, 10
+    COMBOBOX        IDC_CUR_SYM,                    110,   7, 150, 120, CBS_DROPDOWN | WS_TABSTOP | WS_VSCROLL
+    LTEXT           "Non-empty Desktop Symbol:",    IDC_ST_OTH_SYM,   10,  26, 110, 10
+    COMBOBOX        IDC_OTH_SYM,                    110,  25, 150, 120, CBS_DROPDOWN | WS_TABSTOP | WS_VSCROLL
+    LTEXT           "Empty Desktop Symbol:",        IDC_ST_EMP_SYM,   10,  44, 110, 10
+    COMBOBOX        IDC_EMP_SYM,                    110,  43, 150, 120, CBS_DROPDOWN | WS_TABSTOP | WS_VSCROLL
+    LTEXT           "Font:",                        IDC_ST_FONT,      10,  62, 110, 10
+    COMBOBOX        IDC_FONT,                       110,  61, 150, 120, CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL
+    LTEXT           "Spacing:",                     IDC_ST_SPACING,   10,  82, 110, 10
+    EDITTEXT        IDC_SPACING,                    110,  80,  30,  12, ES_CENTER | ES_NUMBER | WS_TABSTOP | WS_BORDER
+    CONTROL         "",                             IDC_SPIN,         "msctls_updown32", UDS_SETBUDDYINT | UDS_AUTOBUDDY | UDS_ALIGNRIGHT | UDS_ARROWKEYS, 0, 0, 0, 0
+    LTEXT           "Switch Shortcut:",             IDC_ST_MODKEY,        10,  97,  95, 10
+    AUTORADIOBUTTON "Alt",                          IDC_MODKEY_ALT,      110,  95,  30, 14, WS_GROUP | WS_TABSTOP
+    AUTORADIOBUTTON "Ctrl",                         IDC_MODKEY_CTRL,     142,  95,  30, 14
+    AUTORADIOBUTTON "Ctrl+Alt",                     IDC_MODKEY_CTRLALT,  175,  95,  45, 14
+    AUTORADIOBUTTON "Alt+Shift",                    IDC_MODKEY_ALTSHIFT, 220,  95,  50, 14
+    DEFPUSHBUTTON   "OK",                           IDOK,                 60, 130,  60, 14
+    PUSHBUTTON      "Cancel",                       IDCANCEL,            150, 130,  60, 14
 END
 

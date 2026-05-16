@@ -42,6 +42,7 @@ HWND FindTopOnDesktop(const VirtualDesktopHelper *pHelper) {
 } // namespace
 
 VirtualDesktopSwitcher *VirtualDesktopSwitcher::s_active = nullptr;
+ModKey                  VirtualDesktopSwitcher::s_modKey = ModKey::Alt;
 
 VirtualDesktopSwitcher::VirtualDesktopSwitcher()
     : m_pVDeskHelper(std::make_unique<VirtualDesktopHelper>()) {
@@ -62,10 +63,21 @@ LRESULT CALLBACK VirtualDesktopSwitcher::LowLevelKeyboardProc(int nCode, WPARAM 
         return CallNextHookEx(nullptr, nCode, wParam, lParam);
     }
 
-    const auto *pKeyboard  = LParamToPtr<const KBDLLHOOKSTRUCT>(lParam);
-    const bool  altPressed = (pKeyboard->flags & LLKHF_ALTDOWN) != 0;
+    const auto *pKeyboard = LParamToPtr<const KBDLLHOOKSTRUCT>(lParam);
 
-    if (altPressed && pKeyboard->vkCode >= '1' && pKeyboard->vkCode <= '9') {
+    const bool alt   = (pKeyboard->flags & LLKHF_ALTDOWN) != 0 || (static_cast<UINT>(GetAsyncKeyState(VK_MENU)) & 0x8000u) != 0;
+    const bool ctrl  = (static_cast<UINT>(GetAsyncKeyState(VK_CONTROL)) & 0x8000u) != 0;
+    const bool shift = (static_cast<UINT>(GetAsyncKeyState(VK_SHIFT)) & 0x8000u) != 0;
+
+    bool match = false;
+    switch (s_modKey) {
+    case ModKey::Alt: match = alt && !ctrl && !shift; break;
+    case ModKey::Ctrl: match = ctrl && !alt && !shift; break;
+    case ModKey::CtrlAlt: match = ctrl && alt && !shift; break;
+    case ModKey::AltShift: match = alt && shift && !ctrl; break;
+    }
+
+    if (match && pKeyboard->vkCode >= '1' && pKeyboard->vkCode <= '9') {
         const int desktopIndex = static_cast<int>(pKeyboard->vkCode - '1');
         PostMessage(s_active->m_hwnd, WM_SWITCH_DESKTOP, desktopIndex, 0);
         return 1;

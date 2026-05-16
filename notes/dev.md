@@ -20,3 +20,30 @@
 
 - `EnumWindows` 返回天然 Z 序，第一个匹配就是最顶层，无需排序
 - 空桌面激活 `Program Manager` 是空操作，无害
+
+# 快捷键
+
+代码原来用 `LLKHF_ALTDOWN` 标志判断 Alt 是否被按下：
+
+```cpp
+const bool alt = (pKeyboard->flags & LLKHF_ALTDOWN) != 0;
+```
+
+但在 Windows 低层键盘钩子中，`LLKHF_ALTDOWN` **只在 `WM_SYSKEYDOWN` 消息上设置**。而 `Ctrl+Alt+数字键` 的组合，Windows 会把它当作**应用程序快捷键**发送 `WM_KEYDOWN`，**不会**设置 `LLKHF_ALTDOWN`。
+
+所以按 `Ctrl+Alt+1` 时：
+- `ctrl = true` ✅
+- `alt = false` ❌（因为 `LLKHF_ALTDOWN` 没设置）
+- `match = true && false = false`
+
+这就是只有 `CtrlAlt` 模式不生效的原因——其他模式要么不涉及 Alt，要么是纯 `Alt`/`AltShift`（会触发 `WM_SYSKEYDOWN`，`LLKHF_ALTDOWN` 正常设置）。
+
+- **修复**
+
+把 Alt 检测改为同时检查物理按键状态：
+
+```cpp
+const bool alt = (pKeyboard->flags & LLKHF_ALTDOWN) != 0 || (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+```
+
+保留 `LLKHF_ALTDOWN` 是为了兼容纯 `Alt` 组合的原有行为，新增的 `GetAsyncKeyState(VK_MENU)` 用来捕获 `Ctrl+Alt` 这种被 Windows 归类为 `WM_KEYDOWN` 的情况。
