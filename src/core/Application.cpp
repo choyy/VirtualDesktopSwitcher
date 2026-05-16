@@ -298,7 +298,6 @@ bool Application::Initialize() {
     SyncDesktopState();
 
     if (overlayOk) {
-        m_pOverlay->SetShowMode(m_indicatorCfg.showMode);
         if (m_indicatorCfg.animMode != 0) { m_pOverlay->SetAnimMode(true); }
     }
 

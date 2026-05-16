@@ -72,6 +72,7 @@ private:
     bool                           m_dragging   = false;
     POINT                          m_dragOffset = {.x = 0, .y = 0};
 
+    void ApplyShowMode(ShowMode mode);
     void RebuildText();
     void Render();
     void ApplyPresetPosition();

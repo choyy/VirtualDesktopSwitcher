@@ -22,6 +22,7 @@ constexpr UINT WM_TRAY_ABOUT            = WM_USER + 7;
 constexpr UINT WM_TRAY_RUNAS_ADMIN      = WM_USER + 8;
 constexpr UINT WM_TRAY_ANIM_MODE        = WM_USER + 9;
 constexpr UINT WM_TRAY_TOGGLE_SHOW      = WM_USER + 10;
+constexpr UINT WM_TRAY_RESET            = WM_USER + 11;
 constexpr UINT CMD_SHOW_MODE_BASE       = WM_USER + 300;
 constexpr UINT CMD_SHOW_MODE_CUSTOM     = CMD_SHOW_MODE_BASE + static_cast<UINT>(ShowMode::Count);
 constexpr UINT CMD_POSITION_BASE        = WM_USER + 200;
@@ -215,6 +216,7 @@ void TrayIcon::BuildMenu() {
                 WM_TRAY_TOGGLE_AUTOSTART, Lang::Get(L"Menu.AutoStart"));
 
     AppendMenuW(m_hMenu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_RESET, Lang::Get(L"Menu.Reset"));
     AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_ABOUT, Lang::Get(L"Menu.About"));
     AppendMenuW(m_hMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_EXIT, Lang::Get(L"Menu.Exit"));
@@ -352,6 +354,14 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
         Lang::Set(LangType::English);
         WriteIniInt(L"General", L"Language", 1);
         UpdateTooltip(Lang::Get(L"Tray.DefaultTip"));
+        break;
+
+    case WM_TRAY_RESET:
+        DeleteFileW((GetAppDataDir() + L"\\settings.ini").c_str());
+        DeleteRunReg();
+        RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
+        ShellExecuteW(nullptr, L"open", GetCurrentExePath().c_str(), nullptr, nullptr, SW_SHOW);
+        PostQuitMessage(0);
         break;
 
     case WM_TRAY_ABOUT:

@@ -178,6 +178,7 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
     }
 
     RebuildText();
+    ApplyShowMode(m_pCfg->showMode);
     return !m_layers.empty();
 }
 
@@ -204,9 +205,8 @@ void DesktopIndicator::ShowTemporarily() {
     SetTimer(m_layers[0].hwnd, kAutoHideTimerId, ms, AutoHideTimer);
 }
 
-void DesktopIndicator::SetShowMode(ShowMode mode) {
+void DesktopIndicator::ApplyShowMode(ShowMode mode) {
     if (m_pCfg == nullptr) { return; }
-    m_pCfg->showMode = mode;
     if (!m_layers.empty()) { KillTimer(m_layers[0].hwnd, kAutoHideTimerId); }
     if (mode == ShowMode::AlwaysHide) {
         for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_HIDE); }
@@ -215,6 +215,12 @@ void DesktopIndicator::SetShowMode(ShowMode mode) {
         for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
         if (mode >= ShowMode::Show1s) { ShowTemporarily(); }
     }
+}
+
+void DesktopIndicator::SetShowMode(ShowMode mode) {
+    if (m_pCfg == nullptr) { return; }
+    m_pCfg->showMode = mode;
+    ApplyShowMode(mode);
     if (m_onConfigChanged) { m_onConfigChanged(); }
 }
 
