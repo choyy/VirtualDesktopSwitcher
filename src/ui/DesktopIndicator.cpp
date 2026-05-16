@@ -111,6 +111,16 @@ COLORREF HSVToRGB(float h, float s, float v) {
 
 } // namespace
 
+void DesktopIndicator::EnumerateMonitors(HINSTANCE hInstance) {
+    EnumCtx ctx = {&m_layers, this, hInstance};
+    EnumDisplayMonitors(nullptr, nullptr, EnumMonitorCB, PtrToLParam(&ctx));
+    auto prim = std::ranges::find_if(m_layers,
+                                     [](auto &l) { return l.isPrimary; });
+    if (prim != m_layers.end() && prim != m_layers.begin()) {
+        std::swap(*prim, m_layers[0]);
+    }
+}
+
 DesktopIndicator::DesktopIndicator() = default;
 
 DesktopIndicator::~DesktopIndicator() {
@@ -134,6 +144,7 @@ HWND DesktopIndicator::CreateMonitorWindow(HINSTANCE hInst) {
 bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
     if (m_pCfg == nullptr) { return false; }
 
+    // 1. Register window class
     WNDCLASSW wc = {};
     if (GetClassInfoW(hInstance, L"DesktopIndicatorClass", &wc) == 0) {
         wc.lpfnWndProc   = WndProc;
@@ -143,27 +154,19 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
         if (RegisterClassW(&wc) == 0) { return false; }
     }
 
+    // 2. Initialize font renderer
     m_renderer = std::make_unique<FontRenderer>();
     if (!m_renderer->Init(m_pCfg->fontName)) {
-        if (!m_renderer->Init(L"Segoe UI")) {
-            m_renderer->Init(L"Segoe UI Symbol");
-            m_pCfg->fontName = L"Segoe UI Symbol";
-        } else {
-            m_pCfg->fontName = L"Segoe UI";
-        }
+        m_pCfg->fontName = L"Segoe UI Symbol";
+        m_renderer->Init(m_pCfg->fontName);
     }
 
-    EnumCtx ctx = {&m_layers, this, hInstance};
-    EnumDisplayMonitors(nullptr, nullptr, EnumMonitorCB, PtrToLParam(&ctx));
-
-    auto prim = std::ranges::find_if(m_layers,
-                                     [](auto &l) { return l.isPrimary; });
-    if (prim != m_layers.end() && prim != m_layers.begin()) {
-        std::swap(*prim, m_layers[0]);
-    }
-
+    // 3. Build text and enumerate monitors
+    RebuildText();
+    EnumerateMonitors(hInstance);
     Log(L"[INFO] DesktopIndicator initialized: " + std::to_wstring(m_layers.size()) + L" layers");
 
+    // 4. Restore or calculate default window positions
     if (m_pCfg->posInitialized && !m_layers.empty()) {
         if (m_pCfg->positionPreset >= 0) {
             SetPositionPreset(m_pCfg->positionPreset);
@@ -176,17 +179,20 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
             }
         }
     }
+    if (!m_pCfg->posInitialized && !m_layers.empty()) {
+        int  fs = ScaleForDpi(m_pCfg->fontSize, m_layers[0].dpi);
+        int  tw = 0, th = 0;
+        auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
+        m_renderer->Measure(spacedtext.c_str(), fs, &tw, &th);
+        int w                  = (std::max)(tw + 16, 50);
+        m_pCfg->windowPos.x    = m_layers[0].monitor.left + (m_layers[0].monitor.right - m_layers[0].monitor.left - w) / 2;
+        m_pCfg->windowPos.y    = m_layers[0].monitor.top - 4;
+        m_pCfg->posInitialized = true;
+    }
 
-    RebuildText();
+    // 5. Build initial text and apply display mode
     ApplyShowMode(m_pCfg->showMode);
     return !m_layers.empty();
-}
-
-void DesktopIndicator::Show() {
-    for (auto &l : m_layers) {
-        ShowWindow(l.hwnd, SW_SHOW);
-    }
-    Render();
 }
 
 void DesktopIndicator::SetDesktopState(int count, int currentIndex,
@@ -221,7 +227,6 @@ void DesktopIndicator::SetShowMode(ShowMode mode) {
     if (m_pCfg == nullptr) { return; }
     m_pCfg->showMode = mode;
     ApplyShowMode(mode);
-    if (m_onConfigChanged) { m_onConfigChanged(); }
 }
 
 void CALLBACK DesktopIndicator::AutoHideTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR /*idEvent*/, DWORD /*dwTime*/) {
@@ -342,7 +347,7 @@ void DesktopIndicator::SetEditMode(bool edit) {
         SetCapture(m_layers[0].hwnd);
     } else {
         ReleaseCapture();
-        if (m_onConfigChanged) { m_onConfigChanged(); }
+        m_pCfg->SaveToIni();
     }
     Render();
 }
@@ -436,17 +441,6 @@ void DesktopIndicator::Render() {
     blend.SourceConstantAlpha = 255;
     blend.AlphaFormat         = AC_SRC_ALPHA;
 
-    if (!m_pCfg->posInitialized && !m_layers.empty()) {
-        auto &p  = m_layers[0];
-        int   fs = ScaleForDpi(m_pCfg->fontSize, p.dpi);
-        int   tw = 0, th = 0;
-        m_renderer->Measure(spacedtext.c_str(), fs, &tw, &th);
-        int w                  = (std::max)(tw + padding * 2, 50);
-        m_pCfg->windowPos.x    = p.monitor.left + (p.monitor.right - p.monitor.left - w) / 2;
-        m_pCfg->windowPos.y    = p.monitor.top - 4;
-        m_pCfg->posInitialized = true;
-    }
-
     HDC hdcScreen = GetDC(nullptr);
     HDC hdcMem    = (hdcScreen != nullptr) ? CreateCompatibleDC(hdcScreen) : nullptr;
 
@@ -508,14 +502,7 @@ void DesktopIndicator::Rebuild() {
     m_dragging = false;
     ReleaseCapture();
 
-    EnumCtx ctx = {&m_layers, this, GetModuleHandle(nullptr)};
-    EnumDisplayMonitors(nullptr, nullptr, EnumMonitorCB, PtrToLParam(&ctx));
-
-    auto prim = std::ranges::find_if(m_layers,
-                                     [](auto &l) { return l.isPrimary; });
-    if (prim != m_layers.end() && prim != m_layers.begin()) {
-        std::swap(*prim, m_layers[0]);
-    }
+    EnumerateMonitors(GetModuleHandle(nullptr));
 
     if (wasVisible) {
         for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
@@ -617,7 +604,7 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             m_pCfg->fontSize += (delta > 0) ? 4 : -4;
             m_pCfg->fontSize = (std::clamp)(m_pCfg->fontSize, 12, 300);
             if (m_pCfg->fontSize != oldSize) {
-                if (m_onConfigChanged) { m_onConfigChanged(); }
+                m_pCfg->SaveToIni();
                 RebuildText();
             }
             return 0;

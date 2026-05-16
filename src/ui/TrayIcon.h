@@ -22,11 +22,10 @@ public:
     TrayIcon() = default;
     ~TrayIcon();
 
-    bool               Initialize(HWND hwnd, HINSTANCE hInstance);
-    bool               Reinitialize();
-    void               HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-    void               UpdateTooltip(const std::wstring &tooltip);
-    [[nodiscard]] bool GetAutoStartStatus() const { return m_autoStartEnabled; }
+    bool Initialize(HWND hwnd, HINSTANCE hInstance);
+    bool Reinitialize();
+    void HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    void UpdateTooltip(const std::wstring &tooltip);
 
     void SetActivePositionPreset(int preset) { m_activePositionPreset = preset; }
     void SetEditModeCallback(std::function<void()> cb) { m_editModeFn = std::move(cb); }

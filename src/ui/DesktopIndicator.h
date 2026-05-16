@@ -5,12 +5,11 @@
 #include <windows.h>
 
 #include <array>
-#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "util/IndicatorConfig.h"
+#include "core/IndicatorConfig.h"
 #include "util/Utils.h"
 
 class FontRenderer;
@@ -33,10 +32,8 @@ public:
     DesktopIndicator &operator=(DesktopIndicator &&)      = delete;
 
     void SetConfig(IndicatorConfig *cfg) { m_pCfg = cfg; }
-    void SetOnConfigChanged(std::function<void()> cb) { m_onConfigChanged = std::move(cb); }
 
     bool Initialize(HINSTANCE hInstance);
-    void Show();
     void SetDesktopState(int count, int currentIndex, const std::array<bool, kMaxDesktops> &emptyDesktops);
     void SetColor(const std::wstring &hexColor);
     void SetColorPreview(const std::wstring &hexColor);
@@ -61,7 +58,6 @@ private:
     std::vector<MonitorLayer>      m_layers;
     std::unique_ptr<FontRenderer>  m_renderer;
     IndicatorConfig               *m_pCfg = nullptr;
-    std::function<void()>          m_onConfigChanged;
     std::wstring                   m_text;
     std::wstring                   m_previewColor;
     bool                           m_hasPreview     = false;
@@ -77,6 +73,7 @@ private:
     void Render();
     void ApplyPresetPosition();
     void MoveByDelta(int dx, int dy);
+    void EnumerateMonitors(HINSTANCE hInstance);
 
     static void CALLBACK    AutoHideTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
     static void CALLBACK    AnimTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);

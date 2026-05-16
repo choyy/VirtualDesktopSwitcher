@@ -1,11 +1,8 @@
 #include "TrayIcon.h"
 
-#include <shlwapi.h>
-
 #include <array>
 
-#include "util/IndicatorConfig.h"
-
+#include "core/IndicatorConfig.h"
 #include "util/ConfigIni.h"
 #include "util/Lang.h"
 #include "util/Utils.h"

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <windows.h>
-
 #include <cstdint>
 
 enum class LangType : std::uint8_t { Chinese,

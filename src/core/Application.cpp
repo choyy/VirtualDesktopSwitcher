@@ -1,9 +1,7 @@
 #include "Application.h"
 
-#include <array>
 #include <string>
 
-#include "core/UpdateChecker.h"
 #include "core/VirtualDesktopSwitcher.h"
 #include "ui/AboutDialog.h"
 #include "ui/DesktopIndicator.h"
@@ -12,6 +10,7 @@
 #include "util/ConfigIni.h"
 #include "util/Lang.h"
 #include "util/Log.h"
+#include "util/UpdateChecker.h"
 #include "util/Utils.h"
 
 namespace {
@@ -206,7 +205,6 @@ void Application::LoadConfiguration() {
 void Application::InitializeOverlay() {
     m_pOverlay = std::make_unique<DesktopIndicator>();
     m_pOverlay->SetConfig(&m_indicatorCfg);
-    m_pOverlay->SetOnConfigChanged([this]() { m_indicatorCfg.SaveToIni(); });
 }
 
 bool Application::InitializeTrayIcon() {

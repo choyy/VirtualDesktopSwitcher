@@ -1,7 +1,6 @@
 #include "VirtualDesktopHelper.h"
 
 #include <ObjectArray.h>
-#include <initguid.h>
 #include <servprov.h>
 
 #include <array>
@@ -51,9 +50,9 @@ VirtualDesktopHelper::VirtualDesktopHelper() : m_comInitResult(CoInitialize(null
 }
 
 void VirtualDesktopHelper::Refresh() {
-    virtualDesktopManagerInternal = nullptr;
-    virtualDesktopManager         = nullptr;
-    viewCollection                = nullptr;
+    m_virtualDesktopManagerInternal = nullptr;
+    m_virtualDesktopManager         = nullptr;
+    m_viewCollection                = nullptr;
     InitCOMServices();
 }
 
@@ -102,8 +101,8 @@ bool VirtualDesktopHelper::InitDesktopManagerInternal(Microsoft::WRL::ComPtr<ISe
         {.service = &CLSID_VirtualDesktopManager, .iid = &IID_IVirtualDesktopManagerInternal_Win11, .win10 = false},
     }};
     for (const auto &c : vdiCombos) {
-        hr = sp->QueryService(*c.service, *c.iid, ComPtrAsVoid(virtualDesktopManagerInternal));
-        if (SUCCEEDED(hr) && virtualDesktopManagerInternal != nullptr) {
+        hr = sp->QueryService(*c.service, *c.iid, ComPtrAsVoid(m_virtualDesktopManagerInternal));
+        if (SUCCEEDED(hr) && m_virtualDesktopManagerInternal != nullptr) {
             m_iidVirtualDesktop = c.win10 ? IID_IVirtualDesktop_Win10 : __uuidof(IVirtualDesktop);
             Log(L"[INFO] IVirtualDesktopManagerInternal created (QueryService)");
             return true;
@@ -113,8 +112,8 @@ bool VirtualDesktopHelper::InitDesktopManagerInternal(Microsoft::WRL::ComPtr<ISe
     {
         const std::array<const IID *, 3> qiIIDs = {&IID_IVirtualDesktopManagerInternal_Win10, &IID_IVirtualDesktopManagerInternal_Win11, &IID_IVirtualDesktopManagerInternal_Service};
         for (const auto &iid : qiIIDs) {
-            hr = shell->QueryInterface(*iid, ComPtrAsVoid(virtualDesktopManagerInternal));
-            if (SUCCEEDED(hr) && virtualDesktopManagerInternal != nullptr) {
+            hr = shell->QueryInterface(*iid, ComPtrAsVoid(m_virtualDesktopManagerInternal));
+            if (SUCCEEDED(hr) && m_virtualDesktopManagerInternal != nullptr) {
                 m_iidVirtualDesktop = (iid == &IID_IVirtualDesktopManagerInternal_Win10) ? IID_IVirtualDesktop_Win10 : __uuidof(IVirtualDesktop);
                 Log(L"[INFO] IVirtualDesktopManagerInternal created (QI from immersiveShell)");
                 return true;
@@ -129,8 +128,8 @@ bool VirtualDesktopHelper::InitDesktopManagerInternal(Microsoft::WRL::ComPtr<ISe
         if (SUCCEEDED(hr)) {
             const std::array<const IID *, 2> qiIIDs = {&IID_IVirtualDesktopManagerInternal_Win10, &IID_IVirtualDesktopManagerInternal_Win11};
             for (const auto &iid : qiIIDs) {
-                hr = vdMgr->QueryInterface(*iid, ComPtrAsVoid(virtualDesktopManagerInternal));
-                if (SUCCEEDED(hr) && virtualDesktopManagerInternal != nullptr) {
+                hr = vdMgr->QueryInterface(*iid, ComPtrAsVoid(m_virtualDesktopManagerInternal));
+                if (SUCCEEDED(hr) && m_virtualDesktopManagerInternal != nullptr) {
                     m_iidVirtualDesktop = (iid == &IID_IVirtualDesktopManagerInternal_Win10) ? IID_IVirtualDesktop_Win10 : __uuidof(IVirtualDesktop);
                     Log(L"[INFO] IVirtualDesktopManagerInternal created (QI from vdMgr)");
                     return true;
@@ -145,7 +144,7 @@ bool VirtualDesktopHelper::InitDesktopManagerInternal(Microsoft::WRL::ComPtr<ISe
 
 void VirtualDesktopHelper::VerifyDesktopIID() {
     Microsoft::WRL::ComPtr<IVirtualDesktop> testDesktop;
-    if (SUCCEEDED(virtualDesktopManagerInternal->GetCurrentDesktop(&testDesktop))) {
+    if (SUCCEEDED(m_virtualDesktopManagerInternal->GetCurrentDesktop(&testDesktop))) {
         Microsoft::WRL::ComPtr<IUnknown> testQI;
         if (FAILED(testDesktop->QueryInterface(m_iidVirtualDesktop, ComPtrAsVoid(testQI)))) {
             m_iidVirtualDesktop = (IsEqualGUID(m_iidVirtualDesktop, IID_IVirtualDesktop_Win10) != 0) ? __uuidof(IVirtualDesktop) : IID_IVirtualDesktop_Win10;
@@ -156,11 +155,11 @@ void VirtualDesktopHelper::VerifyDesktopIID() {
 void VirtualDesktopHelper::InitViewCollection(Microsoft::WRL::ComPtr<IServiceProvider> &sp) {
     HRESULT hr = sp->QueryService(IID_IApplicationViewCollection_1903,
                                   IID_IApplicationViewCollection_1903,
-                                  ComPtrAsVoid(viewCollection));
+                                  ComPtrAsVoid(m_viewCollection));
     if (FAILED(hr)) {
         hr = sp->QueryService(IID_IApplicationViewCollection_1809,
                               IID_IApplicationViewCollection_1809,
-                              ComPtrAsVoid(viewCollection));
+                              ComPtrAsVoid(m_viewCollection));
     }
     if (SUCCEEDED(hr)) {
         Log(L"[INFO] IApplicationViewCollection created successfully");
@@ -171,7 +170,7 @@ void VirtualDesktopHelper::InitViewCollection(Microsoft::WRL::ComPtr<IServicePro
 
 void VirtualDesktopHelper::InitDesktopManager() {
     HRESULT hr = CoCreateInstance(CLSID_VirtualDesktopManager, nullptr, CLSCTX_INPROC_SERVER,
-                                  IID_IVirtualDesktopManager, ComPtrAsVoid(virtualDesktopManager));
+                                  IID_IVirtualDesktopManager, ComPtrAsVoid(m_virtualDesktopManager));
     if (FAILED(hr)) {
         Log(L"[ERROR] Failed to create IVirtualDesktopManager: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
     } else {
@@ -180,12 +179,12 @@ void VirtualDesktopHelper::InitDesktopManager() {
 }
 
 int VirtualDesktopHelper::GetDesktopCount() const {
-    if (virtualDesktopManagerInternal == nullptr) {
+    if (m_virtualDesktopManagerInternal == nullptr) {
         return 0;
     }
 
     Microsoft::WRL::ComPtr<IObjectArray> desktops;
-    if (FAILED(virtualDesktopManagerInternal->GetDesktops(&desktops))) {
+    if (FAILED(m_virtualDesktopManagerInternal->GetDesktops(&desktops))) {
         return 0;
     }
 
@@ -194,17 +193,17 @@ int VirtualDesktopHelper::GetDesktopCount() const {
 }
 
 int VirtualDesktopHelper::GetCurrentDesktopIndex() const {
-    if (virtualDesktopManagerInternal == nullptr) {
+    if (m_virtualDesktopManagerInternal == nullptr) {
         return -1;
     }
 
     Microsoft::WRL::ComPtr<IVirtualDesktop> currentDesktop;
-    if (FAILED(virtualDesktopManagerInternal->GetCurrentDesktop(&currentDesktop))) {
+    if (FAILED(m_virtualDesktopManagerInternal->GetCurrentDesktop(&currentDesktop))) {
         return -1;
     }
 
     Microsoft::WRL::ComPtr<IObjectArray> desktops;
-    if (FAILED(virtualDesktopManagerInternal->GetDesktops(&desktops))) {
+    if (FAILED(m_virtualDesktopManagerInternal->GetDesktops(&desktops))) {
         return -1;
     }
 
@@ -229,12 +228,12 @@ int VirtualDesktopHelper::GetCurrentDesktopIndex() const {
 }
 
 void VirtualDesktopHelper::SwitchToDesktop(int index) const {
-    if (virtualDesktopManagerInternal == nullptr) {
+    if (m_virtualDesktopManagerInternal == nullptr) {
         return;
     }
 
     Microsoft::WRL::ComPtr<IObjectArray> desktops;
-    if (FAILED(virtualDesktopManagerInternal->GetDesktops(&desktops))) {
+    if (FAILED(m_virtualDesktopManagerInternal->GetDesktops(&desktops))) {
         return;
     }
 
@@ -249,28 +248,28 @@ void VirtualDesktopHelper::SwitchToDesktop(int index) const {
         return;
     }
 
-    virtualDesktopManagerInternal->SwitchDesktop(targetDesktop.Get());
+    m_virtualDesktopManagerInternal->SwitchDesktop(targetDesktop.Get());
 }
 
 bool VirtualDesktopHelper::IsWindowOnCurrentDesktop(HWND hwnd) const {
-    if ((virtualDesktopManagerInternal == nullptr) || hwnd == nullptr) {
+    if ((m_virtualDesktopManagerInternal == nullptr) || hwnd == nullptr) {
         return false;
     }
     return CheckViaViewCollection(hwnd) || CheckViaDesktopManager(hwnd);
 }
 
 bool VirtualDesktopHelper::CheckViaViewCollection(HWND hwnd) const {
-    if (viewCollection == nullptr) {
+    if (m_viewCollection == nullptr) {
         return false;
     }
 
     Microsoft::WRL::ComPtr<IUnknown> view;
-    if (FAILED(viewCollection->GetViewForHwnd(hwnd, view.GetAddressOf())) || (view == nullptr)) {
+    if (FAILED(m_viewCollection->GetViewForHwnd(hwnd, view.GetAddressOf())) || (view == nullptr)) {
         return false;
     }
 
     Microsoft::WRL::ComPtr<IVirtualDesktop> currentDesktop;
-    if (FAILED(virtualDesktopManagerInternal->GetCurrentDesktop(&currentDesktop)) || (currentDesktop == nullptr)) {
+    if (FAILED(m_virtualDesktopManagerInternal->GetCurrentDesktop(&currentDesktop)) || (currentDesktop == nullptr)) {
         return false;
     }
 
@@ -279,22 +278,22 @@ bool VirtualDesktopHelper::CheckViaViewCollection(HWND hwnd) const {
 }
 
 bool VirtualDesktopHelper::CheckViaDesktopManager(HWND hwnd) const {
-    if (virtualDesktopManager == nullptr) {
+    if (m_virtualDesktopManager == nullptr) {
         return false;
     }
 
     BOOL onCurrentDesktop = FALSE;
-    if (SUCCEEDED(virtualDesktopManager->IsWindowOnCurrentVirtualDesktop(hwnd, &onCurrentDesktop))) {
+    if (SUCCEEDED(m_virtualDesktopManager->IsWindowOnCurrentVirtualDesktop(hwnd, &onCurrentDesktop))) {
         return onCurrentDesktop != FALSE;
     }
 
     GUID windowDesktopId{};
-    if (FAILED(virtualDesktopManager->GetWindowDesktopId(hwnd, &windowDesktopId))) {
+    if (FAILED(m_virtualDesktopManager->GetWindowDesktopId(hwnd, &windowDesktopId))) {
         return false;
     }
 
     Microsoft::WRL::ComPtr<IVirtualDesktop> currentDesktop;
-    if (FAILED(virtualDesktopManagerInternal->GetCurrentDesktop(&currentDesktop)) || (currentDesktop == nullptr)) {
+    if (FAILED(m_virtualDesktopManagerInternal->GetCurrentDesktop(&currentDesktop)) || (currentDesktop == nullptr)) {
         return false;
     }
 
@@ -304,12 +303,12 @@ bool VirtualDesktopHelper::CheckViaDesktopManager(HWND hwnd) const {
 
 std::array<bool, kMaxDesktops> VirtualDesktopHelper::GetDesktopEmptyMask() const {
     std::array<bool, kMaxDesktops> emptyMask{};
-    if ((virtualDesktopManagerInternal == nullptr) || (viewCollection == nullptr)) {
+    if ((m_virtualDesktopManagerInternal == nullptr) || (m_viewCollection == nullptr)) {
         return emptyMask;
     }
 
     Microsoft::WRL::ComPtr<IObjectArray> desktops;
-    if (FAILED(virtualDesktopManagerInternal->GetDesktops(&desktops))) {
+    if (FAILED(m_virtualDesktopManagerInternal->GetDesktops(&desktops))) {
         return emptyMask;
     }
 
@@ -319,7 +318,7 @@ std::array<bool, kMaxDesktops> VirtualDesktopHelper::GetDesktopEmptyMask() const
     }
 
     Microsoft::WRL::ComPtr<IObjectArray> views;
-    if (FAILED(viewCollection->GetViews(&views))) {
+    if (FAILED(m_viewCollection->GetViews(&views))) {
         return emptyMask;
     }
 

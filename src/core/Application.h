@@ -4,18 +4,58 @@
 
 #include <memory>
 
-#include "util/IndicatorConfig.h"
+#include "core/IndicatorConfig.h"
 
-class VirtualDesktopSwitcher;
-class TrayIcon;
 class DesktopIndicator;
+class TrayIcon;
+class VirtualDesktopSwitcher;
 
 namespace SettingsDialog {
 struct Result;
 } // namespace SettingsDialog
 
 class Application {
+public:
+    Application(const Application &)            = delete;
+    Application &operator=(const Application &) = delete;
+    Application(Application &&)                 = delete;
+    Application &operator=(Application &&)      = delete;
+
+    Application();
+    ~Application();
+
+    bool Initialize();
+
+    static int Run();
+
 private:
+    // --- Static Callbacks ---
+    static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+    static void CALLBACK    TimerPollUpdateProc(HWND hwnd, UINT uMsg, UINT_PTR id, DWORD dwTime);
+
+    // --- Message Handlers ---
+    void OnDestroy(HWND hwnd);
+    void OnSystemResume();
+    void OnDisplayChange();
+    void OnTrayMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, HWND hwnd);
+    void OnMenuSelect(WPARAM wParam, LPARAM lParam);
+    void OnDesktopSwitch(WPARAM wParam);
+    void OnTimerTick();
+
+    // --- Internal Operations ---
+    void SyncDesktopState();
+    void ApplySettingsPreview(const SettingsDialog::Result &r);
+    void PollUpdateProcess();
+    void SpawnUpdateCheckProcess();
+
+    // --- Initialization Sub-steps ---
+    bool CreateHiddenWindow();
+    void LoadConfiguration();
+    void InitializeOverlay();
+    bool InitializeTrayIcon();
+    void SetupTrayCallbacks();
+
+    // --- Member Variables ---
     HWND                                    m_hwnd = nullptr;
     std::unique_ptr<VirtualDesktopSwitcher> m_switcher;
     std::unique_ptr<TrayIcon>               m_pTrayIcon;
@@ -27,40 +67,4 @@ private:
     bool                                    m_autoCheckUpdates = true;
     UINT                                    m_uTaskbarCreated  = 0;
     HANDLE                                  m_hUpdateProcess   = nullptr;
-
-    static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-    static void CALLBACK    TimerPollUpdateProc(HWND hwnd, UINT uMsg, UINT_PTR id, DWORD dwTime);
-    void                    OnSystemResume();
-    void                    OnDisplayChange();
-    void                    SyncDesktopState();
-    void                    OnTrayMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, HWND hwnd);
-    void                    OnMenuSelect(WPARAM wParam, LPARAM lParam);
-    void                    OnDesktopSwitch(WPARAM wParam);
-    void                    OnTimerTick();
-    void                    PollUpdateProcess();
-    void                    SpawnUpdateCheckProcess();
-    void                    OnDestroy(HWND hwnd);
-    void                    ApplySettingsPreview(const SettingsDialog::Result &r);
-
-    // Initialize sub-steps
-    bool CreateHiddenWindow();
-    void LoadConfiguration();
-    void InitializeOverlay();
-    bool InitializeTrayIcon();
-    void SetupTrayCallbacks();
-
-public:
-    Application(const Application &)            = delete;
-    Application &operator=(const Application &) = delete;
-    Application(Application &&)                 = delete;
-    Application &operator=(Application &&)      = delete;
-
-    Application();
-    ~Application();
-
-    // 初始化应用程序
-    bool Initialize();
-
-    // 运行消息循环
-    static int Run();
 };

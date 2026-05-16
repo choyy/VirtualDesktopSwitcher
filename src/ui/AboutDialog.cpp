@@ -1,11 +1,9 @@
 #include "AboutDialog.h"
 
-#include <commctrl.h>
-
 #include <string>
 
-#include "core/UpdateChecker.h"
 #include "util/Lang.h"
+#include "util/UpdateChecker.h"
 #include "util/Utils.h"
 
 namespace {

@@ -50,25 +50,6 @@ public:
 };
 
 class VirtualDesktopHelper {
-private:
-    HRESULT                                                m_comInitResult = E_FAIL;
-    Microsoft::WRL::ComPtr<IVirtualDesktopManagerInternal> virtualDesktopManagerInternal;
-    Microsoft::WRL::ComPtr<IVirtualDesktopManager>         virtualDesktopManager;
-    Microsoft::WRL::ComPtr<IApplicationViewCollection>     viewCollection;
-    IID                                                    m_iidVirtualDesktop = __uuidof(IVirtualDesktop);
-
-    bool InitCOMServices();
-
-    [[nodiscard]] bool CheckViaViewCollection(HWND hwnd) const;
-    [[nodiscard]] bool CheckViaDesktopManager(HWND hwnd) const;
-
-    static bool InitImmersiveShell(Microsoft::WRL::ComPtr<IUnknown> &shell);
-    static bool InitServiceProvider(Microsoft::WRL::ComPtr<IUnknown> &shell, Microsoft::WRL::ComPtr<IServiceProvider> &sp);
-    bool        InitDesktopManagerInternal(Microsoft::WRL::ComPtr<IServiceProvider> &sp, Microsoft::WRL::ComPtr<IUnknown> &shell);
-    void        VerifyDesktopIID();
-    void        InitViewCollection(Microsoft::WRL::ComPtr<IServiceProvider> &sp);
-    void        InitDesktopManager();
-
 public:
     VirtualDesktopHelper(const VirtualDesktopHelper &)            = delete;
     VirtualDesktopHelper &operator=(const VirtualDesktopHelper &) = delete;
@@ -84,4 +65,24 @@ public:
     [[nodiscard]] bool                           IsWindowOnCurrentDesktop(HWND hwnd) const;
     [[nodiscard]] std::array<bool, kMaxDesktops> GetDesktopEmptyMask() const;
     void                                         SwitchToDesktop(int index) const;
+
+private:
+    bool InitCOMServices();
+
+    [[nodiscard]] bool CheckViaViewCollection(HWND hwnd) const;
+    [[nodiscard]] bool CheckViaDesktopManager(HWND hwnd) const;
+
+    static bool InitImmersiveShell(Microsoft::WRL::ComPtr<IUnknown> &shell);
+    static bool InitServiceProvider(Microsoft::WRL::ComPtr<IUnknown> &shell, Microsoft::WRL::ComPtr<IServiceProvider> &sp);
+    bool        InitDesktopManagerInternal(Microsoft::WRL::ComPtr<IServiceProvider> &sp, Microsoft::WRL::ComPtr<IUnknown> &shell);
+    void        VerifyDesktopIID();
+    void        InitViewCollection(Microsoft::WRL::ComPtr<IServiceProvider> &sp);
+    void        InitDesktopManager();
+
+    // --- Member Variables ---
+    HRESULT                                                m_comInitResult = E_FAIL;
+    Microsoft::WRL::ComPtr<IVirtualDesktopManagerInternal> m_virtualDesktopManagerInternal;
+    Microsoft::WRL::ComPtr<IVirtualDesktopManager>         m_virtualDesktopManager;
+    Microsoft::WRL::ComPtr<IApplicationViewCollection>     m_viewCollection;
+    IID                                                    m_iidVirtualDesktop = __uuidof(IVirtualDesktop);
 };

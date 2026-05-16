@@ -2,8 +2,6 @@
 // Original: https://github.com/vladelaina/Catime
 #pragma once
 
-#include <windows.h>
-
 #include <string>
 
 std::wstring GetAppDataDir();

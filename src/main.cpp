@@ -5,9 +5,9 @@
 #include <cstring>
 
 #include "core/Application.h"
-#include "core/UpdateChecker.h"
 #include "util/ConfigIni.h"
 #include "util/Log.h"
+#include "util/UpdateChecker.h"
 #include "util/Utils.h"
 
 int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR lpCmdLine, int /*nCmdShow*/) {

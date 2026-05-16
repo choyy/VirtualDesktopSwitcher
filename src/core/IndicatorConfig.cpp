@@ -8,12 +8,8 @@ void IndicatorConfig::LoadFromIni() {
 
     int x = ReadIniInt(L"Display", L"WindowPosX", -1);
     int y = ReadIniInt(L"Display", L"WindowPosY", -1);
-    if (x >= 0) {
-        windowPos.x    = x;
-        posInitialized = true;
-    }
-    if (y >= 0) {
-        windowPos.y    = y;
+    if (x >= 0 && y >= 0) {
+        windowPos      = {x, y};
         posInitialized = true;
     }
 

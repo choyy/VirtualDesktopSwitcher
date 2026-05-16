@@ -1,5 +1,7 @@
 #include "Lang.h"
 
+#include <windows.h>
+
 #include <array>
 
 #include "util/ConfigIni.h"
