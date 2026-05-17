@@ -14,6 +14,7 @@ constexpr int IDC_HOMEPAGE        = 102;
 constexpr int IDC_VERSION         = 103;
 constexpr int IDC_APP_ICON        = 104;
 constexpr int IDC_APP_NAME        = 105;
+constexpr int IDC_STATIC_VERSION  = 106;
 constexpr int IDC_STATIC_HOMEPAGE = 203;
 
 struct AboutData {
@@ -32,21 +33,16 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         auto *hInst = reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(GetParent(hwnd), GWLP_HINSTANCE)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
 
-        auto ChildRect = [&](int id) {
-            RECT r{};
-            GetWindowRect(GetDlgItem(hwnd, id), &r);
-            MapWindowPoints(HWND_DESKTOP, hwnd, reinterpret_cast<LPPOINT>(&r), 2); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-            return r;
-        };
-        const RECT rcTitle   = ChildRect(IDC_APP_NAME);
-        const RECT rcVersion = ChildRect(IDC_VERSION);
+        const RECT rcTitle   = GetChildRect(hwnd, IDC_APP_NAME);
+        const RECT rcVersion = GetChildRect(hwnd, IDC_VERSION);
         const int  iconSize  = rcVersion.bottom - rcTitle.top;
-        const RECT rcIcon    = ChildRect(IDC_APP_ICON);
+        const RECT rcIcon    = GetChildRect(hwnd, IDC_APP_ICON);
         SetWindowPos(GetDlgItem(hwnd, IDC_APP_ICON), nullptr, rcIcon.left, rcTitle.top, iconSize, iconSize, SWP_NOZORDER);
 
         SetWindowTextW(hwnd, Lang::Get(L"About.Caption"));
         SetDlgItemTextW(hwnd, IDC_APP_NAME, Lang::Get(L"About.Title"));
         SetDlgItemTextW(hwnd, IDC_STATIC_HOMEPAGE, Lang::Get(L"About.LabelHomepage"));
+        SetDlgItemTextW(hwnd, IDC_STATIC_VERSION, Lang::Get(L"About.Version"));
         SetDlgItemTextW(hwnd, IDC_AUTO_CHECK, Lang::Get(L"About.AutoCheck"));
         SetDlgItemTextW(hwnd, IDC_CHECK_UPDATES, Lang::Get(L"About.BtnCheckUpdates"));
         SetDlgItemTextW(hwnd, IDCANCEL, Lang::Get(L"About.BtnClose"));
@@ -64,16 +60,19 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SendDlgItemMessageW(hwnd, IDC_APP_NAME, WM_SETFONT, HandleToWParam(data->hFont), TRUE);
         }
 
-        std::wstring verStr = std::wstring(Lang::Get(L"About.VersionPrefix")) + Utf8ToWide(APP_VERSION);
-        SetDlgItemTextW(hwnd, IDC_VERSION, verStr.c_str());
+        SetDlgItemTextW(hwnd, IDC_VERSION, Utf8ToWide(APP_VERSION).c_str());
+
+        int labelLeft = GetChildRect(hwnd, IDC_STATIC_HOMEPAGE).left;
+        int maxW      = MeasureMaxLabelWidth(hwnd, {IDC_STATIC_HOMEPAGE, IDC_STATIC_VERSION});
+        int vx        = labelLeft + maxW + 4;
+        MoveChildrenToX(hwnd, {IDC_HOMEPAGE, IDC_VERSION}, vx);
 
         if (data->autoCheckUpdates) {
             SendDlgItemMessageW(hwnd, IDC_AUTO_CHECK, BM_SETCHECK, BST_CHECKED, 0);
         }
 
-        data->hHomepage = GetDlgItem(hwnd, IDC_HOMEPAGE);
-        GetWindowRect(data->hHomepage, &data->homepageRect);
-        MapWindowPoints(HWND_DESKTOP, hwnd, reinterpret_cast<LPPOINT>(&data->homepageRect), 2); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        data->hHomepage    = GetDlgItem(hwnd, IDC_HOMEPAGE);
+        data->homepageRect = GetChildRect(hwnd, data->hHomepage);
 
         return TRUE;
     }

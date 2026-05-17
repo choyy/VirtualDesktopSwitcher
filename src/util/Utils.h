@@ -92,3 +92,40 @@ template <typename T>
 inline INT_PTR PtrToIntPtr(T value) {
     return reinterpret_cast<INT_PTR>(value); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 }
+
+// --- Dialog Layout Helpers ---
+
+inline RECT GetChildRect(HWND parent, int childId) {
+    RECT rc{};
+    HWND hChild = GetDlgItem(parent, childId);
+    if (hChild != nullptr) {
+        GetWindowRect(hChild, &rc);
+        MapWindowPoints(HWND_DESKTOP, parent, reinterpret_cast<LPPOINT>(&rc), 2); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    }
+    return rc;
+}
+
+inline RECT GetChildRect(HWND parent, HWND hChild) {
+    RECT rc{};
+    if (hChild != nullptr) {
+        GetWindowRect(hChild, &rc);
+        MapWindowPoints(HWND_DESKTOP, parent, reinterpret_cast<LPPOINT>(&rc), 2); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    }
+    return rc;
+}
+
+inline void MoveWindowTo(HWND hWnd, int x, int y) {
+    SetWindowPos(hWnd, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+}
+
+inline void MoveChildrenToX(HWND parent, std::initializer_list<int> ids, int x) {
+    for (int id : ids) {
+        HWND h = GetDlgItem(parent, id);
+        if (h == nullptr) { continue; }
+        RECT rc = GetChildRect(parent, h);
+        MoveWindowTo(h, x, rc.top);
+    }
+}
+
+int MeasureLabelWidth(HWND parent, int id);
+int MeasureMaxLabelWidth(HWND parent, std::initializer_list<int> ids);

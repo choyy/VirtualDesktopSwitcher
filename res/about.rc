@@ -7,6 +7,7 @@
 
 #define IDC_HOMEPAGE        102
 #define IDC_VERSION         103
+#define IDC_STATIC_VERSION  106
 #define IDC_ABOUT_ICON      104
 #define IDC_ABOUT_TITLE     105
 
@@ -23,9 +24,10 @@ BEGIN
     ICON          101,                              IDC_ABOUT_ICON,         12, 12,  44, 48
     LTEXT         "Virtual Desktop Switcher",       IDC_ABOUT_TITLE,        84, 14, 190, 18
     LTEXT         "Homepage:",                      IDC_STATIC_HOMEPAGE,    84, 36,  55, 10
-    LTEXT         "github.com/choyy/VirtualDesktopSwitcher", IDC_HOMEPAGE, 139, 36, 130, 10, 0x100
-    LTEXT         "",                               IDC_VERSION,            84, 50, 100, 10
-    CONTROL       "Auto check updates",             IDC_AUTO_CHECK,   "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 155, 48, 115, 12
+    LTEXT         "github.com/choyy/VirtualDesktopSwitcher", IDC_HOMEPAGE, 125, 36, 150, 10, 0x100
+    LTEXT         "Version:",                       IDC_STATIC_VERSION,     84, 50,  40, 10
+    LTEXT         "",                               IDC_VERSION,           124, 50,  80, 10
+    CONTROL       "Auto check updates",             IDC_AUTO_CHECK,   "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 165, 48, 115, 12
     PUSHBUTTON    "Check updates",                  IDC_CHECK_UPDATES,      55, 82,  85, 15
     DEFPUSHBUTTON "Close",                          IDCANCEL,              160, 82,  75, 15
 END

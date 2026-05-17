@@ -191,6 +191,41 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         SendDlgItemMessageW(hwnd, IDC_SPIN, UDM_SETRANGE, 0, MAKELPARAM(100, 0));
         SendDlgItemMessageW(hwnd, IDC_SPIN, UDM_SETPOS, 0, data->result.charSpacing);
+
+        int labelLeft = GetChildRect(hwnd, IDC_ST_CUR_SYM).left;
+        int maxW      = MeasureLabelWidth(hwnd, IDC_ST_OTH_SYM);
+        int vx        = labelLeft + maxW + 4;
+        int dx        = vx - GetChildRect(hwnd, IDC_CUR_SYM).left;
+
+        MoveChildrenToX(hwnd, {IDC_CUR_SYM, IDC_OTH_SYM, IDC_EMP_SYM, IDC_FONT, IDC_SPACING, IDC_MODKEY_ALT}, vx);
+        if (dx != 0) {
+            for (int id : {IDC_SPIN, IDC_MODKEY_ALT + 1, IDC_MODKEY_ALT + 2, IDC_MODKEY_ALT + 3}) {
+                HWND h = GetDlgItem(hwnd, id);
+                if (h == nullptr) { break; }
+                RECT rc = GetChildRect(hwnd, h);
+                MoveWindowTo(h, rc.left + dx, rc.top);
+            }
+        }
+
+        int maxRight = GetChildRect(hwnd, IDC_CUR_SYM).right;
+
+        RECT rcClient;
+        GetClientRect(hwnd, &rcClient);
+        int newClientW = maxRight + 50;
+        if (newClientW < rcClient.right) {
+            int shrink = rcClient.right - newClientW;
+
+            RECT rcOk     = GetChildRect(hwnd, IDOK);
+            RECT rcCancel = GetChildRect(hwnd, IDCANCEL);
+            MoveWindowTo(GetDlgItem(hwnd, IDOK), rcOk.left - shrink / 2, rcOk.top);
+            MoveWindowTo(GetDlgItem(hwnd, IDCANCEL), rcCancel.left - shrink / 2, rcCancel.top);
+
+            RECT rcDlg;
+            GetWindowRect(hwnd, &rcDlg);
+            int newW = newClientW + (rcDlg.right - rcDlg.left - rcClient.right);
+            SetWindowPos(hwnd, nullptr, rcDlg.left + shrink / 2, rcDlg.top, newW, rcDlg.bottom - rcDlg.top, SWP_NOZORDER);
+        }
+
         return TRUE;
     }
 

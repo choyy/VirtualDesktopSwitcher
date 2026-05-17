@@ -97,6 +97,30 @@ size_t ParseMultiColorString(const std::wstring &colorStr, COLORREF *outColors, 
     return count;
 }
 
+int MeasureLabelWidth(HWND parent, int id) {
+    HWND h = GetDlgItem(parent, id);
+    if (h == nullptr) { return 0; }
+    int len = GetWindowTextLengthW(h);
+    if (len <= 0) { return 0; }
+    std::wstring txt(len + 1, L'\0');
+    GetWindowTextW(h, txt.data(), len + 1);
+    HDC   hdc = GetDC(h);
+    auto *hf  = reinterpret_cast<HFONT>(SendMessageW(h, WM_GETFONT, 0, 0)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+    if (hf != nullptr) { SelectObject(hdc, hf); }
+    SIZE sz{};
+    GetTextExtentPoint32W(hdc, txt.c_str(), len, &sz);
+    ReleaseDC(h, hdc);
+    return static_cast<int>(sz.cx);
+}
+
+int MeasureMaxLabelWidth(HWND parent, std::initializer_list<int> ids) {
+    int maxW = 0;
+    for (int id : ids) {
+        maxW = std::max<int>(MeasureLabelWidth(parent, id), maxW);
+    }
+    return maxW;
+}
+
 COLORREF InterpolateGradientColor(const COLORREF *colors, size_t colorCount, float t) {
     if (colorCount <= 1) { return colors[0]; }
     t          = std::clamp(t, 0.0f, 1.0f);
