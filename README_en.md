@@ -26,9 +26,9 @@ To build from source, see [Building from Source](#building-from-source) below.
 2. The desktop indicator appears on screen, and the program icon shows in the system tray
 3. Use `Alt + 1` ~ `Alt + 9` to switch between virtual desktops
 4. Right-click the tray icon to configure:
-   - Adjust indicator **position**, **size**, and **color**
-   - Toggle auto-start
-5. Double-click the tray icon to quickly show/hide the indicator
+   - Adjust indicator **position**, **size**, **style**, **hotkeys**, and **display**
+   - Toggle auto-start and run as administrator
+5. Double-click the tray icon to quickly **show/hide the indicator**
 
 All settings and log files are saved to `%LOCALAPPDATA%\VirtualDesktopSwitcher`.
 
@@ -58,7 +58,7 @@ Some applications (e.g., Task Manager) ignore keyboard shortcuts when the switch
 - **Run as admin**: Right-click tray icon → `Run as admin`. This setting is persisted — the app will auto-elevate on next launch (UAC prompt will appear).
 - **Auto-start (normal privileges)**: Writes to registry `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
 - **Auto-start (admin privileges)**: When auto-start is enabled under admin mode, the app automatically creates a **Task Scheduler** login task (`/rl highest`), so startup has no UAC prompts.
-- **Clean uninstall**: Right-click → `Exit` automatically removes both registry keys and scheduled tasks. The program can then be safely deleted without leaving traces.
+- **Clean uninstall**: Tray icon right-click → `Exit` automatically removes both registry keys and scheduled tasks. The program can then be safely deleted without leaving traces.
 
 ## FAQ
 
@@ -77,6 +77,16 @@ Disable taskbar flashing in Windows Settings:
 
 **Settings → System → Multitasking → Desktops → On the taskbar, show all open windows**
 Change the dropdown to **"On all desktops"** to see window icons from other virtual desktops on the taskbar.
+
+</details>
+
+<details>
+<summary><b>Windows virtual desktop keyboard shortcuts</b></summary>
+
+- Open virtual desktop view: `Win + Tab`
+- Create a new virtual desktop: `Win + Ctrl + D`
+- Switch to previous/next virtual desktop: `Win + Ctrl + ← / →`
+- Close current virtual desktop: `Win + Ctrl + F4`
 
 </details>
 
