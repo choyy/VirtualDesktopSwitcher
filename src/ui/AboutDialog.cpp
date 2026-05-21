@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "config.h"
 #include "util/Lang.h"
 #include "util/UpdateChecker.h"
 #include "util/Utils.h"

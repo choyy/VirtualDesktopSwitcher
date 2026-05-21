@@ -3,6 +3,7 @@
 #include <array>
 #include <string>
 
+#include "config.h"
 #include "util/Lang.h"
 
 namespace {

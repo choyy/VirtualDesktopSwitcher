@@ -1,0 +1,32 @@
+#pragma code_page(65001)
+#include <windows.h>
+#include "config.h"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION      APP_VERSION_MAJOR,APP_VERSION_MINOR,APP_VERSION_ALTER
+ PRODUCTVERSION   APP_VERSION_MAJOR,APP_VERSION_MINOR,APP_VERSION_ALTER
+ FILEFLAGSMASK    0x3fL
+ FILEFLAGS        0x0L
+ FILEOS           VOS_NT_WINDOWS32
+ FILETYPE         VFT_APP
+ FILESUBTYPE      0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "FileDescription",  "Virtual Desktop Switcher"
+            VALUE "FileVersion",      APP_VERSION
+            VALUE "InternalName",     "VirtualDesktopSwitcher"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 Chooyy. MIT License."
+            VALUE "OriginalFilename", "VirtualDesktopSwitcher.exe"
+            VALUE "ProductName",      "VirtualDesktopSwitcher"
+            VALUE "ProductVersion",   APP_VERSION
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0804, 1200
+        VALUE "Translation", 0x0409, 1200
+    END
+END
