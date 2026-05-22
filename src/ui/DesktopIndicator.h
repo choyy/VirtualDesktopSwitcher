@@ -15,11 +15,16 @@
 class FontRenderer;
 
 struct MonitorLayer {
-    HWND hwnd{};
-    RECT monitor{}; // rcMonitor
-    RECT work{};    // rcWork (excluding taskbar)
-    int  dpi{};     // LOGPIXELSY
-    bool isPrimary = false;
+    HWND                 hwnd{};
+    RECT                 monitor{}; // rcMonitor
+    RECT                 work{};    // rcWork (excluding taskbar)
+    int                  dpi{};     // LOGPIXELSY
+    bool                 isPrimary     = false;
+    bool                 bgSampleValid = false;
+    double               bgLch_L       = -1.0; // CIE L* (-1 = uninitialized)
+    double               bgLch_C       = 0.0;  // CIE C* (chroma)
+    std::array<float, 5> smoothV{};            // per-color smoothed V
+    std::array<float, 5> smoothS{};            // per-color smoothed S
 };
 
 class DesktopIndicator {
@@ -50,6 +55,7 @@ public:
     void SetShowMode(ShowMode mode);
     void ShowTemporarily();
     void SetAnimMode(bool on);
+    void SetAutoContrast(bool on);
     HWND CreateMonitorWindow(HINSTANCE hInst);
 
     [[nodiscard]] bool IsEditMode() const { return m_editMode; }
@@ -68,15 +74,22 @@ private:
     bool                           m_dragging   = false;
     POINT                          m_dragOffset = {.x = 0, .y = 0};
 
-    void ApplyShowMode(ShowMode mode);
-    void RebuildText();
-    void Render();
-    void ApplyPresetPosition();
-    void MoveByDelta(int dx, int dy);
-    void EnumerateMonitors(HINSTANCE hInstance);
+    void         ApplyShowMode(ShowMode mode);
+    void         SampleBackground();
+    void         StartAnimTimer();
+    void         StartBgSampleTimer();
+    void         StopAnimTimer();
+    void         StopBgSampleTimer();
+    void         RebuildText();
+    std::wstring BuildLayerColors(MonitorLayer &layer, float hueOff, const std::array<COLORREF, 5> &baseColors, size_t colorCount) const;
+    void         Render();
+    void         ApplyPresetPosition();
+    void         MoveByDelta(int dx, int dy);
+    void         EnumerateMonitors(HINSTANCE hInstance);
 
     static void CALLBACK    AutoHideTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
     static void CALLBACK    AnimTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
+    static void CALLBACK    BgSampleTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
     LRESULT                 HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 };

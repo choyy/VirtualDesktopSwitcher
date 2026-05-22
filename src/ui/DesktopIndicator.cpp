@@ -2,11 +2,11 @@
 // Original: https://github.com/vladelaina/Catime
 #include "DesktopIndicator.h"
 
-#include <cmath>
 #include <shellscalingapi.h>
 #include <windowsx.h>
 
 #include <algorithm>
+#include <cmath>
 
 #include "util/DrawingTextSTB.h"
 #include "util/Log.h"
@@ -14,8 +14,13 @@
 
 namespace {
 
-constexpr UINT_PTR kAutoHideTimerId = 100;
-constexpr UINT_PTR kAnimTimerId     = 101;
+constexpr UINT_PTR kAutoHideTimerId  = 100;
+constexpr UINT_PTR kAnimTimerId      = 101;
+constexpr UINT_PTR kBgSampleTimerId  = 102;
+constexpr int      kAnimIntervalMs   = 50;
+constexpr int      kSampleIntervalMs = 2500;
+constexpr int      kAutoHideShow1sMs = 1000;
+constexpr int      kAutoHideShow3sMs = 3000;
 
 struct EnumCtx {
     std::vector<MonitorLayer> *vec;
@@ -72,8 +77,8 @@ void RGBToHSV(COLORREF rgb, float &h, float &s, float &v) {
     float r  = GetRValue(rgb) / 255.0f;
     float g  = GetGValue(rgb) / 255.0f;
     float b  = GetBValue(rgb) / 255.0f;
-    float mx = (std::max)({r, g, b});
-    float mn = (std::min)({r, g, b});
+    float mx = std::max({r, g, b});
+    float mn = std::min({r, g, b});
     float d  = mx - mn;
     v        = mx;
     s        = (mx > 0.001f) ? d / mx : 0.0f;
@@ -184,7 +189,7 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
         int  tw = 0, th = 0;
         auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
         m_renderer->Measure(spacedtext.c_str(), fs, &tw, &th);
-        int w                  = (std::max)(tw + 16, 50);
+        int w                  = std::max(tw + 16, 50);
         m_pCfg->windowPos.x    = m_layers[0].monitor.left + (m_layers[0].monitor.right - m_layers[0].monitor.left - w) / 2;
         m_pCfg->windowPos.y    = m_layers[0].monitor.top - 4;
         m_pCfg->posInitialized = true;
@@ -207,7 +212,7 @@ void DesktopIndicator::ShowTemporarily() {
     if (m_pCfg == nullptr || m_pCfg->showMode < ShowMode::Show1s || m_layers.empty()) { return; }
     for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
     KillTimer(m_layers[0].hwnd, kAutoHideTimerId);
-    int ms = (m_pCfg->showMode == ShowMode::Show1s) ? 1000 : 3000;
+    int ms = (m_pCfg->showMode == ShowMode::Show1s) ? kAutoHideShow1sMs : kAutoHideShow3sMs;
     SetTimer(m_layers[0].hwnd, kAutoHideTimerId, ms, AutoHideTimer);
 }
 
@@ -216,10 +221,12 @@ void DesktopIndicator::ApplyShowMode(ShowMode mode) {
     if (!m_layers.empty()) { KillTimer(m_layers[0].hwnd, kAutoHideTimerId); }
     if (mode == ShowMode::AlwaysHide) {
         for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_HIDE); }
-        if (!m_layers.empty()) { KillTimer(m_layers[0].hwnd, kAnimTimerId); }
+        StopAnimTimer();
+        StopBgSampleTimer();
     } else {
         for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
         if (mode >= ShowMode::Show1s) { ShowTemporarily(); }
+        StartBgSampleTimer();
     }
 }
 
@@ -242,9 +249,23 @@ void DesktopIndicator::SetAnimMode(bool on) {
     m_pCfg->animMode = on ? 1 : 0;
     if (!m_layers.empty()) {
         if (on) {
-            SetTimer(m_layers[0].hwnd, kAnimTimerId, 50, AnimTimer);
+            StartAnimTimer();
         } else {
-            KillTimer(m_layers[0].hwnd, kAnimTimerId);
+            StopAnimTimer();
+        }
+    }
+    Render();
+}
+
+void DesktopIndicator::SetAutoContrast(bool on) {
+    if (m_pCfg == nullptr) { return; }
+    m_pCfg->autoContrast = on;
+    if (!m_layers.empty()) {
+        if (on && m_pCfg->showMode != ShowMode::AlwaysHide) {
+            StartBgSampleTimer();
+            SampleBackground();
+        } else {
+            StopBgSampleTimer();
         }
     }
     Render();
@@ -255,6 +276,15 @@ void CALLBACK DesktopIndicator::AnimTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR /*i
     if (overlay == nullptr || overlay->m_pCfg == nullptr || overlay->m_pCfg->animMode == 0) { return; }
     if (overlay->m_pCfg->showMode == ShowMode::AlwaysHide) { return; }
     if (overlay->m_pCfg->showMode >= ShowMode::Show1s && IsWindowVisible(hwnd) == 0) { return; }
+    overlay->Render();
+}
+
+void CALLBACK DesktopIndicator::BgSampleTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR /*idEvent*/, DWORD /*dwTime*/) {
+    auto *overlay = GetWndUserData<DesktopIndicator>(hwnd);
+    if (overlay == nullptr || overlay->m_pCfg == nullptr || !overlay->m_pCfg->autoContrast) { return; }
+    if (overlay->m_pCfg->showMode == ShowMode::AlwaysHide) { return; }
+    if (overlay->m_pCfg->showMode >= ShowMode::Show1s && IsWindowVisible(hwnd) == 0) { return; }
+    overlay->SampleBackground();
     overlay->Render();
 }
 
@@ -376,8 +406,8 @@ void DesktopIndicator::ApplyPresetPosition() {
         int fs = MulDiv(m_pCfg->fontSize, l.dpi, 96);
         int tw = 0, th = 0;
         m_renderer->Measure(spacedtext.c_str(), fs, &tw, &th);
-        int w = (std::max)(tw + padding * 2, 50);
-        int h = (std::max)(th + padding * 2, 20);
+        int w = std::max(tw + padding * 2, 50);
+        int h = std::max(th + padding * 2, 20);
 
         POINT pos = CalcPresetPos(preset, l.monitor, l.work, w, h);
         if (&l == m_layers.data()) { m_pCfg->windowPos = pos; }
@@ -402,6 +432,150 @@ void DesktopIndicator::MoveByDelta(int dx, int dy) {
     m_pCfg->positionPreset = -1;
 }
 
+void DesktopIndicator::SampleBackground() {
+    HDC hdcScreen = GetDC(nullptr);
+    if (hdcScreen == nullptr) { return; }
+
+    for (auto &l : m_layers) {
+        RECT wr;
+        GetWindowRect(l.hwnd, &wr);
+        int wx = wr.left, wy = wr.top;
+        int ww = wr.right - wr.left, wh = wr.bottom - wr.top;
+        if (ww <= 0 || wh <= 0) { continue; }
+
+        constexpr int expand = 8;
+        int           cx = wx - expand, cy = wy - expand;
+        int           cw = ww + expand * 2, ch = wh + expand * 2;
+
+        HDC hdcMem = CreateCompatibleDC(hdcScreen);
+        if (hdcMem == nullptr) { continue; }
+
+        HBITMAP hBmp = CreateCompatibleBitmap(hdcScreen, cw, ch);
+        if (hBmp == nullptr) {
+            DeleteDC(hdcMem);
+            continue;
+        }
+
+        auto *oldBmp = SelectObject(hdcMem, hBmp);
+        BOOL  ok     = BitBlt(hdcMem, 0, 0, cw, ch, hdcScreen, cx, cy, SRCCOPY);
+
+        if (ok != 0) {
+            BITMAPINFO bmi              = {};
+            bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+            bmi.bmiHeader.biWidth       = cw;
+            bmi.bmiHeader.biHeight      = -ch;
+            bmi.bmiHeader.biPlanes      = 1;
+            bmi.bmiHeader.biBitCount    = 32;
+            bmi.bmiHeader.biCompression = BI_RGB;
+
+            std::vector<DWORD> pixels(static_cast<size_t>(cw) * ch);
+            if (GetDIBits(hdcMem, hBmp, 0, ch, pixels.data(), &bmi, DIB_RGB_COLORS) != 0) {
+                int totalR = 0, totalG = 0, totalB = 0, count = 0;
+                int innerL = expand, innerT = expand;
+                int innerR = expand + ww, innerB = expand + wh;
+                for (int y = 0; y < ch; ++y) {
+                    for (int x = 0; x < cw; ++x) {
+                        if (x >= innerL && x < innerR && y >= innerT && y < innerB) { continue; }
+                        DWORD px = pixels[static_cast<size_t>(y) * cw + x];
+                        totalR += GetRValue(px);
+                        totalG += GetGValue(px);
+                        totalB += GetBValue(px);
+                        ++count;
+                    }
+                }
+                if (count > 0) {
+                    COLORREF avgColor = RGB(totalR / count, totalG / count, totalB / count);
+                    double   h{};
+                    RGBToLCh(avgColor, l.bgLch_L, l.bgLch_C, h);
+                    l.bgSampleValid = true;
+                }
+            }
+        }
+
+        SelectObject(hdcMem, oldBmp);
+        DeleteObject(hBmp);
+        DeleteDC(hdcMem);
+    }
+    ReleaseDC(nullptr, hdcScreen);
+}
+
+void DesktopIndicator::StartAnimTimer() {
+    if ((m_pCfg != nullptr) && m_pCfg->animMode != 0
+        && m_pCfg->showMode != ShowMode::AlwaysHide
+        && !m_layers.empty()) {
+        SetTimer(m_layers[0].hwnd, kAnimTimerId, kAnimIntervalMs, AnimTimer);
+    }
+}
+
+void DesktopIndicator::StartBgSampleTimer() {
+    if ((m_pCfg != nullptr) && m_pCfg->autoContrast
+        && m_pCfg->showMode != ShowMode::AlwaysHide
+        && !m_layers.empty()) {
+        SetTimer(m_layers[0].hwnd, kBgSampleTimerId, kSampleIntervalMs, BgSampleTimer);
+    }
+}
+
+void DesktopIndicator::StopAnimTimer() {
+    if (!m_layers.empty()) {
+        KillTimer(m_layers[0].hwnd, kAnimTimerId);
+    }
+}
+
+void DesktopIndicator::StopBgSampleTimer() {
+    if (!m_layers.empty()) {
+        KillTimer(m_layers[0].hwnd, kBgSampleTimerId);
+    }
+    for (auto &l : m_layers) { l.bgSampleValid = false; }
+}
+
+std::wstring DesktopIndicator::BuildLayerColors(MonitorLayer &layer, float hueOff,
+                                                const std::array<COLORREF, 5> &baseColors, size_t colorCount) const {
+    if (m_hasPreview) { return m_previewColor; }
+    if (colorCount == 0) { return m_pCfg->textColor; }
+
+    std::wstring colorStr;
+    for (size_t i = 0; i < colorCount; ++i) {
+        float h{}, s{}, v{};
+        RGBToHSV(baseColors.at(i), h, s, v);
+
+        // 呼吸色相旋转
+        if (m_pCfg->animMode != 0) {
+            h = fmod(h + hueOff, 360.0f);
+        }
+
+        // HSV 自适应: 基于背景 L* 和 C*
+        if (m_pCfg->autoContrast && layer.bgSampleValid) {
+            double bgL = layer.bgLch_L;
+            double bgC = layer.bgLch_C;
+
+            // V 调整: 亮底压暗, 暗底提亮
+            v = (bgL > 60.0) ? std::clamp(v, 0.25f, 0.70f)
+                             : std::clamp(v, 0.50f, 0.90f);
+
+            // S 调整: 低饱和度拉升（放过灰度色）
+            if (s > 0.05f) {
+                float targetS = 0.25f + static_cast<float>(bgC * 0.004);
+                targetS       = (std::clamp)(targetS, 0.25f, 0.75f);
+                if (s < targetS) { s += (targetS - s) * 0.5f; }
+            }
+
+            // 平滑: 保留 80% 上帧状态 + 20% 新值
+            if (layer.smoothV.at(i) > 0.01f) {
+                v = layer.smoothV.at(i) * 0.8f + v * 0.2f;
+                s = layer.smoothS.at(i) * 0.8f + s * 0.2f;
+            }
+            layer.smoothV.at(i) = v;
+            layer.smoothS.at(i) = s;
+        }
+        COLORREF               c = HSVToRGB(h, s, v);
+        std::array<wchar_t, 8> buf{};
+        swprintf_s(buf.data(), buf.size(), L"#%02X%02X%02X", GetRValue(c), GetGValue(c), GetBValue(c)); // NOLINT
+        if (i > 0) { colorStr += L'_'; }
+        colorStr += buf.data();
+    }
+    return colorStr;
+}
+
 void DesktopIndicator::Render() {
     if (m_layers.empty() || m_pCfg == nullptr) { return; }
 
@@ -409,31 +583,17 @@ void DesktopIndicator::Render() {
 
     if (m_renderer == nullptr) { return; }
 
-    std::wstring colorStr;
-    if (m_hasPreview) {
-        colorStr = m_previewColor;
-    } else if (m_pCfg->animMode != 0) {
-        std::array<COLORREF, 5> colors{};
-        size_t                  cnt = ParseMultiColorString(m_pCfg->textColor, colors.data(), 5);
-        if (cnt > 0) {
-            ULONGLONG ms     = GetTickCount64();
-            auto      hueOff = static_cast<float>(fmod(static_cast<double>(ms) / 12000.0 * 360.0, 360.0));
-            colorStr.clear();
-            for (size_t i = 0; i < cnt; ++i) {
-                float h{}, s{}, v{};
-                RGBToHSV(colors.at(i), h, s, v);
-                COLORREF               c = HSVToRGB(h + hueOff, s, v);
-                std::array<wchar_t, 8> buf{};
-                swprintf_s(buf.data(), buf.size(), L"#%02X%02X%02X", GetRValue(c), GetGValue(c), GetBValue(c)); // NOLINT
-                if (i > 0) { colorStr += L'_'; }
-                colorStr += buf.data();
-            }
-        } else {
-            colorStr = m_pCfg->textColor;
-        }
-    } else {
-        colorStr = m_pCfg->textColor;
+    // Shared hue offset for breathing
+    float hueOff = 0.0f;
+    if (m_pCfg->animMode != 0) {
+        ULONGLONG ms = GetTickCount64();
+        hueOff       = static_cast<float>(fmod(static_cast<double>(ms) / 12000.0 * 360.0, 360.0));
     }
+
+    // Parse base colors once (shared across layers)
+    std::array<COLORREF, 5> baseColors{};
+    size_t                  colorCount = ParseMultiColorString(m_pCfg->textColor, baseColors.data(), 5);
+
     int padding = 8;
 
     BLENDFUNCTION blend       = {};
@@ -445,11 +605,13 @@ void DesktopIndicator::Render() {
     HDC hdcMem    = (hdcScreen != nullptr) ? CreateCompatibleDC(hdcScreen) : nullptr;
 
     for (auto &l : m_layers) {
+        auto colorStr = BuildLayerColors(l, hueOff, baseColors, colorCount);
+
         int fontSize = MulDiv(m_pCfg->fontSize, l.dpi, 96);
         int textW = 0, textH = 0;
         m_renderer->Measure(spacedtext.c_str(), fontSize, &textW, &textH);
-        int w = (std::max)(textW + padding * 2, 50);
-        int h = (std::max)(textH + padding * 2, 20);
+        int w = std::max(textW + padding * 2, 50);
+        int h = std::max(textH + padding * 2, 20);
 
         if (hdcMem == nullptr) { continue; }
 
@@ -523,9 +685,8 @@ void DesktopIndicator::Rebuild() {
                          SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
     }
-    if (m_pCfg != nullptr && m_pCfg->animMode != 0 && m_pCfg->showMode != ShowMode::AlwaysHide && !m_layers.empty()) {
-        SetTimer(m_layers[0].hwnd, kAnimTimerId, 50, AnimTimer);
-    }
+    StartAnimTimer();
+    StartBgSampleTimer();
 }
 
 LRESULT CALLBACK DesktopIndicator::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {

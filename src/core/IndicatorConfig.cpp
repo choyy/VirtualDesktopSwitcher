@@ -29,6 +29,7 @@ void IndicatorConfig::LoadFromIni() {
     positionPreset = ReadIniInt(L"Display", L"PositionPreset", 1);
     showMode       = static_cast<ShowMode>(ReadIniInt(L"Display", L"ShowMode", 0));
     animMode       = ReadIniInt(L"Display", L"AnimMode", 1);
+    autoContrast   = ReadIniInt(L"Display", L"AutoContrast", 1) != 0;
 }
 
 void IndicatorConfig::SaveToIni() const {
@@ -44,4 +45,5 @@ void IndicatorConfig::SaveToIni() const {
     WriteIniInt(L"Display", L"PositionPreset", positionPreset);
     WriteIniInt(L"Display", L"ShowMode", static_cast<int>(showMode));
     WriteIniInt(L"Display", L"AnimMode", animMode);
+    WriteIniInt(L"Display", L"AutoContrast", autoContrast ? 1 : 0);
 }

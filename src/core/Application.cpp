@@ -273,6 +273,9 @@ void Application::SetupTrayCallbacks() {
     m_pTrayIcon->SetAnimModeCallback([this](bool on) {
         if (m_pOverlay) { m_pOverlay->SetAnimMode(on); }
     });
+    m_pTrayIcon->SetAutoContrastCallback([this](bool on) {
+        if (m_pOverlay) { m_pOverlay->SetAutoContrast(on); }
+    });
 }
 
 bool Application::Initialize() {
@@ -296,6 +299,7 @@ bool Application::Initialize() {
 
     if (overlayOk) {
         if (m_indicatorCfg.animMode != 0) { m_pOverlay->SetAnimMode(true); }
+        if (m_indicatorCfg.autoContrast) { m_pOverlay->SetAutoContrast(true); }
     }
 
     SetupTrayCallbacks();

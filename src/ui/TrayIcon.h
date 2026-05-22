@@ -35,6 +35,7 @@ public:
     void SetAboutCallback(std::function<void()> cb) { m_aboutFn = std::move(cb); }
     void SetShowModeCallback(std::function<void(int)> cb) { m_showModeFn = std::move(cb); }
     void SetAnimModeCallback(std::function<void(bool)> cb) { m_animModeFn = std::move(cb); }
+    void SetAutoContrastCallback(std::function<void(bool)> cb) { m_autoContrastFn = std::move(cb); }
 
 private:
     NOTIFYICONDATAW m_nid{};
@@ -51,6 +52,7 @@ private:
     std::function<void()>                     m_aboutFn;
     std::function<void(int)>                  m_showModeFn;
     std::function<void(bool)>                 m_animModeFn;
+    std::function<void(bool)>                 m_autoContrastFn;
 
     void BuildMenu();
     void HandleCommand(WPARAM wParam);

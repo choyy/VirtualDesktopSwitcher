@@ -1,6 +1,7 @@
 #include "util/Utils.h"
 
 #include <algorithm>
+#include <cmath>
 
 void ActivateWindow(HWND hwnd) {
     HWND        foreHwnd     = GetForegroundWindow();
@@ -138,4 +139,92 @@ COLORREF InterpolateGradientColor(const COLORREF *colors, size_t colorCount, flo
         static_cast<int>(GetRValue(colors[idx]) * s + GetRValue(colors[idx + 1]) * segT),
         static_cast<int>(GetGValue(colors[idx]) * s + GetGValue(colors[idx + 1]) * segT),
         static_cast<int>(GetBValue(colors[idx]) * s + GetBValue(colors[idx + 1]) * segT));
+}
+
+namespace {
+
+constexpr double kPi = 3.14159265358979323846;
+constexpr double kXn = 0.95047;
+constexpr double kYn = 1.0;
+constexpr double kZn = 1.08883;
+
+double SRGBToLinear(double c) {
+    if (c <= 0.04045) { return c / 12.92; }
+    return std::pow((c + 0.055) / 1.055, 2.4);
+}
+
+double LinearToSRGB(double c) {
+    if (c <= 0.0031308) { return c * 12.92; }
+    return 1.055 * std::pow(c, 1.0 / 2.4) - 0.055;
+}
+
+double LabF(double t) {
+    constexpr double delta = 6.0 / 29.0;
+    if (t > delta * delta * delta) { return std::cbrt(t); }
+    return t / (3.0 * delta * delta) + 4.0 / 29.0;
+}
+
+double LabFInv(double t) {
+    constexpr double delta = 6.0 / 29.0;
+    if (t > delta) { return t * t * t; }
+    return 3.0 * delta * delta * (t - 4.0 / 29.0);
+}
+
+} // namespace
+
+void RGBToLCh(COLORREF color, double &L, double &C, double &h) {
+    // sRGB → Linear
+    double r = SRGBToLinear(GetRValue(color) / 255.0);
+    double g = SRGBToLinear(GetGValue(color) / 255.0);
+    double b = SRGBToLinear(GetBValue(color) / 255.0);
+
+    // Linear → XYZ (D65)
+    double X = 0.4124564 * r + 0.3575761 * g + 0.1804375 * b;
+    double Y = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b;
+    double Z = 0.0193339 * r + 0.1191920 * g + 0.9503041 * b;
+
+    // XYZ → CIE L*a*b*
+    double fx = LabF(X / kXn);
+    double fy = LabF(Y / kYn);
+    double fz = LabF(Z / kZn);
+
+    L            = 116.0 * fy - 16.0;
+    double a     = 500.0 * (fx - fy);
+    double bStar = 200.0 * (fy - fz);
+
+    // Lab → LCh
+    C = std::sqrt(a * a + bStar * bStar);
+    h = std::atan2(bStar, a) * 180.0 / kPi;
+    if (h < 0) { h += 360.0; }
+}
+
+COLORREF LChToRGB(double L, double C, double h) {
+    // LCh → Lab
+    double hRad  = h * kPi / 180.0;
+    double a     = C * std::cos(hRad);
+    double bStar = C * std::sin(hRad);
+
+    // Lab → XYZ
+    double fy = (L + 16.0) / 116.0;
+    double fx = a / 500.0 + fy;
+    double fz = fy - bStar / 200.0;
+
+    double X = kXn * LabFInv(fx);
+    double Y = kYn * LabFInv(fy);
+    double Z = kZn * LabFInv(fz);
+
+    // XYZ → Linear sRGB
+    double r = 3.2404542 * X - 1.5371385 * Y - 0.4985314 * Z;
+    double g = -0.9692660 * X + 1.8760108 * Y + 0.0415560 * Z;
+    double b = 0.0556434 * X - 0.2040259 * Y + 1.0572252 * Z;
+
+    // Clamp & Linear → sRGB
+    r = std::clamp(r, 0.0, 1.0);
+    g = std::clamp(g, 0.0, 1.0);
+    b = std::clamp(b, 0.0, 1.0);
+
+    return RGB(
+        static_cast<int>(std::round(LinearToSRGB(r) * 255.0)),
+        static_cast<int>(std::round(LinearToSRGB(g) * 255.0)),
+        static_cast<int>(std::round(LinearToSRGB(b) * 255.0)));
 }

@@ -32,6 +32,7 @@ struct IndicatorConfig {
     int          positionPreset = -1;
     ShowMode     showMode       = ShowMode::AlwaysShow;
     int          animMode       = 1;
+    bool         autoContrast   = true;
 
     void LoadFromIni();
     void SaveToIni() const;

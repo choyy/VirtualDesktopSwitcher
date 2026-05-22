@@ -47,6 +47,11 @@ COLORREF ParseColorString(const std::wstring &colorStr);
 size_t   ParseMultiColorString(const std::wstring &colorStr, COLORREF *outColors, size_t maxColors);
 COLORREF InterpolateGradientColor(const COLORREF *colors, size_t colorCount, float t);
 
+// --- CIE LCh Color Space ---
+
+void     RGBToLCh(COLORREF color, double &L, double &C, double &h);
+COLORREF LChToRGB(double L, double C, double h);
+
 // --- System & Window Helpers ---
 
 inline std::wstring GetCurrentExePath() {

@@ -20,6 +20,7 @@ constexpr UINT WM_TRAY_RUNAS_ADMIN      = WM_USER + 8;
 constexpr UINT WM_TRAY_ANIM_MODE        = WM_USER + 9;
 constexpr UINT WM_TRAY_TOGGLE_SHOW      = WM_USER + 10;
 constexpr UINT WM_TRAY_RESET            = WM_USER + 11;
+constexpr UINT WM_TRAY_AUTO_CONTRAST    = WM_USER + 12;
 constexpr UINT CMD_SHOW_MODE_BASE       = WM_USER + 300;
 constexpr UINT CMD_SHOW_MODE_CUSTOM     = CMD_SHOW_MODE_BASE + static_cast<UINT>(ShowMode::Count);
 constexpr UINT CMD_POSITION_BASE        = WM_USER + 200;
@@ -195,6 +196,8 @@ void TrayIcon::BuildMenu() {
     AppendMenuW(hColorMenu, MF_SEPARATOR, 0, nullptr);
     bool animOn = ReadIniInt(L"Display", L"AnimMode", 1) != 0;
     AppendMenuW(hColorMenu, MF_STRING | (animOn ? MF_CHECKED : 0), WM_TRAY_ANIM_MODE, Lang::Get(L"Menu.BreathingRing"));
+    bool autoContrastOn = ReadIniInt(L"Display", L"AutoContrast", 1) != 0;
+    AppendMenuW(hColorMenu, MF_STRING | (autoContrastOn ? MF_CHECKED : 0), WM_TRAY_AUTO_CONTRAST, Lang::Get(L"Menu.AutoContrast"));
     AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hColorMenu), Lang::Get(L"Menu.Color")); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     AppendMenuW(m_hMenu, MF_STRING, WM_TRAY_SETTINGS, Lang::Get(L"Menu.Settings"));
@@ -369,6 +372,13 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
         bool nowOn = ReadIniInt(L"Display", L"AnimMode", 1) == 0;
         WriteIniInt(L"Display", L"AnimMode", nowOn ? 1 : 0);
         if (m_animModeFn) { m_animModeFn(nowOn); }
+        break;
+    }
+
+    case WM_TRAY_AUTO_CONTRAST: {
+        bool nowOn = ReadIniInt(L"Display", L"AutoContrast", 0) == 0;
+        WriteIniInt(L"Display", L"AutoContrast", nowOn ? 1 : 0);
+        if (m_autoContrastFn) { m_autoContrastFn(nowOn); }
         break;
     }
 
