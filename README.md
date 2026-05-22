@@ -16,11 +16,11 @@
 
 - **快捷键切换**：`Alt + 1` ~ `Alt + 9` 快速跳转到对应虚拟桌面
 - **桌面指示器**：使用不同的符号表示不同的虚拟桌面，可表示 **◉ 当前虚拟桌面**、**○ 非空桌面**和 **◌ 空桌面**，支持自定义位置、大小和样式
-- **极其轻量**：可执行文件 ~120KB，内存占用 ~2MB，零依赖、静默运行。
+- **极其轻量**：可执行文件 ~130KB，内存占用 ~2MB，零依赖、静默运行。
 
 ## 📦 安装
 
-从 [Releases](https://github.com/choyy/VirtualDesktopSwitcher/releases) 页面下载最新的 `VirtualDesktopSwitcher.exe`，放在任何位置，双击运行即可。
+从 [Releases](https://github.com/choyy/VirtualDesktopSwitcher/releases) 页面下载最新的 [VirtualDesktopSwitcher.exe](https://api.github.com/repos/choyy/VirtualDesktopSwitcher/releases/latest)，放在任何位置，双击运行即可。
 
 如需从源码编译，请参考下方 [编译](#编译) 部分。
 

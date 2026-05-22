@@ -4,23 +4,27 @@
 
 <h1 align="center">Windows 10/11 Virtual Desktop Switcher & Indicator</h1>
 
+<p align="center">
+  <b>English</b> | <a href="README.md">中文</a>
+</p>
+
 > A lightweight virtual desktop quick-switching tool for Windows 10/11. Jump to any desktop instantly with `Alt + 1~9`, with a customizable on-screen desktop status indicator.
 
 ![Preview](assets/demo.gif)
 
-## Features
+## ✨ Features
 
 - **Hotkey switching**: `Alt + 1` ~ `Alt + 9` to jump directly to the corresponding virtual desktop
-- **Desktop indicator**: Uses distinct symbols for different desktop states — **current** desktop, **non-empty** desktops, and **empty** desktops. Fully customizable position, size, and style.
-- **Extremely lightweight**: Executable ~120KB, memory footprint ~2MB, zero dependencies, runs silently in the background.
+- **Desktop indicator**: Uses distinct symbols for different desktop states — **◉ current** desktop, **○ non-empty** desktops, and **◌ empty** desktops. Fully customizable position, size, and style.
+- **Extremely lightweight**: Executable ~130KB, memory footprint ~2MB, zero dependencies, runs silently in the background.
 
-## Installation
+## 📦 Installation
 
-Download the latest `VirtualDesktopSwitcher.exe` from the [Releases](https://github.com/choyy/VirtualDesktopSwitcher/releases) page, place it anywhere, and double-click to run.
+Download the latest [VirtualDesktopSwitcher.exe](https://api.github.com/repos/choyy/VirtualDesktopSwitcher/releases/latest) from the [Releases](https://github.com/choyy/VirtualDesktopSwitcher/releases) page, place it anywhere, and double-click to run.
 
 To build from source, see [Building from Source](#building-from-source) below.
 
-## Usage
+## 🚀 Usage
 
 1. Launch `VirtualDesktopSwitcher.exe`
 2. The desktop indicator appears on screen, and the program icon shows in the system tray
@@ -32,7 +36,7 @@ To build from source, see [Building from Source](#building-from-source) below.
 
 All settings and log files are saved to `%LOCALAPPDATA%\VirtualDesktopSwitcher`.
 
-## Building from Source
+## 🔧 Building from Source
 
 ### Prerequisites
 
@@ -51,7 +55,7 @@ xmake project -k vsxmake
 
 Build output is located in the `build` directory.
 
-## Run as Administrator & Auto-start
+## ⚙️ Run as Administrator & Auto-start
 
 Some applications (e.g., Task Manager) ignore keyboard shortcuts when the switcher runs with normal privileges. Running as administrator resolves this.
 
@@ -60,7 +64,7 @@ Some applications (e.g., Task Manager) ignore keyboard shortcuts when the switch
 - **Auto-start (admin privileges)**: When auto-start is enabled under admin mode, the app automatically creates a **Task Scheduler** login task (`/rl highest`), so startup has no UAC prompts.
 - **Clean uninstall**: Tray icon right-click → `Exit` automatically removes both registry keys and scheduled tasks. The program can then be safely deleted without leaving traces.
 
-## FAQ
+## 💡 FAQ
 
 <details>
 <summary><b>Taskbar icons flash when switching desktops</b></summary>
@@ -90,6 +94,6 @@ Change the dropdown to **"On all desktops"** to see window icons from other virt
 
 </details>
 
-## Acknowledgments
+## 🤝 Acknowledgments
 
 The desktop indicator component is ported from [vladelaina](https://github.com/vladelaina)'s open-source project [Catime](https://github.com/vladelaina/Catime). Thanks to the original author for the excellent work!
