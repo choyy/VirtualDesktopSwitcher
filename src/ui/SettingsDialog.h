@@ -13,7 +13,7 @@ struct Result {
     std::wstring emptySymbol;
     std::wstring fontName;
     int          charSpacing = 0;
-    int          modKey      = 0;
+    uint8_t      modMask     = 1; // bitmask: 1=Alt, 2=Ctrl, 4=Shift, 8=Win
     bool         accepted    = false;
 };
 

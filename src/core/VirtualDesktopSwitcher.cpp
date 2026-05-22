@@ -41,8 +41,8 @@ HWND FindTopOnDesktop(const VirtualDesktopHelper *pHelper) {
 
 } // namespace
 
-VirtualDesktopSwitcher *VirtualDesktopSwitcher::s_active = nullptr;
-ModKey                  VirtualDesktopSwitcher::s_modKey = ModKey::Alt;
+VirtualDesktopSwitcher *VirtualDesktopSwitcher::s_active  = nullptr;
+ModMask                 VirtualDesktopSwitcher::s_modMask = ModMask::Alt;
 
 VirtualDesktopSwitcher::VirtualDesktopSwitcher()
     : m_pVDeskHelper(std::make_unique<VirtualDesktopHelper>()) {
@@ -68,14 +68,10 @@ LRESULT CALLBACK VirtualDesktopSwitcher::LowLevelKeyboardProc(int nCode, WPARAM 
     const bool alt   = (pKeyboard->flags & LLKHF_ALTDOWN) != 0 || (static_cast<UINT>(GetAsyncKeyState(VK_MENU)) & 0x8000u) != 0;
     const bool ctrl  = (static_cast<UINT>(GetAsyncKeyState(VK_CONTROL)) & 0x8000u) != 0;
     const bool shift = (static_cast<UINT>(GetAsyncKeyState(VK_SHIFT)) & 0x8000u) != 0;
+    const bool win   = (static_cast<UINT>(GetAsyncKeyState(VK_LWIN)) & 0x8000u) != 0 || (static_cast<UINT>(GetAsyncKeyState(VK_RWIN)) & 0x8000u) != 0;
 
-    bool match = false;
-    switch (s_modKey) {
-    case ModKey::Alt: match = alt && !ctrl && !shift; break;
-    case ModKey::Ctrl: match = ctrl && !alt && !shift; break;
-    case ModKey::CtrlAlt: match = ctrl && alt && !shift; break;
-    case ModKey::AltShift: match = alt && shift && !ctrl; break;
-    }
+    uint8_t held  = (alt ? ModMask::Alt : 0u) | (ctrl ? ModMask::Ctrl : 0u) | (shift ? ModMask::Shift : 0u) | (win ? ModMask::Win : 0u);
+    bool    match = held != 0 && held == s_modMask;
 
     if (match && pKeyboard->vkCode >= '1' && pKeyboard->vkCode <= '9') {
         const int desktopIndex = static_cast<int>(pKeyboard->vkCode - '1');
@@ -86,7 +82,8 @@ LRESULT CALLBACK VirtualDesktopSwitcher::LowLevelKeyboardProc(int nCode, WPARAM 
     return CallNextHookEx(s_active->m_hHook, nCode, wParam, lParam);
 }
 
-bool VirtualDesktopSwitcher::InstallHook() {
+bool VirtualDesktopSwitcher::InstallHook(HWND hwnd) {
+    m_hwnd  = hwnd;
     m_hHook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, GetModuleHandle(nullptr), 0);
     return m_hHook != nullptr;
 }
@@ -100,7 +97,7 @@ void VirtualDesktopSwitcher::UninstallHook() {
 
 bool VirtualDesktopSwitcher::ReinstallHook() {
     UninstallHook();
-    return InstallHook();
+    return InstallHook(m_hwnd);
 }
 
 int VirtualDesktopSwitcher::GetDesktopCount() const {

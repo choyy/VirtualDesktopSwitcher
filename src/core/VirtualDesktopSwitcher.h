@@ -9,10 +9,12 @@
 
 constexpr UINT WM_SWITCH_DESKTOP = WM_USER + 1;
 
-enum class ModKey : std::uint8_t { Alt,
-                                   Ctrl,
-                                   CtrlAlt,
-                                   AltShift };
+enum ModMask : uint8_t {
+    Alt   = 1,
+    Ctrl  = 2,
+    Shift = 4,
+    Win   = 8,
+};
 
 class VirtualDesktopSwitcher {
 public:
@@ -24,14 +26,13 @@ public:
     VirtualDesktopSwitcher();
     ~VirtualDesktopSwitcher();
 
-    bool InstallHook();
+    bool InstallHook(HWND hwnd);
     void UninstallHook();
     bool ReinstallHook();
     void SwitchToDesktop(int index);
     void RefreshCOM();
 
-    void        SetWindowHandle(HWND hwnd) { m_hwnd = hwnd; }
-    static void SetModKey(ModKey mod) { s_modKey = mod; }
+    static void SetModMask(uint8_t mask) { s_modMask = static_cast<ModMask>(mask); };
 
     [[nodiscard]] int                            GetDesktopCount() const;
     [[nodiscard]] int                            GetCurrentDesktopIndex() const;
@@ -43,7 +44,7 @@ private:
     HWND                                        m_hwnd  = nullptr;
 
     static VirtualDesktopSwitcher *s_active;
-    static ModKey                  s_modKey;
+    static ModMask                 s_modMask;
 
     static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
 };

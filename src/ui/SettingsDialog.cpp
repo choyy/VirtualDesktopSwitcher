@@ -6,31 +6,28 @@
 #include <string>
 #include <vector>
 
+#include "core/VirtualDesktopSwitcher.h"
 #include "util/Lang.h"
 #include "util/Utils.h"
 
 namespace {
 
-constexpr int IDC_CUR_SYM    = 101;
-constexpr int IDC_OTH_SYM    = 102;
-constexpr int IDC_FONT       = 103;
-constexpr int IDC_SPACING    = 104;
-constexpr int IDC_SPIN       = 105;
-constexpr int IDC_EMP_SYM    = 106;
-constexpr int IDC_ST_CUR_SYM = 107;
-constexpr int IDC_ST_OTH_SYM = 108;
-constexpr int IDC_ST_EMP_SYM = 109;
-constexpr int IDC_ST_FONT    = 110;
-constexpr int IDC_ST_SPACING = 111;
-constexpr int IDC_ST_MODKEY  = 112;
-constexpr int IDC_MODKEY_ALT = 113;
-
-constexpr std::array kModkeyIds = {
-    IDC_MODKEY_ALT,
-    IDC_MODKEY_ALT + 1,
-    IDC_MODKEY_ALT + 2,
-    IDC_MODKEY_ALT + 3,
-};
+constexpr int IDC_CUR_SYM      = 101;
+constexpr int IDC_OTH_SYM      = 102;
+constexpr int IDC_FONT         = 103;
+constexpr int IDC_SPACING      = 104;
+constexpr int IDC_SPIN         = 105;
+constexpr int IDC_EMP_SYM      = 106;
+constexpr int IDC_ST_CUR_SYM   = 107;
+constexpr int IDC_ST_OTH_SYM   = 108;
+constexpr int IDC_ST_EMP_SYM   = 109;
+constexpr int IDC_ST_FONT      = 110;
+constexpr int IDC_ST_SPACING   = 111;
+constexpr int IDC_ST_MODKEY    = 112;
+constexpr int IDC_MODKEY_ALT   = 113;
+constexpr int IDC_MODKEY_CTRL  = 114;
+constexpr int IDC_MODKEY_SHIFT = 115;
+constexpr int IDC_MODKEY_WIN   = 116;
 
 constexpr std::array kSymbolList = {
     L"\u00B7",
@@ -182,7 +179,11 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SetDlgItemTextW(hwnd, IDOK, Lang::Get(L"Settings.BtnOK"));
         SetDlgItemTextW(hwnd, IDCANCEL, Lang::Get(L"Settings.BtnCancel"));
 
-        SendDlgItemMessageW(hwnd, kModkeyIds.at(data->result.modKey), BM_SETCHECK, BST_CHECKED, 0);
+        uint8_t mask = data->result.modMask;
+        SendDlgItemMessageW(hwnd, IDC_MODKEY_ALT, BM_SETCHECK, ((mask & ModMask::Alt) != 0) ? BST_CHECKED : BST_UNCHECKED, 0);
+        SendDlgItemMessageW(hwnd, IDC_MODKEY_CTRL, BM_SETCHECK, ((mask & ModMask::Ctrl) != 0) ? BST_CHECKED : BST_UNCHECKED, 0);
+        SendDlgItemMessageW(hwnd, IDC_MODKEY_SHIFT, BM_SETCHECK, ((mask & ModMask::Shift) != 0) ? BST_CHECKED : BST_UNCHECKED, 0);
+        SendDlgItemMessageW(hwnd, IDC_MODKEY_WIN, BM_SETCHECK, ((mask & ModMask::Win) != 0) ? BST_CHECKED : BST_UNCHECKED, 0);
 
         FillCombo(GetDlgItem(hwnd, IDC_CUR_SYM), kSymbolList.data(), kSymbolList.size(), data->result.currentSymbol, false, true);
         FillCombo(GetDlgItem(hwnd, IDC_OTH_SYM), kSymbolList.data(), kSymbolList.size(), data->result.otherSymbol, false, true);
@@ -199,7 +200,7 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         MoveChildrenToX(hwnd, {IDC_CUR_SYM, IDC_OTH_SYM, IDC_EMP_SYM, IDC_FONT, IDC_SPACING, IDC_MODKEY_ALT}, vx);
         if (dx != 0) {
-            for (int id : {IDC_SPIN, IDC_MODKEY_ALT + 1, IDC_MODKEY_ALT + 2, IDC_MODKEY_ALT + 3}) {
+            for (int id : {IDC_SPIN, IDC_MODKEY_CTRL, IDC_MODKEY_SHIFT, IDC_MODKEY_WIN}) {
                 HWND h = GetDlgItem(hwnd, id);
                 if (h == nullptr) { break; }
                 RECT rc = GetChildRect(hwnd, h);
@@ -297,12 +298,12 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case IDOK: {
             data->result.charSpacing = ReadSpacing();
             data->result.accepted    = true;
-            for (size_t i = 0; i < kModkeyIds.size(); ++i) {
-                if (SendDlgItemMessageW(hwnd, kModkeyIds.at(i), BM_GETCHECK, 0, 0) == BST_CHECKED) {
-                    data->result.modKey = static_cast<int>(i);
-                    break;
-                }
-            }
+            uint8_t mask             = 0;
+            if (SendDlgItemMessageW(hwnd, IDC_MODKEY_ALT, BM_GETCHECK, 0, 0) == BST_CHECKED) { mask |= ModMask::Alt; }
+            if (SendDlgItemMessageW(hwnd, IDC_MODKEY_CTRL, BM_GETCHECK, 0, 0) == BST_CHECKED) { mask |= ModMask::Ctrl; }
+            if (SendDlgItemMessageW(hwnd, IDC_MODKEY_SHIFT, BM_GETCHECK, 0, 0) == BST_CHECKED) { mask |= ModMask::Shift; }
+            if (SendDlgItemMessageW(hwnd, IDC_MODKEY_WIN, BM_GETCHECK, 0, 0) == BST_CHECKED) { mask |= ModMask::Win; }
+            data->result.modMask = (mask != 0) ? mask : ModMask::Alt;
             EndDialog(hwnd, id);
             break;
         }

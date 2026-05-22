@@ -63,7 +63,7 @@ private:
     IndicatorConfig                         m_indicatorCfg;
     int                                     m_lastDesktopIndex = -1;
     int                                     m_lastDesktopCount = 0;
-    int                                     m_modKey           = 0;
+    uint8_t                                 m_modMask          = 1;
     bool                                    m_autoCheckUpdates = true;
     UINT                                    m_uTaskbarCreated  = 0;
     HANDLE                                  m_hUpdateProcess   = nullptr;

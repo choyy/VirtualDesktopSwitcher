@@ -190,16 +190,15 @@ bool Application::CreateHiddenWindow() {
         return false;
     }
 
-    m_switcher->SetWindowHandle(m_hwnd);
     SetWndUserData(m_hwnd, this);
     return true;
 }
 
 void Application::LoadConfiguration() {
     m_autoCheckUpdates = ReadIniInt(L"General", L"AutoCheckUpdates", 1) != 0;
-    m_modKey           = ReadIniInt(L"General", L"ModKey", 0);
+    m_modMask          = static_cast<uint8_t>(ReadIniInt(L"General", L"ModMask", 1));
     m_indicatorCfg.LoadFromIni();
-    VirtualDesktopSwitcher::SetModKey(static_cast<ModKey>(m_modKey));
+    VirtualDesktopSwitcher::SetModMask(m_modMask);
 }
 
 void Application::InitializeOverlay() {
@@ -242,7 +241,7 @@ void Application::SetupTrayCallbacks() {
             .emptySymbol   = m_indicatorCfg.emptySymbol,
             .fontName      = m_indicatorCfg.fontName,
             .charSpacing   = m_indicatorCfg.charSpacing,
-            .modKey        = m_modKey};
+            .modMask       = m_modMask};
 
         SettingsDialog::Result res = SettingsDialog::Show(m_hwnd, cur,
                                                           [this](const SettingsDialog::Result &preview) {
@@ -251,10 +250,10 @@ void Application::SetupTrayCallbacks() {
 
         if (res.accepted) {
             m_indicatorCfg.SaveToIni();
-            if (res.modKey != m_modKey) {
-                m_modKey = res.modKey;
-                WriteIniInt(L"General", L"ModKey", m_modKey);
-                VirtualDesktopSwitcher::SetModKey(static_cast<ModKey>(m_modKey));
+            if (res.modMask != m_modMask) {
+                m_modMask = res.modMask;
+                WriteIniInt(L"General", L"ModMask", m_modMask);
+                VirtualDesktopSwitcher::SetModMask(m_modMask);
             }
         } else {
             ApplySettingsPreview(cur);
@@ -307,7 +306,7 @@ bool Application::Initialize() {
         SpawnUpdateCheckProcess();
     }
 
-    if (!m_switcher->InstallHook()) {
+    if (!m_switcher->InstallHook(m_hwnd)) {
         Log(L"[ERROR] Failed to install keyboard hook");
         return false;
     }

@@ -19,8 +19,8 @@
 #define IDC_ST_MODKEY   112
 #define IDC_MODKEY_ALT  113
 #define IDC_MODKEY_CTRL 114
-#define IDC_MODKEY_CTRLALT 115
-#define IDC_MODKEY_ALTSHIFT 116
+#define IDC_MODKEY_SHIFT 115
+#define IDC_MODKEY_WIN   116
 
 IDD_SETTINGS DIALOGEX 0, 0, 280, 155
 STYLE        DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
@@ -40,10 +40,10 @@ BEGIN
     EDITTEXT        IDC_SPACING,                    115,  80,  30,  12, ES_CENTER | ES_NUMBER | WS_TABSTOP | WS_BORDER
     CONTROL         "",                             IDC_SPIN,         "msctls_updown32", UDS_SETBUDDYINT | UDS_AUTOBUDDY | UDS_ALIGNRIGHT | UDS_ARROWKEYS, 0, 0, 0, 0
     LTEXT           "Switch Shortcut:",             IDC_ST_MODKEY,        15,  97,  95, 10
-    AUTORADIOBUTTON "Alt",                          IDC_MODKEY_ALT,      115,  95,  30, 14, WS_GROUP | WS_TABSTOP
-    AUTORADIOBUTTON "Ctrl",                         IDC_MODKEY_CTRL,     147,  95,  30, 14
-    AUTORADIOBUTTON "Ctrl+Alt",                     IDC_MODKEY_CTRLALT,  180,  95,  45, 14
-    AUTORADIOBUTTON "Alt+Shift",                    IDC_MODKEY_ALTSHIFT, 225,  95,  50, 14
+    AUTOCHECKBOX    "Alt",                          IDC_MODKEY_ALT,      115,  95,  30, 14, WS_TABSTOP
+    AUTOCHECKBOX    "Ctrl",                         IDC_MODKEY_CTRL,     147,  95,  30, 14
+    AUTOCHECKBOX    "Shift",                        IDC_MODKEY_SHIFT,    179,  95,  35, 14
+    AUTOCHECKBOX    "Win",                          IDC_MODKEY_WIN,      214,  95,  30, 14
     DEFPUSHBUTTON   "OK",                           IDOK,                 60, 130,  60, 14
     PUSHBUTTON      "Cancel",                       IDCANCEL,            150, 130,  60, 14
 END
