@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -56,6 +57,7 @@ public:
     void ShowTemporarily();
     void SetAnimMode(bool on);
     void SetAutoContrast(bool on);
+    void SetScrollSwitchCallback(std::function<void(int)> cb) { m_scrollSwitchFn = std::move(cb); }
     HWND CreateMonitorWindow(HINSTANCE hInst);
 
     [[nodiscard]] bool IsEditMode() const { return m_editMode; }
@@ -73,6 +75,7 @@ private:
     bool                           m_editMode   = false;
     bool                           m_dragging   = false;
     POINT                          m_dragOffset = {.x = 0, .y = 0};
+    std::function<void(int)>       m_scrollSwitchFn;
 
     void         ApplyShowMode(ShowMode mode);
     void         SampleBackground();
@@ -86,6 +89,7 @@ private:
     void         ApplyPresetPosition();
     void         MoveByDelta(int dx, int dy);
     void         EnumerateMonitors(HINSTANCE hInstance);
+    void         RegisterMouseWheelInput();
 
     static void CALLBACK    AutoHideTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
     static void CALLBACK    AnimTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);

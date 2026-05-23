@@ -300,6 +300,9 @@ bool Application::Initialize() {
     if (overlayOk) {
         if (m_indicatorCfg.animMode != 0) { m_pOverlay->SetAnimMode(true); }
         if (m_indicatorCfg.autoContrast) { m_pOverlay->SetAutoContrast(true); }
+        m_pOverlay->SetScrollSwitchCallback([this](int target) {
+            OnDesktopSwitch(target);
+        });
     }
 
     SetupTrayCallbacks();

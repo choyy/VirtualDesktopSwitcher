@@ -29,10 +29,11 @@ To build from source, see [Building from Source](#building-from-source) below.
 1. Launch `VirtualDesktopSwitcher.exe`
 2. The desktop indicator appears on screen, and the program icon shows in the system tray
 3. Use `Alt + 1` ~ `Alt + 9` to switch between virtual desktops
-4. Right-click the tray icon to configure:
+4. Use the mouse scroll wheel on the desktop indicator to switch to the previous/next virtual desktop
+5. Right-click the tray icon to configure:
    - Adjust indicator **position**, **size**, **style**, **hotkeys**, and **display**
    - Toggle auto-start and run as administrator
-5. Double-click the tray icon to quickly **show/hide the indicator**
+6. Double-click the tray icon to quickly **show/hide the indicator**
 
 All settings and log files are saved to `%LOCALAPPDATA%\VirtualDesktopSwitcher`.
 

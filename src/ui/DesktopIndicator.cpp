@@ -134,6 +134,18 @@ DesktopIndicator::~DesktopIndicator() {
     }
 }
 
+void DesktopIndicator::RegisterMouseWheelInput() {
+    if (m_layers.empty()) { return; }
+    RAWINPUTDEVICE rid = {};
+    rid.usUsagePage    = 0x01;
+    rid.usUsage        = 0x02;
+    rid.dwFlags        = RIDEV_INPUTSINK;
+    rid.hwndTarget     = m_layers[0].hwnd;
+    if (RegisterRawInputDevices(&rid, 1, sizeof(rid)) == 0) {
+        Log(L"[ERROR] RegisterRawInputDevices failed");
+    }
+}
+
 HWND DesktopIndicator::CreateMonitorWindow(HINSTANCE hInst) {
     HWND hwnd = CreateWindowExW(
         WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
@@ -197,6 +209,10 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
 
     // 5. Build initial text and apply display mode
     ApplyShowMode(m_pCfg->showMode);
+
+    // 6. Register Raw Input for mouse wheel
+    RegisterMouseWheelInput();
+
     return !m_layers.empty();
 }
 
@@ -687,6 +703,7 @@ void DesktopIndicator::Rebuild() {
     }
     StartAnimTimer();
     StartBgSampleTimer();
+    RegisterMouseWheelInput();
 }
 
 LRESULT CALLBACK DesktopIndicator::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -707,29 +724,62 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         return 0;
     }
 
-    case WM_LBUTTONDBLCLK:
-        if (!m_editMode) { ToggleEditMode(); }
-        return 0;
-
-    case WM_LBUTTONDOWN:
-        if (m_editMode) {
-            POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
-            ClientToScreen(hwnd, &pt);
-            // Convert to primary monitor coordinate system
-            auto it = std::ranges::find_if(m_layers,
-                                           [hwnd](const MonitorLayer &l) {
-                                               return l.hwnd == hwnd;
-                                           });
-            if (it != m_layers.end()) {
-                int winLeft    = m_pCfg->windowPos.x + (it->monitor.left - m_layers[0].monitor.left);
-                int winTop     = m_pCfg->windowPos.y + (it->monitor.top - m_layers[0].monitor.top);
-                m_dragOffset.x = pt.x - winLeft;
-                m_dragOffset.y = pt.y - winTop;
-                m_dragging     = true;
-                SetCapture(hwnd);
+    case WM_INPUT: {
+        bool handled = false;
+        UINT sz      = 0;
+        GetRawInputData(reinterpret_cast<HRAWINPUT>(lp), RID_INPUT, nullptr, &sz, sizeof(RAWINPUTHEADER)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+        if (sz > 0) {
+            std::vector<BYTE> buf(sz);
+            if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lp), RID_INPUT, // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+                                buf.data(), &sz, sizeof(RAWINPUTHEADER))
+                == sz) {
+                auto *raw = reinterpret_cast<RAWINPUT *>(buf.data()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                if (raw->header.dwType == RIM_TYPEMOUSE
+                    && (raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL) != 0) { // NOLINT(cppcoreguidelines-pro-type-union-access)
+                    POINT cursorPt;
+                    GetCursorPos(&cursorPt);
+                    bool overIndicator = false;
+                    for (const auto &l : m_layers) {
+                        RECT wr;
+                        GetWindowRect(l.hwnd, &wr);
+                        if (PtInRect(&wr, cursorPt) != 0) {
+                            overIndicator = true;
+                            break;
+                        }
+                    }
+                    if (overIndicator && m_scrollSwitchFn && m_desktopCount > 0 && !m_editMode) {
+                        auto delta  = static_cast<int16_t>(raw->data.mouse.usButtonData); // NOLINT(cppcoreguidelines-pro-type-union-access)
+                        int  target = m_currentDesktop + ((delta > 0) ? -1 : 1);
+                        if (target >= 0 && target < m_desktopCount) {
+                            m_scrollSwitchFn(target);
+                            handled = true;
+                        }
+                    }
+                }
             }
         }
+        if (handled) { return 0; }
+        break;
+    }
+
+    case WM_LBUTTONDOWN: {
+        if (!m_editMode) { return DefWindowProcW(hwnd, msg, wp, lp); }
+        POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+        ClientToScreen(hwnd, &pt);
+        auto it = std::ranges::find_if(m_layers,
+                                       [hwnd](const MonitorLayer &l) {
+                                           return l.hwnd == hwnd;
+                                       });
+        if (it != m_layers.end()) {
+            int winLeft    = m_pCfg->windowPos.x + (it->monitor.left - m_layers[0].monitor.left);
+            int winTop     = m_pCfg->windowPos.y + (it->monitor.top - m_layers[0].monitor.top);
+            m_dragOffset.x = pt.x - winLeft;
+            m_dragOffset.y = pt.y - winTop;
+            m_dragging     = true;
+            SetCapture(hwnd);
+        }
         return 0;
+    }
 
     case WM_MOUSEMOVE:
         if (m_dragging && ((wp & MK_LBUTTON) != 0u)) {
@@ -747,6 +797,7 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         return 0;
 
     case WM_LBUTTONUP:
+        if (!m_editMode) { return DefWindowProcW(hwnd, msg, wp, lp); }
         if (m_dragging) {
             m_dragging = false;
             ReleaseCapture();
@@ -754,8 +805,13 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         }
         return 0;
 
+    case WM_LBUTTONDBLCLK:
+        ToggleEditMode();
+        return 0;
+
     case WM_RBUTTONDOWN:
-        if (m_editMode) { SetEditMode(false); }
+        if (!m_editMode) { return DefWindowProcW(hwnd, msg, wp, lp); }
+        SetEditMode(false);
         return 0;
 
     case WM_MOUSEWHEEL:
@@ -770,7 +826,7 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             }
             return 0;
         }
-        return 0;
+        return DefWindowProcW(hwnd, msg, wp, lp);
 
     case WM_KEYDOWN:
         if (m_editMode) {
