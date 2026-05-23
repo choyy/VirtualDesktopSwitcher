@@ -16,6 +16,8 @@
 
 - **Hotkey switching**: `Alt + 1` ~ `Alt + 9` to jump directly to the corresponding virtual desktop
 - **Desktop indicator**: Uses distinct symbols for different desktop states — **◉ current** desktop, **○ non-empty** desktops, and **◌ empty** desktops. Fully customizable position, size, and style.
+- **Scroll to switch**: Scroll the mouse wheel while hovering over the indicator to quickly switch to the previous/next virtual desktop.
+- **Drag to move**: Drag any window onto an indicator symbol to move it to that virtual desktop and automatically switch to it.
 - **Extremely lightweight**: Executable ~130KB, memory footprint ~2MB, zero dependencies, runs silently in the background.
 
 ## 📦 Installation
@@ -29,11 +31,12 @@ To build from source, see [Building from Source](#building-from-source) below.
 1. Launch `VirtualDesktopSwitcher.exe`
 2. The desktop indicator appears on screen, and the program icon shows in the system tray
 3. Use `Alt + 1` ~ `Alt + 9` to switch between virtual desktops
-4. Use the mouse scroll wheel on the desktop indicator to switch to the previous/next virtual desktop
-5. Right-click the tray icon to configure:
+4. **Scroll** the mouse wheel while hovering over the indicator to switch desktops
+5. **Drag a window** onto an indicator symbol to move it to that desktop and switch to it automatically
+6. Right-click the tray icon to configure:
    - Adjust indicator **position**, **size**, **style**, **hotkeys**, and **display**
    - Toggle auto-start and run as administrator
-6. Double-click the tray icon to quickly **show/hide the indicator**
+7. Double-click the tray icon to quickly **show/hide the indicator**
 
 All settings and log files are saved to `%LOCALAPPDATA%\VirtualDesktopSwitcher`.
 
