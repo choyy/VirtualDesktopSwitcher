@@ -30,6 +30,7 @@ public:
     void UninstallHook();
     bool ReinstallHook();
     void SwitchToDesktop(int index);
+    void MoveWindowToDesktop(HWND hwnd, int targetIndex);
     void RefreshCOM();
 
     static void SetModMask(uint8_t mask) { s_modMask = static_cast<ModMask>(mask); };

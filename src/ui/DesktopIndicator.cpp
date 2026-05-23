@@ -22,6 +22,8 @@ constexpr int      kSampleIntervalMs = 2500;
 constexpr int      kAutoHideShow1sMs = 1000;
 constexpr int      kAutoHideShow3sMs = 3000;
 
+constexpr UINT WM_INDICATOR_MOVE_WINDOW = WM_USER + 50;
+
 struct EnumCtx {
     std::vector<MonitorLayer> *vec;
     DesktopIndicator          *self;
@@ -116,6 +118,9 @@ COLORREF HSVToRGB(float h, float s, float v) {
 
 } // namespace
 
+HHOOK             DesktopIndicator::s_dragHook = nullptr;
+DesktopIndicator *DesktopIndicator::s_instance = nullptr;
+
 void DesktopIndicator::EnumerateMonitors(HINSTANCE hInstance) {
     EnumCtx ctx = {&m_layers, this, hInstance};
     EnumDisplayMonitors(nullptr, nullptr, EnumMonitorCB, PtrToLParam(&ctx));
@@ -126,9 +131,13 @@ void DesktopIndicator::EnumerateMonitors(HINSTANCE hInstance) {
     }
 }
 
-DesktopIndicator::DesktopIndicator() = default;
+DesktopIndicator::DesktopIndicator() {
+    s_instance = this;
+}
 
 DesktopIndicator::~DesktopIndicator() {
+    UninstallDragHook();
+    if (s_instance == this) { s_instance = nullptr; }
     for (auto &l : m_layers) {
         if (l.hwnd != nullptr) { DestroyWindow(l.hwnd); }
     }
@@ -144,6 +153,92 @@ void DesktopIndicator::RegisterMouseWheelInput() {
     if (RegisterRawInputDevices(&rid, 1, sizeof(rid)) == 0) {
         Log(L"[ERROR] RegisterRawInputDevices failed");
     }
+}
+
+void DesktopIndicator::InstallDragHook() {
+    if (s_dragHook == nullptr) {
+        s_dragHook = SetWindowsHookExW(WH_MOUSE_LL, DragHookProc,
+                                       GetModuleHandleW(nullptr), 0);
+        if (s_dragHook != nullptr) {
+            Log(L"[INFO] Drag hook installed");
+        } else {
+            Log(L"[ERROR] Drag hook install failed");
+        }
+    }
+}
+
+void DesktopIndicator::UninstallDragHook() {
+    if (s_dragHook != nullptr) {
+        UnhookWindowsHookEx(s_dragHook);
+        s_dragHook = nullptr;
+        Log(L"[INFO] Drag hook uninstalled");
+    }
+}
+
+bool DesktopIndicator::GetSymbolIndexAt(POINT screenPt, int &outIndex) const {
+    for (const auto &l : m_layers) {
+        RECT wr;
+        GetWindowRect(l.hwnd, &wr);
+        if (PtInRect(&wr, screenPt) == 0) { continue; }
+
+        int clientX  = screenPt.x - wr.left;
+        int relX     = clientX - m_lastPadding;
+        int symCount = static_cast<int>(m_text.size());
+        if (symCount <= 0 || m_lastTextW <= 0 || relX < 0 || relX >= m_lastTextW) {
+            continue;
+        }
+
+        int idx = relX * symCount / m_lastTextW;
+        if (idx >= 0 && idx < symCount) {
+            outIndex = idx;
+            return true;
+        }
+    }
+    return false;
+}
+
+LRESULT CALLBACK DesktopIndicator::DragHookProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode < 0 || s_instance == nullptr) {
+        return CallNextHookEx(s_dragHook, nCode, wParam, lParam);
+    }
+
+    auto *hs = reinterpret_cast<MSLLHOOKSTRUCT *>(lParam); // NOLINT
+
+    if (wParam == WM_LBUTTONDOWN) {
+        bool onSelf = false;
+        for (const auto &l : s_instance->m_layers) {
+            RECT wr;
+            GetWindowRect(l.hwnd, &wr);
+            if (PtInRect(&wr, hs->pt) != 0) {
+                onSelf = true;
+                break;
+            }
+        }
+        if (!onSelf) {
+            s_instance->m_dragHwnd = GetAncestor(WindowFromPoint(hs->pt), GA_ROOT);
+        }
+    }
+
+    if (wParam == WM_MOUSEMOVE && s_instance->m_dragHwnd != nullptr) {
+        int symIdx = -1;
+        if (s_instance->GetSymbolIndexAt(hs->pt, symIdx)) {
+            if (symIdx != s_instance->m_lastHoverSymbol) {
+                s_instance->m_lastHoverSymbol = symIdx;
+                PostMessageW(s_instance->m_layers[0].hwnd, WM_INDICATOR_MOVE_WINDOW,
+                             static_cast<WPARAM>(symIdx),
+                             reinterpret_cast<LPARAM>(s_instance->m_dragHwnd)); // NOLINT
+            }
+        } else {
+            s_instance->m_lastHoverSymbol = -1;
+        }
+    }
+
+    if (wParam == WM_LBUTTONUP) {
+        s_instance->m_dragHwnd        = nullptr;
+        s_instance->m_lastHoverSymbol = -1;
+    }
+
+    return CallNextHookEx(s_dragHook, nCode, wParam, lParam);
 }
 
 HWND DesktopIndicator::CreateMonitorWindow(HINSTANCE hInst) {
@@ -212,6 +307,7 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
 
     // 6. Register Raw Input for mouse wheel
     RegisterMouseWheelInput();
+    InstallDragHook();
 
     return !m_layers.empty();
 }
@@ -626,8 +722,10 @@ void DesktopIndicator::Render() {
         int fontSize = MulDiv(m_pCfg->fontSize, l.dpi, 96);
         int textW = 0, textH = 0;
         m_renderer->Measure(spacedtext.c_str(), fontSize, &textW, &textH);
-        int w = std::max(textW + padding * 2, 50);
-        int h = std::max(textH + padding * 2, 20);
+        m_lastTextW   = textW;
+        m_lastPadding = padding;
+        int w         = std::max(textW + padding * 2, 50);
+        int h         = std::max(textH + padding * 2, 20);
 
         if (hdcMem == nullptr) { continue; }
 
@@ -723,6 +821,15 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         EndPaint(hwnd, &ps);
         return 0;
     }
+
+    case WM_INDICATOR_MOVE_WINDOW:
+        if (m_moveWindowFn && m_desktopCount > 0 && !m_editMode) {
+            auto targetIdx = static_cast<int>(wp);
+            auto hwndDrag  = reinterpret_cast<HWND>(lp); // NOLINT
+            Log(L"[INFO] MoveWindow: desktop " + std::to_wstring(targetIdx));
+            m_moveWindowFn(targetIdx, hwndDrag);
+        }
+        return 0;
 
     case WM_INPUT: {
         bool handled = false;

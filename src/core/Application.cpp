@@ -303,6 +303,13 @@ bool Application::Initialize() {
         m_pOverlay->SetScrollSwitchCallback([this](int target) {
             OnDesktopSwitch(target);
         });
+        m_pOverlay->SetMoveWindowCallback([this](int targetIdx, HWND hwnd) {
+            if (m_switcher) {
+                m_switcher->MoveWindowToDesktop(hwnd, targetIdx);
+                m_switcher->SwitchToDesktop(targetIdx);
+                SyncDesktopState();
+            }
+        });
     }
 
     SetupTrayCallbacks();

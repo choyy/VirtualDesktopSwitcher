@@ -145,3 +145,8 @@ void VirtualDesktopSwitcher::SwitchToDesktop(int index) {
         Log(L"[DEBUG] SwitchToDesktop: index=" + std::to_wstring(index) + L" no window");
     }
 }
+
+void VirtualDesktopSwitcher::MoveWindowToDesktop(HWND hwnd, int targetIndex) {
+    if (hwnd == nullptr || m_pVDeskHelper == nullptr) { return; }
+    m_pVDeskHelper->MoveWindowToDesktop(hwnd, targetIndex);
+}

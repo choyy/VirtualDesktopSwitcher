@@ -65,6 +65,7 @@ public:
     [[nodiscard]] bool                           IsWindowOnCurrentDesktop(HWND hwnd) const;
     [[nodiscard]] std::array<bool, kMaxDesktops> GetDesktopEmptyMask() const;
     void                                         SwitchToDesktop(int index) const;
+    void                                         MoveWindowToDesktop(HWND hwnd, int targetIndex) const;
 
 private:
     bool InitCOMServices();

@@ -251,6 +251,54 @@ void VirtualDesktopHelper::SwitchToDesktop(int index) const {
     m_virtualDesktopManagerInternal->SwitchDesktop(targetDesktop.Get());
 }
 
+void VirtualDesktopHelper::MoveWindowToDesktop(HWND hwnd, int targetIndex) const {
+    if (m_virtualDesktopManagerInternal == nullptr || m_viewCollection == nullptr || hwnd == nullptr) {
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<IUnknown> view;
+    HRESULT                          hr = m_viewCollection->GetViewForHwnd(hwnd, &view);
+    if (FAILED(hr) || view == nullptr) {
+        std::array<wchar_t, 128> titleBuf = {};
+        GetWindowTextW(hwnd, titleBuf.data(), static_cast<int>(titleBuf.size()));
+        Log(L"[ERROR] MoveWindowToDesktop: GetViewForHwnd failed for \""
+            + std::wstring(titleBuf.data()) + L"\" hr=0x" + std::to_wstring(static_cast<uint32_t>(hr)));
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<IObjectArray> desktops;
+    hr = m_virtualDesktopManagerInternal->GetDesktops(&desktops);
+    if (FAILED(hr)) {
+        Log(L"[ERROR] MoveWindowToDesktop: GetDesktops failed hr=0x"
+            + std::to_wstring(static_cast<uint32_t>(hr)));
+        return;
+    }
+
+    UINT count = 0;
+    hr         = desktops->GetCount(&count);
+    if (FAILED(hr) || static_cast<size_t>(targetIndex) >= static_cast<size_t>(count)) {
+        Log(L"[ERROR] MoveWindowToDesktop: bad index " + std::to_wstring(targetIndex)
+            + L" count=" + std::to_wstring(count) + L" hr=0x"
+            + std::to_wstring(static_cast<uint32_t>(hr)));
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<IVirtualDesktop> targetDesktop;
+    hr = desktops->GetAt(targetIndex, m_iidVirtualDesktop, ComPtrAsVoid(targetDesktop));
+    if (FAILED(hr)) {
+        Log(L"[ERROR] MoveWindowToDesktop: GetAt failed for index "
+            + std::to_wstring(targetIndex) + L" hr=0x"
+            + std::to_wstring(static_cast<uint32_t>(hr)));
+        return;
+    }
+
+    hr                                = m_virtualDesktopManagerInternal->MoveViewToDesktop(view.Get(), targetDesktop.Get());
+    std::array<wchar_t, 128> titleBuf = {};
+    GetWindowTextW(hwnd, titleBuf.data(), static_cast<int>(titleBuf.size()));
+    Log(L"[INFO] MoveWindowToDesktop: \"" + std::wstring(titleBuf.data()) + L"\" -> desktop "
+        + std::to_wstring(targetIndex) + L" hr=0x" + std::to_wstring(static_cast<uint32_t>(hr)));
+}
+
 bool VirtualDesktopHelper::IsWindowOnCurrentDesktop(HWND hwnd) const {
     if ((m_virtualDesktopManagerInternal == nullptr) || hwnd == nullptr) {
         return false;

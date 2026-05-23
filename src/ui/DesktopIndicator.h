@@ -58,6 +58,7 @@ public:
     void SetAnimMode(bool on);
     void SetAutoContrast(bool on);
     void SetScrollSwitchCallback(std::function<void(int)> cb) { m_scrollSwitchFn = std::move(cb); }
+    void SetMoveWindowCallback(std::function<void(int, HWND)> cb) { m_moveWindowFn = std::move(cb); }
     HWND CreateMonitorWindow(HINSTANCE hInst);
 
     [[nodiscard]] bool IsEditMode() const { return m_editMode; }
@@ -76,6 +77,11 @@ private:
     bool                           m_dragging   = false;
     POINT                          m_dragOffset = {.x = 0, .y = 0};
     std::function<void(int)>       m_scrollSwitchFn;
+    std::function<void(int, HWND)> m_moveWindowFn;
+    HWND                           m_dragHwnd        = nullptr;
+    int                            m_lastHoverSymbol = -1;
+    int                            m_lastTextW       = 0;
+    int                            m_lastPadding     = 8;
 
     void         ApplyShowMode(ShowMode mode);
     void         SampleBackground();
@@ -90,6 +96,13 @@ private:
     void         MoveByDelta(int dx, int dy);
     void         EnumerateMonitors(HINSTANCE hInstance);
     void         RegisterMouseWheelInput();
+    static void  InstallDragHook();
+    static void  UninstallDragHook();
+    bool         GetSymbolIndexAt(POINT screenPt, int &outIndex) const;
+
+    static HHOOK             s_dragHook;
+    static DesktopIndicator *s_instance;
+    static LRESULT CALLBACK  DragHookProc(int nCode, WPARAM wParam, LPARAM lParam);
 
     static void CALLBACK    AutoHideTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
     static void CALLBACK    AnimTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
