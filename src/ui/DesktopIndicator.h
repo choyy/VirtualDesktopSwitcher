@@ -26,6 +26,9 @@ struct MonitorLayer {
     double               bgLch_C       = 0.0;  // CIE C* (chroma)
     std::array<float, 5> smoothV{};            // per-color smoothed V
     std::array<float, 5> smoothS{};            // per-color smoothed S
+    std::array<float, 9> symbolScales{};       // per-symbol dock scale (lerped)
+    std::array<float, 9> symbolCenters{};      // client X center after render
+    std::array<float, 9> symbolHalfWidths{};   // half-width after render
 };
 
 class DesktopIndicator {
@@ -80,8 +83,6 @@ private:
     std::function<void(int, HWND)> m_moveWindowFn;
     HWND                           m_dragHwnd        = nullptr;
     int                            m_lastHoverSymbol = -1;
-    int                            m_lastTextW       = 0;
-    int                            m_lastPadding     = 8;
 
     void         ApplyShowMode(ShowMode mode);
     void         SampleBackground();

@@ -17,7 +17,7 @@ namespace {
 constexpr UINT_PTR kAutoHideTimerId  = 100;
 constexpr UINT_PTR kAnimTimerId      = 101;
 constexpr UINT_PTR kBgSampleTimerId  = 102;
-constexpr int      kAnimIntervalMs   = 50;
+constexpr int      kAnimIntervalMs   = 16;
 constexpr int      kSampleIntervalMs = 2500;
 constexpr int      kAutoHideShow1sMs = 1000;
 constexpr int      kAutoHideShow3sMs = 3000;
@@ -181,17 +181,13 @@ bool DesktopIndicator::GetSymbolIndexAt(POINT screenPt, int &outIndex) const {
         GetWindowRect(l.hwnd, &wr);
         if (PtInRect(&wr, screenPt) == 0) { continue; }
 
-        int clientX  = screenPt.x - wr.left;
-        int relX     = clientX - m_lastPadding;
-        int symCount = static_cast<int>(m_text.size());
-        if (symCount <= 0 || m_lastTextW <= 0 || relX < 0 || relX >= m_lastTextW) {
-            continue;
-        }
-
-        int idx = relX * symCount / m_lastTextW;
-        if (idx >= 0 && idx < symCount) {
-            outIndex = idx;
-            return true;
+        auto clientX = static_cast<float>(screenPt.x - wr.left);
+        for (int i = 0; i < static_cast<int>(m_text.size()); ++i) {
+            if (l.symbolHalfWidths.at(i) <= 0.0f) { continue; }
+            if (std::fabs(clientX - l.symbolCenters.at(i)) <= l.symbolHalfWidths.at(i) + 3.0f) {
+                outIndex = i;
+                return true;
+            }
         }
     }
     return false;
@@ -691,8 +687,6 @@ std::wstring DesktopIndicator::BuildLayerColors(MonitorLayer &layer, float hueOf
 void DesktopIndicator::Render() {
     if (m_layers.empty() || m_pCfg == nullptr) { return; }
 
-    auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
-
     if (m_renderer == nullptr) { return; }
 
     // Shared hue offset for breathing
@@ -706,7 +700,9 @@ void DesktopIndicator::Render() {
     std::array<COLORREF, 5> baseColors{};
     size_t                  colorCount = ParseMultiColorString(m_pCfg->textColor, baseColors.data(), 5);
 
-    int padding = 8;
+    const int padding    = 8;
+    const int symCount   = static_cast<int>(m_text.size());
+    bool      isDragging = (m_dragHwnd != nullptr && !m_editMode);
 
     BLENDFUNCTION blend       = {};
     blend.BlendOp             = AC_SRC_OVER;
@@ -718,14 +714,85 @@ void DesktopIndicator::Render() {
 
     for (auto &l : m_layers) {
         auto colorStr = BuildLayerColors(l, hueOff, baseColors, colorCount);
+        int  baseFont = MulDiv(m_pCfg->fontSize, l.dpi, 96);
 
-        int fontSize = MulDiv(m_pCfg->fontSize, l.dpi, 96);
-        int textW = 0, textH = 0;
-        m_renderer->Measure(spacedtext.c_str(), fontSize, &textW, &textH);
-        m_lastTextW   = textW;
-        m_lastPadding = padding;
-        int w         = std::max(textW + padding * 2, 50);
-        int h         = std::max(textH + padding * 2, 20);
+        // Init scales on first frame
+        if (l.symbolScales[0] < 0.01f) { l.symbolScales.fill(1.0f); }
+
+        // Split per-symbol colors
+        std::array<std::wstring, 9> symColors;
+        {
+            size_t pos = 0;
+            for (size_t i = 0; i < static_cast<size_t>(symCount); ++i) {
+                size_t next     = colorStr.find(L'_', pos);
+                symColors.at(i) = (next == std::wstring::npos)
+                                      ? colorStr.substr(pos)
+                                      : colorStr.substr(pos, next - pos);
+                pos             = (next == std::wstring::npos) ? colorStr.size() : next + 1;
+            }
+        }
+
+        // Per-symbol nominal widths for Dock center calculation
+        std::array<float, 9> nominalWidths{};
+        float                nominalTotalW = 0;
+        for (int i = 0; i < symCount; ++i) {
+            int sw = 0, sh = 0;
+            m_renderer->Measure(std::wstring(1, m_text[i]).c_str(), baseFont, &sw, &sh);
+            nominalWidths.at(i) = static_cast<float>(sw);
+            nominalTotalW += nominalWidths.at(i);
+        }
+
+        // Gap between symbols
+        int spaceW = 0, dummy = 0;
+        m_renderer->Measure(L" ", baseFont, &spaceW, &dummy);
+        int gap = m_pCfg->charSpacing * spaceW;
+        if (symCount > 1) { nominalTotalW += static_cast<float>(gap * (symCount - 1)); }
+
+        // Dock parameters
+        float avgSymW  = (symCount > 0) ? nominalTotalW / static_cast<float>(symCount) : 0.0f;
+        float sigma    = std::max(avgSymW * 1.5f, 20.0f);
+        float maxExtra = 1.0f;
+
+        POINT cursorPt{};
+        RECT  layerRect{};
+        if (isDragging) {
+            GetCursorPos(&cursorPt);
+            GetWindowRect(l.hwnd, &layerRect);
+        }
+
+        // Per-symbol measure & scale
+        std::array<int, 9>   symWidths{};
+        std::array<float, 9> symScales{};
+        int                  totalW = 0;
+        int                  maxH   = 0;
+
+        for (int i = 0; i < symCount; ++i) {
+            float targetScale = 1.0f;
+            if (isDragging) {
+                auto  cursorClientX = static_cast<float>(cursorPt.x - layerRect.left);
+                float symCenterX    = static_cast<float>(padding) + avgSymW * (static_cast<float>(i) + 0.5f);
+                float dist          = std::fabs(cursorClientX - symCenterX);
+                targetScale         = 1.0f + maxExtra * std::exp(-dist * dist / (2.0f * sigma * sigma));
+            }
+
+            float &cur  = l.symbolScales.at(i);
+            float  rate = (targetScale > cur) ? 0.4f : 0.15f;
+            cur += (targetScale - cur) * rate;
+            symScales.at(i) = cur;
+
+            int          symFont = static_cast<int>(static_cast<float>(baseFont) * symScales.at(i));
+            int          sw = 0, sh = 0;
+            std::wstring sym(1, m_text[i]);
+            m_renderer->Measure(sym.c_str(), symFont, &sw, &sh);
+            symWidths.at(i) = sw;
+            totalW += sw;
+            maxH = std::max(sh, maxH);
+        }
+
+        if (symCount > 1) { totalW += gap * (symCount - 1); }
+
+        int w = std::max(totalW + padding * 2, 50);
+        int h = std::max(maxH + padding * 2, 20);
 
         if (hdcMem == nullptr) { continue; }
 
@@ -747,8 +814,18 @@ void DesktopIndicator::Render() {
         auto *hOldBmp = SelectObject(hdcMem, hDib);
         DWORD clear   = m_editMode ? 0x55000000 : 0x00000000;
         std::fill_n(static_cast<DWORD *>(bits), w * h, clear);
-        m_renderer->Render(bits, w, h, padding, padding, w - padding * 2, h - padding * 2,
-                           spacedtext.c_str(), colorStr, fontSize);
+
+        // Per-symbol render
+        int curX = padding;
+        for (int i = 0; i < symCount; ++i) {
+            int          symFont = static_cast<int>(static_cast<float>(baseFont) * symScales.at(i));
+            std::wstring sym(1, m_text[i]);
+            m_renderer->Render(bits, w, h, curX, padding, symWidths.at(i), h - padding * 2,
+                               sym.c_str(), symColors.at(i), symFont);
+            l.symbolCenters.at(i)    = static_cast<float>(curX) + static_cast<float>(symWidths.at(i)) * 0.5f;
+            l.symbolHalfWidths.at(i) = static_cast<float>(symWidths.at(i)) * 0.5f;
+            curX += symWidths.at(i) + gap;
+        }
 
         RECT wr;
         GetWindowRect(l.hwnd, &wr);
