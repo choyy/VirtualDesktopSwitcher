@@ -3,13 +3,12 @@
 #include <array>
 
 #include "core/IndicatorConfig.h"
+#include "util/AutoStart.h"
 #include "util/ConfigIni.h"
 #include "util/Lang.h"
 #include "util/Utils.h"
 
 namespace {
-
-constexpr auto kRegRunPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
 constexpr UINT WM_TRAY_EXIT             = WM_USER + 3;
 constexpr UINT WM_TRAY_TOGGLE_AUTOSTART = WM_USER + 4;
@@ -69,84 +68,6 @@ void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
     SelectObject(hdc, oldB);
     SelectObject(hdc, oldP);
     DeleteObject(hp);
-}
-
-bool RunSchtasks(const wchar_t *args) {
-    std::array<wchar_t, MAX_PATH> sys32{};
-    GetSystemDirectoryW(sys32.data(), static_cast<UINT>(sys32.size()));
-    std::wstring        cmd = std::wstring(sys32.data()) + L"\\schtasks.exe " + args;
-    PROCESS_INFORMATION pi{};
-    STARTUPINFOW        si = {.cb = sizeof(si)};
-    if (CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE,
-                       CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)
-        == 0) {
-        return false;
-    }
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD code = 0;
-    GetExitCodeProcess(pi.hProcess, &code);
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
-    return code == 0;
-}
-
-void DeleteRunReg() {
-    HKEY hKey{};
-    if (RegOpenKeyExW(HKEY_CURRENT_USER, kRegRunPath, 0, KEY_WRITE, &hKey) == ERROR_SUCCESS) {
-        RegDeleteValueW(hKey, L"VirtualDesktopSwitcher");
-        RegCloseKey(hKey);
-    }
-}
-
-bool IsAutoStartEnabled() {
-    if (RunSchtasks(L"/query /tn \"VirtualDesktopSwitcher\"")) {
-        return true;
-    }
-    HKEY hKey   = nullptr;
-    LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, kRegRunPath, 0, KEY_READ, &hKey);
-    if (result != ERROR_SUCCESS) { return false; }
-    std::wstring                  currentPath = GetCurrentExePath();
-    std::array<wchar_t, MAX_PATH> value{};
-    auto                          valueSize = static_cast<DWORD>(sizeof(value));
-    result                                  = RegQueryValueExW(hKey, L"VirtualDesktopSwitcher", nullptr, nullptr,
-                                                               reinterpret_cast<LPBYTE>(value.data()), &valueSize); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    RegCloseKey(hKey);
-    if (result != ERROR_SUCCESS) { return false; }
-    std::wstring registryPath(value.data());
-    if (registryPath.length() >= 2 && registryPath.front() == L'"' && registryPath.back() == L'"') {
-        registryPath = registryPath.substr(1, registryPath.length() - 2);
-    }
-    return _wcsicmp(registryPath.c_str(), currentPath.c_str()) == 0;
-}
-
-void SetAutoStart(bool enable) {
-    if (IsAdminProcess()) {
-        if (enable) {
-            std::wstring exePath = GetCurrentExePath();
-            std::wstring args    = L"/create /tn \"VirtualDesktopSwitcher\" /tr \\\"";
-            args += exePath;
-            args += L"\\\" /sc onlogon /delay 0000:10 /rl highest /f";
-            RunSchtasks(args.c_str());
-            DeleteRunReg();
-        } else {
-            RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
-            DeleteRunReg();
-        }
-        return;
-    }
-    HKEY       hKey   = nullptr;
-    const LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, kRegRunPath, 0, KEY_WRITE, &hKey);
-    if (result != ERROR_SUCCESS) { return; }
-    if (enable) {
-        std::wstring       exePath    = GetCurrentExePath();
-        const std::wstring quotedPath = L"\"" + exePath + L"\"";
-        RegSetValueExW(hKey, L"VirtualDesktopSwitcher", 0, REG_SZ,
-                       reinterpret_cast<const BYTE *>(quotedPath.c_str()), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-                       static_cast<DWORD>((quotedPath.length() + 1) * sizeof(wchar_t)));
-    } else {
-        DeleteRunReg();
-    }
-    RegCloseKey(hKey);
 }
 
 } // namespace
@@ -240,7 +161,7 @@ bool TrayIcon::Initialize(HWND hwnd, HINSTANCE hInstance) {
         return false;
     }
 
-    m_autoStartEnabled = IsAutoStartEnabled();
+    m_autoStartEnabled = AutoStart::IsEnabled();
     BuildMenu();
     return true;
 }
@@ -253,7 +174,7 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             GetCursorPos(&pt);
             SetForegroundWindow(hwnd);
 
-            m_autoStartEnabled = IsAutoStartEnabled();
+            m_autoStartEnabled = AutoStart::IsEnabled();
             BuildMenu();
 
             TrackPopupMenu(m_hMenu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, nullptr);
@@ -301,14 +222,13 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
 }
 
 void TrayIcon::HandleExit() {
-    DeleteRunReg();
-    RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
+    AutoStart::RemoveAll();
     PostQuitMessage(0);
 }
 
 void TrayIcon::HandleToggleAutoStart() {
-    bool newState = !IsAutoStartEnabled();
-    SetAutoStart(newState);
+    bool newState = !AutoStart::IsEnabled();
+    AutoStart::SetEnabled(newState);
     m_autoStartEnabled = newState;
 }
 
@@ -318,7 +238,7 @@ void TrayIcon::HandleRunAsAdmin() {
     WriteIniInt(L"General", L"RunAsAdmin", nowOn ? 1 : 0);
 
     if (!nowOn && IsAdminProcess()) {
-        RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
+        AutoStart::RemoveTask();
     }
 
     if (!wasOn && !IsAdminProcess()) {
@@ -330,8 +250,7 @@ void TrayIcon::HandleRunAsAdmin() {
 
 void TrayIcon::HandleReset() {
     DeleteFileW((GetAppDataDir() + L"\\settings.ini").c_str());
-    DeleteRunReg();
-    RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
+    AutoStart::RemoveAll();
     ShellExecuteW(nullptr, L"open", GetCurrentExePath().c_str(), nullptr, nullptr, SW_SHOW);
     PostQuitMessage(0);
 }
