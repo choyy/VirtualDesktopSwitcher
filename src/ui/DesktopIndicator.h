@@ -82,11 +82,14 @@ private:
     std::function<void(int)>       m_scrollSwitchFn;
     std::function<void(int, HWND)> m_moveWindowFn;
     HWND                           m_dragHwnd        = nullptr;
+    bool                           m_draggingWindow  = false;
+    bool                           m_pendingDrag     = false;
     int                            m_lastHoverSymbol = -1;
 
     void         ApplyShowMode(ShowMode mode);
     void         SampleBackground();
     void         UpdateRenderTimer();
+    void         ResetDragState();
     bool         NeedsSettleRender() const;
     void         StartBgSampleTimer();
     void         StopBgSampleTimer();

@@ -27,6 +27,8 @@ const float kSmoothBlend = 1.0f - kSmoothKeep;
 
 constexpr UINT WM_INDICATOR_MOVE_WINDOW = WM_USER + 50;
 
+const HCURSOR s_hArrow = LoadCursor(nullptr, IDC_ARROW);
+
 struct EnumCtx {
     std::vector<MonitorLayer> *vec;
     DesktopIndicator          *self;
@@ -256,29 +258,46 @@ LRESULT CALLBACK DesktopIndicator::DragHookProc(int nCode, WPARAM wParam, LPARAM
             }
         }
         if (!onSelf) {
-            s_instance->m_dragHwnd = GetAncestor(WindowFromPoint(hs->pt), GA_ROOT);
-            s_instance->UpdateRenderTimer();
-        }
-    }
-
-    if (wParam == WM_MOUSEMOVE && s_instance->m_dragHwnd != nullptr) {
-        int symIdx = -1;
-        if (s_instance->GetSymbolIndexAt(hs->pt, symIdx)) {
-            if (symIdx != s_instance->m_lastHoverSymbol) {
-                s_instance->m_lastHoverSymbol = symIdx;
-                PostMessageW(s_instance->m_layers[0].hwnd, WM_INDICATOR_MOVE_WINDOW,
-                             static_cast<WPARAM>(symIdx),
-                             reinterpret_cast<LPARAM>(s_instance->m_dragHwnd)); // NOLINT
-            }
-        } else {
+            s_instance->m_pendingDrag     = true;
             s_instance->m_lastHoverSymbol = -1;
         }
     }
 
+    if (wParam == WM_MOUSEMOVE && (s_instance->m_pendingDrag || s_instance->m_draggingWindow)) {
+        GUITHREADINFO info       = {.cbSize = sizeof(info)};
+        bool          inMoveSize = GetGUIThreadInfo(0, &info) != 0 && (info.flags & GUI_INMOVESIZE) != 0;
+
+        if (!s_instance->m_draggingWindow) {
+            if (inMoveSize) {
+                CURSORINFO ci = {.cbSize = sizeof(ci)};
+                if (GetCursorInfo(&ci) != 0 && ci.hCursor == s_hArrow) {
+                    s_instance->m_pendingDrag    = false;
+                    s_instance->m_dragHwnd       = info.hwndMoveSize;
+                    s_instance->m_draggingWindow = true;
+                    s_instance->UpdateRenderTimer();
+                }
+            }
+        } else {
+            if (!inMoveSize) {
+                s_instance->ResetDragState();
+            } else {
+                int symIdx = -1;
+                if (s_instance->GetSymbolIndexAt(hs->pt, symIdx)) {
+                    if (symIdx != s_instance->m_lastHoverSymbol) {
+                        s_instance->m_lastHoverSymbol = symIdx;
+                        PostMessageW(s_instance->m_layers[0].hwnd, WM_INDICATOR_MOVE_WINDOW,
+                                     static_cast<WPARAM>(symIdx),
+                                     reinterpret_cast<LPARAM>(s_instance->m_dragHwnd)); // NOLINT
+                    }
+                } else {
+                    s_instance->m_lastHoverSymbol = -1;
+                }
+            }
+        }
+    }
+
     if (wParam == WM_LBUTTONUP) {
-        s_instance->m_dragHwnd        = nullptr;
-        s_instance->m_lastHoverSymbol = -1;
-        s_instance->UpdateRenderTimer();
+        s_instance->ResetDragState();
     }
 
     return CallNextHookEx(nullptr, nCode, wParam, lParam);
@@ -594,12 +613,20 @@ void DesktopIndicator::SampleBackground() {
 void DesktopIndicator::UpdateRenderTimer() {
     if (m_layers.empty()) { return; }
     bool needsTimer = (m_pCfg != nullptr) && m_pCfg->showMode != ShowMode::AlwaysHide
-                      && (m_pCfg->animMode != 0 || m_pCfg->autoContrast || m_dragHwnd != nullptr || NeedsSettleRender());
+                      && (m_pCfg->animMode != 0 || m_pCfg->autoContrast || m_draggingWindow || NeedsSettleRender());
     if (needsTimer) {
         SetTimer(m_layers[0].hwnd, kRenderTimerId, kRenderIntervalMs, RenderTimer);
     } else {
         KillTimer(m_layers[0].hwnd, kRenderTimerId);
     }
+}
+
+void DesktopIndicator::ResetDragState() {
+    m_pendingDrag     = false;
+    m_dragHwnd        = nullptr;
+    m_draggingWindow  = false;
+    m_lastHoverSymbol = -1;
+    UpdateRenderTimer();
 }
 
 bool DesktopIndicator::NeedsSettleRender() const {
@@ -788,7 +815,7 @@ void DesktopIndicator::Render() {
 
     std::array<COLORREF, 5> baseColors{};
     size_t                  colorCount = ParseMultiColorString(m_pCfg->textColor, baseColors.data(), 5);
-    bool                    isDragging = (m_dragHwnd != nullptr && !m_editMode);
+    bool                    isDragging = (m_draggingWindow && !m_editMode);
 
     BLENDFUNCTION blend       = {};
     blend.BlendOp             = AC_SRC_OVER;
