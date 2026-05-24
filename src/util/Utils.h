@@ -47,6 +47,11 @@ COLORREF ParseColorString(const std::wstring &colorStr);
 size_t   ParseMultiColorString(const std::wstring &colorStr, COLORREF *outColors, size_t maxColors);
 COLORREF InterpolateGradientColor(const COLORREF *colors, size_t colorCount, float t);
 
+// --- HSV Color Space ---
+
+void     RGBToHSV(COLORREF rgb, float &h, float &s, float &v);
+COLORREF HSVToRGB(float h, float s, float v);
+
 // --- CIE LCh Color Space ---
 
 void     RGBToLCh(COLORREF color, double &L, double &C, double &h);

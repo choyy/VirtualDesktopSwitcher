@@ -43,7 +43,7 @@ bool VirtualDesktopHelper::InitCOMServices() {
 
 VirtualDesktopHelper::VirtualDesktopHelper() : m_comInitResult(CoInitialize(nullptr)) {
     if (FAILED(m_comInitResult)) {
-        Log(L"[ERROR] CoInitialize failed: 0x" + std::to_wstring(static_cast<uint32_t>(m_comInitResult)));
+        Log(L"[ERROR] CoInitialize failed");
         return;
     }
     InitCOMServices();
@@ -66,7 +66,7 @@ bool VirtualDesktopHelper::InitImmersiveShell(Microsoft::WRL::ComPtr<IUnknown> &
     HRESULT hr = CoCreateInstance(CLSID_ImmersiveShell, nullptr, CLSCTX_LOCAL_SERVER,
                                   IID_IUnknown, ComPtrAsVoid(shell));
     if (FAILED(hr)) {
-        Log(L"[ERROR] Failed to create IImmersiveShell: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
+        Log(L"[ERROR] Failed to create IImmersiveShell");
         return false;
     }
     Log(L"[INFO] IImmersiveShell created successfully");
@@ -77,7 +77,7 @@ bool VirtualDesktopHelper::InitServiceProvider(Microsoft::WRL::ComPtr<IUnknown> 
                                                Microsoft::WRL::ComPtr<IServiceProvider> &sp) {
     HRESULT hr = shell.As(&sp);
     if (FAILED(hr)) {
-        Log(L"[ERROR] Failed to query IServiceProvider: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
+        Log(L"[ERROR] Failed to query IServiceProvider");
         return false;
     }
     Log(L"[INFO] ServiceProvider queried successfully");
@@ -164,7 +164,7 @@ void VirtualDesktopHelper::InitViewCollection(Microsoft::WRL::ComPtr<IServicePro
     if (SUCCEEDED(hr)) {
         Log(L"[INFO] IApplicationViewCollection created successfully");
     } else {
-        Log(L"[ERROR] Failed to query IApplicationViewCollection: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
+        Log(L"[ERROR] Failed to query IApplicationViewCollection");
     }
 }
 
@@ -172,7 +172,7 @@ void VirtualDesktopHelper::InitDesktopManager() {
     HRESULT hr = CoCreateInstance(CLSID_VirtualDesktopManager, nullptr, CLSCTX_INPROC_SERVER,
                                   IID_IVirtualDesktopManager, ComPtrAsVoid(m_virtualDesktopManager));
     if (FAILED(hr)) {
-        Log(L"[ERROR] Failed to create IVirtualDesktopManager: 0x" + std::to_wstring(static_cast<uint32_t>(hr)));
+        Log(L"[ERROR] Failed to create IVirtualDesktopManager");
     } else {
         Log(L"[INFO] IVirtualDesktopManager created successfully");
     }
@@ -262,15 +262,14 @@ void VirtualDesktopHelper::MoveWindowToDesktop(HWND hwnd, int targetIndex) const
         std::array<wchar_t, 128> titleBuf = {};
         GetWindowTextW(hwnd, titleBuf.data(), static_cast<int>(titleBuf.size()));
         Log(L"[ERROR] MoveWindowToDesktop: GetViewForHwnd failed for \""
-            + std::wstring(titleBuf.data()) + L"\" hr=0x" + std::to_wstring(static_cast<uint32_t>(hr)));
+            + std::wstring(titleBuf.data()) + L"\"");
         return;
     }
 
     Microsoft::WRL::ComPtr<IObjectArray> desktops;
     hr = m_virtualDesktopManagerInternal->GetDesktops(&desktops);
     if (FAILED(hr)) {
-        Log(L"[ERROR] MoveWindowToDesktop: GetDesktops failed hr=0x"
-            + std::to_wstring(static_cast<uint32_t>(hr)));
+        Log(L"[ERROR] MoveWindowToDesktop: GetDesktops failed");
         return;
     }
 
@@ -278,8 +277,7 @@ void VirtualDesktopHelper::MoveWindowToDesktop(HWND hwnd, int targetIndex) const
     hr         = desktops->GetCount(&count);
     if (FAILED(hr) || static_cast<size_t>(targetIndex) >= static_cast<size_t>(count)) {
         Log(L"[ERROR] MoveWindowToDesktop: bad index " + std::to_wstring(targetIndex)
-            + L" count=" + std::to_wstring(count) + L" hr=0x"
-            + std::to_wstring(static_cast<uint32_t>(hr)));
+            + L" count=" + std::to_wstring(count));
         return;
     }
 
@@ -287,8 +285,7 @@ void VirtualDesktopHelper::MoveWindowToDesktop(HWND hwnd, int targetIndex) const
     hr = desktops->GetAt(targetIndex, m_iidVirtualDesktop, ComPtrAsVoid(targetDesktop));
     if (FAILED(hr)) {
         Log(L"[ERROR] MoveWindowToDesktop: GetAt failed for index "
-            + std::to_wstring(targetIndex) + L" hr=0x"
-            + std::to_wstring(static_cast<uint32_t>(hr)));
+            + std::to_wstring(targetIndex));
         return;
     }
 
@@ -296,7 +293,7 @@ void VirtualDesktopHelper::MoveWindowToDesktop(HWND hwnd, int targetIndex) const
     std::array<wchar_t, 128> titleBuf = {};
     GetWindowTextW(hwnd, titleBuf.data(), static_cast<int>(titleBuf.size()));
     Log(L"[INFO] MoveWindowToDesktop: \"" + std::wstring(titleBuf.data()) + L"\" -> desktop "
-        + std::to_wstring(targetIndex) + L" hr=0x" + std::to_wstring(static_cast<uint32_t>(hr)));
+        + std::to_wstring(targetIndex));
 }
 
 bool VirtualDesktopHelper::IsWindowOnCurrentDesktop(HWND hwnd) const {

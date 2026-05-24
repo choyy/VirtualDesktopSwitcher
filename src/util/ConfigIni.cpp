@@ -5,16 +5,18 @@
 #include <array>
 
 namespace {
+std::wstring InitAppDataDir() {
+    std::array<wchar_t, MAX_PATH> appData{};
+    if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appData.data()))) {
+        std::wstring p = std::wstring(appData.data()) + L"\\VirtualDesktopSwitcher";
+        CreateDirectoryW(p.c_str(), nullptr);
+        return p;
+    }
+    return {};
+}
+
 std::wstring GetOrCreateAppDataDir() {
-    static std::wstring path = []() {
-        std::array<wchar_t, MAX_PATH> appData{};
-        if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appData.data()))) {
-            std::wstring p = std::wstring(appData.data()) + L"\\VirtualDesktopSwitcher";
-            CreateDirectoryW(p.c_str(), nullptr);
-            return p;
-        }
-        return std::wstring();
-    }();
+    static std::wstring path = InitAppDataDir();
     return path;
 }
 

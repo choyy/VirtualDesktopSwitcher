@@ -79,7 +79,7 @@ LRESULT CALLBACK VirtualDesktopSwitcher::LowLevelKeyboardProc(int nCode, WPARAM 
         return 1;
     }
 
-    return CallNextHookEx(s_active->m_hHook, nCode, wParam, lParam);
+    return CallNextHookEx(nullptr, nCode, wParam, lParam);
 }
 
 bool VirtualDesktopSwitcher::InstallHook(HWND hwnd) {

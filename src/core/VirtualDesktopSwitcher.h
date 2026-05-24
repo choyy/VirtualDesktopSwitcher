@@ -33,7 +33,7 @@ public:
     void MoveWindowToDesktop(HWND hwnd, int targetIndex);
     void RefreshCOM();
 
-    static void SetModMask(uint8_t mask) { s_modMask = static_cast<ModMask>(mask); };
+    static void SetModMask(uint8_t mask) { s_modMask = static_cast<ModMask>(mask); }
 
     [[nodiscard]] int                            GetDesktopCount() const;
     [[nodiscard]] int                            GetCurrentDesktopIndex() const;

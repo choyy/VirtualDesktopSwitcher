@@ -228,3 +228,44 @@ COLORREF LChToRGB(double L, double C, double h) {
         static_cast<int>(std::round(LinearToSRGB(g) * 255.0)),
         static_cast<int>(std::round(LinearToSRGB(b) * 255.0)));
 }
+
+void RGBToHSV(COLORREF rgb, float &h, float &s, float &v) {
+    float r  = GetRValue(rgb) / 255.0f;
+    float g  = GetGValue(rgb) / 255.0f;
+    float b  = GetBValue(rgb) / 255.0f;
+    float mx = std::max({r, g, b});
+    float mn = std::min({r, g, b});
+    float d  = mx - mn;
+    v        = mx;
+    s        = (mx > 0.001f) ? d / mx : 0.0f;
+    if (d < 0.001f) {
+        h = 0.0f;
+        return;
+    }
+    if (std::fabs(mx - r) < 0.001f) {
+        h = 60.0f * fmod((g - b) / d, 6.0f);
+    } else if (std::fabs(mx - g) < 0.001f) {
+        h = 60.0f * ((b - r) / d + 2.0f);
+    } else {
+        h = 60.0f * ((r - g) / d + 4.0f);
+    }
+    if (h < 0) { h += 360.0f; }
+}
+
+COLORREF HSVToRGB(float h, float s, float v) {
+    h = fmod(h, 360.0f);
+    if (h < 0) { h += 360.0f; }
+    int   i = static_cast<int>(h / 60.0f) % 6;
+    float f = h / 60.0f - static_cast<float>(i);
+    float p = v * (1.0f - s);
+    float q = v * (1.0f - s * f);
+    float t = v * (1.0f - s * (1.0f - f));
+    switch (i) {
+    case 0: return RGB(static_cast<int>(v * 255), static_cast<int>(t * 255), static_cast<int>(p * 255));
+    case 1: return RGB(static_cast<int>(q * 255), static_cast<int>(v * 255), static_cast<int>(p * 255));
+    case 2: return RGB(static_cast<int>(p * 255), static_cast<int>(v * 255), static_cast<int>(t * 255));
+    case 3: return RGB(static_cast<int>(p * 255), static_cast<int>(q * 255), static_cast<int>(v * 255));
+    case 4: return RGB(static_cast<int>(t * 255), static_cast<int>(p * 255), static_cast<int>(v * 255));
+    default: return RGB(static_cast<int>(v * 255), static_cast<int>(p * 255), static_cast<int>(q * 255));
+    }
+}

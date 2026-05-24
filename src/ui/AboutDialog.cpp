@@ -13,8 +13,8 @@ constexpr int IDC_AUTO_CHECK      = 201;
 constexpr int IDC_CHECK_UPDATES   = 202;
 constexpr int IDC_HOMEPAGE        = 102;
 constexpr int IDC_VERSION         = 103;
-constexpr int IDC_APP_ICON        = 104;
-constexpr int IDC_APP_NAME        = 105;
+constexpr int IDC_ABOUT_ICON      = 104;
+constexpr int IDC_ABOUT_TITLE     = 105;
 constexpr int IDC_STATIC_VERSION  = 106;
 constexpr int IDC_STATIC_HOMEPAGE = 203;
 
@@ -34,14 +34,14 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         auto *hInst = reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(GetParent(hwnd), GWLP_HINSTANCE)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
 
-        const RECT rcTitle   = GetChildRect(hwnd, IDC_APP_NAME);
+        const RECT rcTitle   = GetChildRect(hwnd, IDC_ABOUT_TITLE);
         const RECT rcVersion = GetChildRect(hwnd, IDC_VERSION);
         const int  iconSize  = rcVersion.bottom - rcTitle.top;
-        const RECT rcIcon    = GetChildRect(hwnd, IDC_APP_ICON);
-        SetWindowPos(GetDlgItem(hwnd, IDC_APP_ICON), nullptr, rcIcon.left, rcTitle.top, iconSize, iconSize, SWP_NOZORDER);
+        const RECT rcIcon    = GetChildRect(hwnd, IDC_ABOUT_ICON);
+        SetWindowPos(GetDlgItem(hwnd, IDC_ABOUT_ICON), nullptr, rcIcon.left, rcTitle.top, iconSize, iconSize, SWP_NOZORDER);
 
         SetWindowTextW(hwnd, Lang::Get(L"About.Caption"));
-        SetDlgItemTextW(hwnd, IDC_APP_NAME, Lang::Get(L"About.Title"));
+        SetDlgItemTextW(hwnd, IDC_ABOUT_TITLE, Lang::Get(L"About.Title"));
         SetDlgItemTextW(hwnd, IDC_STATIC_HOMEPAGE, Lang::Get(L"About.LabelHomepage"));
         SetDlgItemTextW(hwnd, IDC_STATIC_VERSION, Lang::Get(L"About.Version"));
         SetDlgItemTextW(hwnd, IDC_AUTO_CHECK, Lang::Get(L"About.AutoCheck"));
@@ -50,7 +50,7 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         data->hIcon = static_cast<HICON>(LoadImageW(hInst, MAKEINTRESOURCEW(101), IMAGE_ICON, iconSize, iconSize, LR_DEFAULTCOLOR));
         if (data->hIcon != nullptr) {
-            SendDlgItemMessageW(hwnd, IDC_APP_ICON, STM_SETIMAGE, IMAGE_ICON, PtrToLParam(data->hIcon));
+            SendDlgItemMessageW(hwnd, IDC_ABOUT_ICON, STM_SETIMAGE, IMAGE_ICON, PtrToLParam(data->hIcon));
         }
 
         data->hFont = CreateFontW(-MulDiv(14, static_cast<int>(GetDpiForWindow(hwnd)), 72), 0, 0, 0, FW_NORMAL,
@@ -58,7 +58,7 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                                   OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                   CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         if (data->hFont != nullptr) {
-            SendDlgItemMessageW(hwnd, IDC_APP_NAME, WM_SETFONT, HandleToWParam(data->hFont), TRUE);
+            SendDlgItemMessageW(hwnd, IDC_ABOUT_TITLE, WM_SETFONT, HandleToWParam(data->hFont), TRUE);
         }
 
         SetDlgItemTextW(hwnd, IDC_VERSION, Utf8ToWide(APP_VERSION).c_str());
