@@ -99,19 +99,6 @@ void ApplyContrastAdaptation(MonitorLayer &layer, size_t colorIdx, float &v, flo
     layer.smoothS.at(colorIdx) = s;
 }
 
-std::array<std::wstring, 9> SplitSymbolColors(const std::wstring &colorStr, int symCount) {
-    std::array<std::wstring, 9> symColors;
-    size_t                      pos = 0;
-    for (int i = 0; i < symCount; ++i) {
-        size_t next     = colorStr.find(L'_', pos);
-        symColors.at(i) = (next == std::wstring::npos)
-                              ? colorStr.substr(pos)
-                              : colorStr.substr(pos, next - pos);
-        pos             = (next == std::wstring::npos) ? colorStr.size() : next + 1;
-    }
-    return symColors;
-}
-
 bool SampleLayerBackground(MonitorLayer &layer, HDC hdcScreen) {
     RECT wr;
     GetWindowRect(layer.hwnd, &wr);
@@ -675,12 +662,13 @@ void DesktopIndicator::RenderLayer(MonitorLayer &layer, float hueOff,
                                    const std::array<COLORREF, 5> &baseColors, size_t colorCount,
                                    bool isDragging, HDC hdcScreen, HDC hdcMem, BLENDFUNCTION *blend) {
     auto colorStr = BuildLayerColors(layer, hueOff, baseColors, colorCount);
+    std::array<COLORREF, 5> actualColors{};
+    size_t                  actualCount = ParseMultiColorString(colorStr, actualColors.data(), actualColors.size());
     int  baseFont = MulDiv(m_pCfg->fontSize, layer.dpi, 96);
 
     if (layer.symbolScales[0] < 0.01f) { layer.symbolScales.fill(1.0f); }
 
     const int symCount  = static_cast<int>(m_text.size());
-    auto      symColors = SplitSymbolColors(colorStr, symCount);
     const int padding   = 8;
 
     std::array<float, 9> nominalWidths{};
@@ -764,10 +752,18 @@ void DesktopIndicator::RenderLayer(MonitorLayer &layer, float hueOff,
 
     int curX = padding;
     for (int i = 0; i < symCount; ++i) {
-        int          symFont = static_cast<int>(static_cast<float>(baseFont) * symScales.at(i));
+        int      symFont  = static_cast<int>(static_cast<float>(baseFont) * symScales.at(i));
+        COLORREF symColor = (actualCount >= 2)
+                                ? InterpolateGradientColor(actualColors.data(), actualCount,
+                                                           static_cast<float>(i) / static_cast<float>(std::max(symCount - 1, 1)))
+                                : actualColors[0];
+        std::array<wchar_t, 8> colorBuf{};
+        swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X",
+                   GetRValue(symColor), GetGValue(symColor), GetBValue(symColor)); // NOLINT
+        std::wstring symColorStr(colorBuf.data());
         std::wstring sym(1, m_text[i]);
         m_renderer->Render(bits, w, h, curX, padding, symWidths.at(i), h - padding * 2,
-                           sym.c_str(), symColors.at(i), symFont);
+                           sym.c_str(), symColorStr, symFont);
         layer.symbolCenters.at(i)    = static_cast<float>(curX) + static_cast<float>(symWidths.at(i)) * 0.5f;
         layer.symbolHalfWidths.at(i) = static_cast<float>(symWidths.at(i)) * 0.5f;
         curX += symWidths.at(i) + gap;
