@@ -710,7 +710,6 @@ void DesktopIndicator::RenderLayer(MonitorLayer &layer, float hueOff,
     if (symCount > 1) { nominalTotalW += static_cast<float>(gap * (symCount - 1)); }
 
     float avgSymW  = (symCount > 0) ? nominalTotalW / static_cast<float>(symCount) : 0.0f;
-    float sigma    = std::max(avgSymW * 1.5f, 20.0f);
     float maxExtra = 1.0f;
 
     POINT cursorPt{};
@@ -728,10 +727,14 @@ void DesktopIndicator::RenderLayer(MonitorLayer &layer, float hueOff,
     for (int i = 0; i < symCount; ++i) {
         float targetScale = 1.0f;
         if (isDragging) {
-            auto  cursorClientX = static_cast<float>(cursorPt.x - layerRect.left);
-            float symCenterX    = static_cast<float>(padding) + avgSymW * (static_cast<float>(i) + 0.5f);
-            float dist          = std::fabs(cursorClientX - symCenterX);
-            targetScale         = 1.0f + maxExtra * std::exp(-dist * dist / (2.0f * sigma * sigma));
+            float symCenterX = static_cast<float>(padding) + avgSymW * (static_cast<float>(i) + 0.5f);
+            float symCenterY = static_cast<float>(layerRect.bottom - layerRect.top) * 0.5f;
+            float sigmaX     = std::max(avgSymW * 4.0f, 300.0f);
+            float sigmaY     = sigmaX / 2.0f;
+            float dx         = static_cast<float>(cursorPt.x - layerRect.left) - symCenterX;
+            float dy         = static_cast<float>(cursorPt.y - layerRect.top) - symCenterY;
+            float dist2      = (dx * dx) / (sigmaX * sigmaX) + (dy * dy) / (sigmaY * sigmaY);
+            targetScale      = 1.0f + maxExtra * std::exp(-0.5f * dist2);
         }
 
         float &cur  = layer.symbolScales.at(i);
