@@ -71,12 +71,26 @@ Some applications (e.g., Task Manager) ignore keyboard shortcuts when the switch
 ## 💡 FAQ
 
 <details>
-<summary><b>Taskbar icons flash when switching desktops</b></summary>
+<summary><b>Taskbar icons flash when switching desktops (occasionally)</b></summary>
 
 Disable taskbar flashing in Windows Settings:
 **Settings → Personalization → Taskbar → Taskbar behaviors → Uncheck "Show flashing on taskbar apps"**
 
 > ⚠️ Note: This also disables flashing alerts from all other applications.
+
+</details>
+
+<details>
+<summary><b>Set individual wallpapers for each virtual desktop</b></summary>
+
+In Task View, right-click on the target desktop thumbnail and select "Choose background" to set a separate wallpaper for that desktop.
+
+</details>
+
+<details>
+<summary><b>Rename virtual desktops</b></summary>
+
+In Task View, right-click on a desktop thumbnail and select "Rename" to give each virtual desktop a custom name.
 
 </details>
 

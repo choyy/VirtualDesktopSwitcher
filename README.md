@@ -71,7 +71,7 @@ xmake project -k vsxmake
 ## 💡 常见问题
 
 <details>
-<summary><b>切换虚拟桌面时任务栏图标闪烁</b></summary>
+<summary><b>切换虚拟桌面时任务栏图标闪烁（偶发）</b></summary>
 
 可在 Windows 设置中禁用任务栏闪烁：
 **设置 → 个性化 → 任务栏 → 任务栏行为 → 取消勾选“显示任务栏应用上的闪烁”**
@@ -95,6 +95,20 @@ xmake project -k vsxmake
 - 创建一个新的虚拟桌面：`Win + Ctrl + D`
 - 切换上一个/下一个虚拟桌面：`Win + Ctrl + ← / →`
 - 关闭当前虚拟桌面：`Win + Ctrl + F4`
+
+</details>
+
+<details>
+<summary><b>为每个虚拟桌面单独设置壁纸</b></summary>
+
+在任务视图中右键点击目标桌面缩略图，选择 “选择背景”，即可为该桌面单独设置壁纸。
+
+</details>
+
+<details>
+<summary><b>重命名虚拟桌面</b></summary>
+
+在任务视图中右键点击桌面缩略图，选择 “重命名” 选项，可对每个虚拟桌面进行重命名。
 
 </details>
 
