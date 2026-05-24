@@ -11,6 +11,7 @@
 > A lightweight virtual desktop quick-switching tool for Windows 10/11. Jump to any desktop instantly with `Alt + 1~9`, with a customizable on-screen desktop status indicator.
 
 ![Preview](assets/demo.gif)
+![Preview](assets/demo2.gif)
 
 ## ✨ Features
 
