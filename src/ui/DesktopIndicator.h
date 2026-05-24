@@ -86,9 +86,9 @@ private:
 
     void         ApplyShowMode(ShowMode mode);
     void         SampleBackground();
-    void         StartAnimTimer();
+    void         UpdateRenderTimer();
+    bool         NeedsSettleRender() const;
     void         StartBgSampleTimer();
-    void         StopAnimTimer();
     void         StopBgSampleTimer();
     void         RebuildText();
     std::wstring BuildLayerColors(MonitorLayer &layer, float hueOff, const std::array<COLORREF, 5> &baseColors, size_t colorCount) const;
@@ -109,7 +109,7 @@ private:
     static LRESULT CALLBACK  DragHookProc(int nCode, WPARAM wParam, LPARAM lParam);
 
     static void CALLBACK    AutoHideTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
-    static void CALLBACK    AnimTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
+    static void CALLBACK    RenderTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
     static void CALLBACK    BgSampleTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
     LRESULT                 HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);

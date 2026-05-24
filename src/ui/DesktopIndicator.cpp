@@ -15,14 +15,14 @@
 namespace {
 
 constexpr UINT_PTR kAutoHideTimerId  = 100;
-constexpr UINT_PTR kAnimTimerId      = 101;
+constexpr UINT_PTR kRenderTimerId    = 101;
 constexpr UINT_PTR kBgSampleTimerId  = 102;
-constexpr int      kAnimIntervalMs   = 16;
+constexpr int      kRenderIntervalMs = 16;
 constexpr int      kSampleIntervalMs = 2500;
 constexpr int      kAutoHideShow1sMs = 1000;
 constexpr int      kAutoHideShow3sMs = 3000;
-// 1 秒收敛至 99%：coeff ^ (1000 / kAnimIntervalMs) == 0.01
-const float kSmoothKeep  = std::pow(0.01f, kAnimIntervalMs / 1000.0f);
+// 1 秒收敛至 99%：coeff ^ (1000 / kRenderIntervalMs) == 0.01
+const float kSmoothKeep  = std::pow(0.01f, kRenderIntervalMs / 1000.0f);
 const float kSmoothBlend = 1.0f - kSmoothKeep;
 
 constexpr UINT WM_INDICATOR_MOVE_WINDOW = WM_USER + 50;
@@ -257,9 +257,7 @@ LRESULT CALLBACK DesktopIndicator::DragHookProc(int nCode, WPARAM wParam, LPARAM
         }
         if (!onSelf) {
             s_instance->m_dragHwnd = GetAncestor(WindowFromPoint(hs->pt), GA_ROOT);
-            if (s_instance->m_pCfg->animMode == 0) {
-                s_instance->StartAnimTimer();
-            }
+            s_instance->UpdateRenderTimer();
         }
     }
 
@@ -280,9 +278,7 @@ LRESULT CALLBACK DesktopIndicator::DragHookProc(int nCode, WPARAM wParam, LPARAM
     if (wParam == WM_LBUTTONUP) {
         s_instance->m_dragHwnd        = nullptr;
         s_instance->m_lastHoverSymbol = -1;
-        if (s_instance->m_pCfg != nullptr && s_instance->m_pCfg->animMode == 0) {
-            s_instance->StopAnimTimer();
-        }
+        s_instance->UpdateRenderTimer();
     }
 
     return CallNextHookEx(nullptr, nCode, wParam, lParam);
@@ -380,8 +376,8 @@ void DesktopIndicator::ApplyShowMode(ShowMode mode) {
     if (!m_layers.empty()) { KillTimer(m_layers[0].hwnd, kAutoHideTimerId); }
     if (mode == ShowMode::AlwaysHide) {
         for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_HIDE); }
-        StopAnimTimer();
         StopBgSampleTimer();
+        UpdateRenderTimer();
     } else {
         for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
         if (mode >= ShowMode::Show1s) { ShowTemporarily(); }
@@ -406,13 +402,7 @@ void CALLBACK DesktopIndicator::AutoHideTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR
 void DesktopIndicator::SetAnimMode(bool on) {
     if (m_pCfg == nullptr) { return; }
     m_pCfg->animMode = on ? 1 : 0;
-    if (!m_layers.empty()) {
-        if (on) {
-            StartAnimTimer();
-        } else {
-            StopAnimTimer();
-        }
-    }
+    UpdateRenderTimer();
     Render();
 }
 
@@ -427,13 +417,13 @@ void DesktopIndicator::SetAutoContrast(bool on) {
             StopBgSampleTimer();
         }
     }
+    UpdateRenderTimer();
     Render();
 }
 
-void CALLBACK DesktopIndicator::AnimTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR /*idEvent*/, DWORD /*dwTime*/) {
+void CALLBACK DesktopIndicator::RenderTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR /*idEvent*/, DWORD /*dwTime*/) {
     auto *overlay = GetWndUserData<DesktopIndicator>(hwnd);
     if (overlay == nullptr || overlay->m_pCfg == nullptr) { return; }
-    if (overlay->m_pCfg->animMode == 0 && overlay->m_dragHwnd == nullptr) { return; }
     if (overlay->m_pCfg->showMode == ShowMode::AlwaysHide) { return; }
     if (overlay->m_pCfg->showMode >= ShowMode::Show1s && IsWindowVisible(hwnd) == 0) { return; }
     overlay->Render();
@@ -445,7 +435,6 @@ void CALLBACK DesktopIndicator::BgSampleTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR
     if (overlay->m_pCfg->showMode == ShowMode::AlwaysHide) { return; }
     if (overlay->m_pCfg->showMode >= ShowMode::Show1s && IsWindowVisible(hwnd) == 0) { return; }
     overlay->SampleBackground();
-    overlay->Render();
 }
 
 void DesktopIndicator::RebuildText() {
@@ -602,12 +591,26 @@ void DesktopIndicator::SampleBackground() {
     ReleaseDC(nullptr, hdcScreen);
 }
 
-void DesktopIndicator::StartAnimTimer() {
-    if ((m_pCfg != nullptr) && (m_pCfg->animMode != 0 || m_dragHwnd != nullptr)
-        && m_pCfg->showMode != ShowMode::AlwaysHide
-        && !m_layers.empty()) {
-        SetTimer(m_layers[0].hwnd, kAnimTimerId, kAnimIntervalMs, AnimTimer);
+void DesktopIndicator::UpdateRenderTimer() {
+    if (m_layers.empty()) { return; }
+    bool needsTimer = (m_pCfg != nullptr) && m_pCfg->showMode != ShowMode::AlwaysHide
+                      && (m_pCfg->animMode != 0 || m_pCfg->autoContrast || m_dragHwnd != nullptr || NeedsSettleRender());
+    if (needsTimer) {
+        SetTimer(m_layers[0].hwnd, kRenderTimerId, kRenderIntervalMs, RenderTimer);
+    } else {
+        KillTimer(m_layers[0].hwnd, kRenderTimerId);
     }
+}
+
+bool DesktopIndicator::NeedsSettleRender() const {
+    for (const auto &l : m_layers) {
+        for (int i = 0; i < static_cast<int>(m_text.size()); ++i) {
+            if (l.symbolScales.at(i) > 1.005f) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void DesktopIndicator::StartBgSampleTimer() {
@@ -615,12 +618,6 @@ void DesktopIndicator::StartBgSampleTimer() {
         && m_pCfg->showMode != ShowMode::AlwaysHide
         && !m_layers.empty()) {
         SetTimer(m_layers[0].hwnd, kBgSampleTimerId, kSampleIntervalMs, BgSampleTimer);
-    }
-}
-
-void DesktopIndicator::StopAnimTimer() {
-    if (!m_layers.empty()) {
-        KillTimer(m_layers[0].hwnd, kAnimTimerId);
     }
 }
 
@@ -758,7 +755,7 @@ void DesktopIndicator::RenderLayer(MonitorLayer &layer, float hueOff,
                                                                          static_cast<float>(i) / static_cast<float>(std::max(symCount - 1, 1)))
                                               : actualColors[0];
         std::array<wchar_t, 8> colorBuf{};
-        swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X",
+        swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X",             // NOLINT
                    GetRValue(symColor), GetGValue(symColor), GetBValue(symColor)); // NOLINT
         std::wstring symColorStr(colorBuf.data());
         std::wstring sym(1, m_text[i]);
@@ -844,7 +841,7 @@ void DesktopIndicator::Rebuild() {
                          SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
     }
-    StartAnimTimer();
+    UpdateRenderTimer();
     StartBgSampleTimer();
     RegisterMouseWheelInput();
 }
