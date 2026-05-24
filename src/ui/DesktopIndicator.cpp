@@ -661,15 +661,15 @@ std::wstring DesktopIndicator::BuildLayerColors(MonitorLayer &layer, float hueOf
 void DesktopIndicator::RenderLayer(MonitorLayer &layer, float hueOff,
                                    const std::array<COLORREF, 5> &baseColors, size_t colorCount,
                                    bool isDragging, HDC hdcScreen, HDC hdcMem, BLENDFUNCTION *blend) {
-    auto colorStr = BuildLayerColors(layer, hueOff, baseColors, colorCount);
+    auto                    colorStr = BuildLayerColors(layer, hueOff, baseColors, colorCount);
     std::array<COLORREF, 5> actualColors{};
     size_t                  actualCount = ParseMultiColorString(colorStr, actualColors.data(), actualColors.size());
-    int  baseFont = MulDiv(m_pCfg->fontSize, layer.dpi, 96);
+    int                     baseFont    = MulDiv(m_pCfg->fontSize, layer.dpi, 96);
 
     if (layer.symbolScales[0] < 0.01f) { layer.symbolScales.fill(1.0f); }
 
-    const int symCount  = static_cast<int>(m_text.size());
-    const int padding   = 8;
+    const int symCount = static_cast<int>(m_text.size());
+    const int padding  = 8;
 
     std::array<float, 9> nominalWidths{};
     float                nominalTotalW = 0;
@@ -752,11 +752,11 @@ void DesktopIndicator::RenderLayer(MonitorLayer &layer, float hueOff,
 
     int curX = padding;
     for (int i = 0; i < symCount; ++i) {
-        int      symFont  = static_cast<int>(static_cast<float>(baseFont) * symScales.at(i));
-        COLORREF symColor = (actualCount >= 2)
-                                ? InterpolateGradientColor(actualColors.data(), actualCount,
-                                                           static_cast<float>(i) / static_cast<float>(std::max(symCount - 1, 1)))
-                                : actualColors[0];
+        int                    symFont  = static_cast<int>(static_cast<float>(baseFont) * symScales.at(i));
+        COLORREF               symColor = (actualCount >= 2)
+                                              ? InterpolateGradientColor(actualColors.data(), actualCount,
+                                                                         static_cast<float>(i) / static_cast<float>(std::max(symCount - 1, 1)))
+                                              : actualColors[0];
         std::array<wchar_t, 8> colorBuf{};
         swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X",
                    GetRValue(symColor), GetGValue(symColor), GetBValue(symColor)); // NOLINT

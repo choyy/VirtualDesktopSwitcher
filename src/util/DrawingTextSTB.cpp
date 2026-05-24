@@ -41,7 +41,6 @@ bool FontRenderer::LoadFontData(const std::wstring &fontName) {
         return false;
     }
 
-    m_fontBuffer = m_fontData.data();
     return true;
 }
 
@@ -52,7 +51,7 @@ bool FontRenderer::Init(const std::wstring &fontName) {
         return false;
     }
 
-    if (stbtt_InitFont(&m_fontInfo, m_fontBuffer, stbtt_GetFontOffsetForIndex(m_fontBuffer, 0)) == 0) {
+    if (stbtt_InitFont(&m_fontInfo, m_fontData.data(), stbtt_GetFontOffsetForIndex(m_fontData.data(), 0)) == 0) {
         return false;
     }
 
@@ -61,8 +60,7 @@ bool FontRenderer::Init(const std::wstring &fontName) {
 }
 
 void FontRenderer::Cleanup() {
-    m_loaded     = false;
-    m_fontBuffer = nullptr;
+    m_loaded = false;
     m_fontData.clear();
 }
 

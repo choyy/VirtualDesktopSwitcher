@@ -29,7 +29,6 @@ public:
 private:
     bool                       m_loaded = false;
     stbtt_fontinfo             m_fontInfo{};
-    unsigned char             *m_fontBuffer = nullptr;
     std::vector<unsigned char> m_fontData;
 
     void Cleanup();
