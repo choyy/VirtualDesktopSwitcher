@@ -267,6 +267,9 @@ LRESULT CALLBACK DesktopIndicator::DragHookProc(int nCode, WPARAM wParam, LPARAM
         }
         if (!onSelf) {
             s_instance->m_dragHwnd = GetAncestor(WindowFromPoint(hs->pt), GA_ROOT);
+            if (s_instance->m_pCfg->animMode == 0) {
+                s_instance->StartAnimTimer();
+            }
         }
     }
 
@@ -287,6 +290,9 @@ LRESULT CALLBACK DesktopIndicator::DragHookProc(int nCode, WPARAM wParam, LPARAM
     if (wParam == WM_LBUTTONUP) {
         s_instance->m_dragHwnd        = nullptr;
         s_instance->m_lastHoverSymbol = -1;
+        if (s_instance->m_pCfg != nullptr && s_instance->m_pCfg->animMode == 0) {
+            s_instance->StopAnimTimer();
+        }
     }
 
     return CallNextHookEx(nullptr, nCode, wParam, lParam);
@@ -436,7 +442,8 @@ void DesktopIndicator::SetAutoContrast(bool on) {
 
 void CALLBACK DesktopIndicator::AnimTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR /*idEvent*/, DWORD /*dwTime*/) {
     auto *overlay = GetWndUserData<DesktopIndicator>(hwnd);
-    if (overlay == nullptr || overlay->m_pCfg == nullptr || overlay->m_pCfg->animMode == 0) { return; }
+    if (overlay == nullptr || overlay->m_pCfg == nullptr) { return; }
+    if (overlay->m_pCfg->animMode == 0 && overlay->m_dragHwnd == nullptr) { return; }
     if (overlay->m_pCfg->showMode == ShowMode::AlwaysHide) { return; }
     if (overlay->m_pCfg->showMode >= ShowMode::Show1s && IsWindowVisible(hwnd) == 0) { return; }
     overlay->Render();
@@ -606,7 +613,7 @@ void DesktopIndicator::SampleBackground() {
 }
 
 void DesktopIndicator::StartAnimTimer() {
-    if ((m_pCfg != nullptr) && m_pCfg->animMode != 0
+    if ((m_pCfg != nullptr) && (m_pCfg->animMode != 0 || m_dragHwnd != nullptr)
         && m_pCfg->showMode != ShowMode::AlwaysHide
         && !m_layers.empty()) {
         SetTimer(m_layers[0].hwnd, kAnimTimerId, kAnimIntervalMs, AnimTimer);
