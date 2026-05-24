@@ -13,7 +13,6 @@ constexpr auto kRegRunPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run
 
 constexpr UINT WM_TRAY_EXIT             = WM_USER + 3;
 constexpr UINT WM_TRAY_TOGGLE_AUTOSTART = WM_USER + 4;
-constexpr UINT WM_TRAY_EDIT_MODE        = WM_USER + 5;
 constexpr UINT WM_TRAY_SETTINGS         = WM_USER + 6;
 constexpr UINT WM_TRAY_ABOUT            = WM_USER + 7;
 constexpr UINT WM_TRAY_RUNAS_ADMIN      = WM_USER + 8;
@@ -301,110 +300,122 @@ void TrayIcon::HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
     }
 }
 
+void TrayIcon::HandleExit() {
+    DeleteRunReg();
+    RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
+    PostQuitMessage(0);
+}
+
+void TrayIcon::HandleToggleAutoStart() {
+    bool newState = !IsAutoStartEnabled();
+    SetAutoStart(newState);
+    m_autoStartEnabled = newState;
+}
+
+void TrayIcon::HandleRunAsAdmin() {
+    bool wasOn = ReadIniInt(L"General", L"RunAsAdmin", 0) != 0;
+    bool nowOn = !wasOn;
+    WriteIniInt(L"General", L"RunAsAdmin", nowOn ? 1 : 0);
+
+    if (!nowOn && IsAdminProcess()) {
+        RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
+    }
+
+    if (!wasOn && !IsAdminProcess()) {
+        std::wstring exePath = GetCurrentExePath();
+        ShellExecuteW(nullptr, L"runas", exePath.c_str(), nullptr, nullptr, SW_SHOW);
+        PostQuitMessage(0);
+    }
+}
+
+void TrayIcon::HandleReset() {
+    DeleteFileW((GetAppDataDir() + L"\\settings.ini").c_str());
+    DeleteRunReg();
+    RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
+    ShellExecuteW(nullptr, L"open", GetCurrentExePath().c_str(), nullptr, nullptr, SW_SHOW);
+    PostQuitMessage(0);
+}
+
+void TrayIcon::HandleAnimMode() {
+    bool nowOn = ReadIniInt(L"Display", L"AnimMode", 1) == 0;
+    WriteIniInt(L"Display", L"AnimMode", nowOn ? 1 : 0);
+    if (m_animModeFn) { m_animModeFn(nowOn); }
+}
+
+void TrayIcon::HandleAutoContrast() {
+    bool nowOn = ReadIniInt(L"Display", L"AutoContrast", 0) == 0;
+    WriteIniInt(L"Display", L"AutoContrast", nowOn ? 1 : 0);
+    if (m_autoContrastFn) { m_autoContrastFn(nowOn); }
+}
+
+void TrayIcon::HandleToggleShow() {
+    int mode    = ReadIniInt(L"Display", L"ShowMode", 0);
+    int newMode = (mode == static_cast<int>(ShowMode::AlwaysHide))
+                      ? static_cast<int>(ShowMode::AlwaysShow)
+                      : static_cast<int>(ShowMode::AlwaysHide);
+    WriteIniInt(L"Display", L"ShowMode", newMode);
+    if (m_showModeFn) { m_showModeFn(newMode); }
+}
+
+void TrayIcon::HandleShowModeCommand(int mode) {
+    WriteIniInt(L"Display", L"ShowMode", mode);
+    if (m_showModeFn) { m_showModeFn(mode); }
+}
+
+void TrayIcon::HandlePositionCommand(int preset) {
+    m_activePositionPreset = preset;
+    if (m_positionFn) { m_positionFn(m_activePositionPreset); }
+}
+
+void TrayIcon::HandleColorCommand(int index) {
+    if (m_colorFn) { m_colorFn(kPredefinedColors.at(index)); }
+}
+
 void TrayIcon::HandleCommand(WPARAM wParam) {
     const UINT cmd = LOWORD(wParam);
 
+    if (cmd >= CMD_SHOW_MODE_BASE && cmd < CMD_SHOW_MODE_CUSTOM) {
+        HandleShowModeCommand(static_cast<int>(cmd - CMD_SHOW_MODE_BASE));
+        return;
+    }
+    if (cmd >= CMD_POSITION_BASE && cmd < CMD_POSITION_CUSTOM) {
+        HandlePositionCommand(static_cast<int>(cmd - CMD_POSITION_BASE));
+        return;
+    }
+    if (cmd >= CMD_COLOR_OPTIONS_BASE && cmd < CMD_COLOR_OPTIONS_BASE + static_cast<UINT>(kPredefinedColors.size())) {
+        HandleColorCommand(static_cast<int>(cmd - CMD_COLOR_OPTIONS_BASE));
+        return;
+    }
+
     switch (cmd) {
-    case WM_TRAY_EXIT:
-        DeleteRunReg();
-        RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
-        PostQuitMessage(0);
-        break;
-
-    case WM_TRAY_TOGGLE_AUTOSTART: {
-        bool newState = !IsAutoStartEnabled();
-        SetAutoStart(newState);
-        m_autoStartEnabled = newState;
-        break;
-    }
-
-    case WM_TRAY_RUNAS_ADMIN: {
-        bool wasOn = ReadIniInt(L"General", L"RunAsAdmin", 0) != 0;
-        bool nowOn = !wasOn;
-        WriteIniInt(L"General", L"RunAsAdmin", nowOn ? 1 : 0);
-
-        if (!nowOn && IsAdminProcess()) {
-            RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
-        }
-
-        if (!wasOn && !IsAdminProcess()) {
-            std::wstring exePath = GetCurrentExePath();
-            ShellExecuteW(nullptr, L"runas", exePath.c_str(), nullptr, nullptr, SW_SHOW);
-            PostQuitMessage(0);
-        }
-        break;
-    }
-
+    case WM_TRAY_EXIT: HandleExit(); break;
+    case WM_TRAY_TOGGLE_AUTOSTART: HandleToggleAutoStart(); break;
+    case WM_TRAY_RUNAS_ADMIN: HandleRunAsAdmin(); break;
     case CMD_POSITION_CUSTOM:
         m_activePositionPreset = -1;
         if (m_editModeFn) { m_editModeFn(); }
         break;
-
     case WM_TRAY_SETTINGS:
         if (m_settingsFn) { m_settingsFn(); }
         break;
-
     case WM_TRAY_LANG_CHINESE:
         Lang::Set(LangType::Chinese);
         WriteIniInt(L"General", L"Language", 0);
         UpdateTooltip(Lang::Get(L"Tray.DefaultTip"));
         break;
-
     case WM_TRAY_LANG_ENGLISH:
         Lang::Set(LangType::English);
         WriteIniInt(L"General", L"Language", 1);
         UpdateTooltip(Lang::Get(L"Tray.DefaultTip"));
         break;
-
-    case WM_TRAY_RESET:
-        DeleteFileW((GetAppDataDir() + L"\\settings.ini").c_str());
-        DeleteRunReg();
-        RunSchtasks(L"/delete /tn \"VirtualDesktopSwitcher\" /f");
-        ShellExecuteW(nullptr, L"open", GetCurrentExePath().c_str(), nullptr, nullptr, SW_SHOW);
-        PostQuitMessage(0);
-        break;
-
+    case WM_TRAY_RESET: HandleReset(); break;
     case WM_TRAY_ABOUT:
         if (m_aboutFn) { m_aboutFn(); }
         break;
-
-    case WM_TRAY_ANIM_MODE: {
-        bool nowOn = ReadIniInt(L"Display", L"AnimMode", 1) == 0;
-        WriteIniInt(L"Display", L"AnimMode", nowOn ? 1 : 0);
-        if (m_animModeFn) { m_animModeFn(nowOn); }
-        break;
-    }
-
-    case WM_TRAY_AUTO_CONTRAST: {
-        bool nowOn = ReadIniInt(L"Display", L"AutoContrast", 0) == 0;
-        WriteIniInt(L"Display", L"AutoContrast", nowOn ? 1 : 0);
-        if (m_autoContrastFn) { m_autoContrastFn(nowOn); }
-        break;
-    }
-
-    case WM_TRAY_TOGGLE_SHOW: {
-        int mode    = ReadIniInt(L"Display", L"ShowMode", 0);
-        int newMode = (mode == static_cast<int>(ShowMode::AlwaysHide))
-                          ? static_cast<int>(ShowMode::AlwaysShow)
-                          : static_cast<int>(ShowMode::AlwaysHide);
-        WriteIniInt(L"Display", L"ShowMode", newMode);
-        if (m_showModeFn) { m_showModeFn(newMode); }
-        break;
-    }
-
-    default:
-        if (cmd >= CMD_SHOW_MODE_BASE && cmd < CMD_SHOW_MODE_CUSTOM) {
-            int mode = static_cast<int>(cmd - CMD_SHOW_MODE_BASE);
-            WriteIniInt(L"Display", L"ShowMode", mode);
-            if (m_showModeFn) { m_showModeFn(mode); }
-        } else if (cmd >= CMD_POSITION_BASE && cmd < CMD_POSITION_CUSTOM) {
-            m_activePositionPreset = static_cast<int>(cmd - CMD_POSITION_BASE);
-            if (m_positionFn) { m_positionFn(m_activePositionPreset); }
-        } else if (cmd >= CMD_COLOR_OPTIONS_BASE && cmd < CMD_COLOR_OPTIONS_BASE + static_cast<UINT>(kPredefinedColors.size())) {
-            const int index = static_cast<int>(cmd - CMD_COLOR_OPTIONS_BASE);
-            if (m_colorFn) { m_colorFn(kPredefinedColors.at(index)); }
-        }
-        break;
+    case WM_TRAY_ANIM_MODE: HandleAnimMode(); break;
+    case WM_TRAY_AUTO_CONTRAST: HandleAutoContrast(); break;
+    case WM_TRAY_TOGGLE_SHOW: HandleToggleShow(); break;
+    default: break;
     }
 }
 

@@ -75,6 +75,102 @@ POINT CalcPresetPos(int preset, RECT mon, RECT work, int w, int h) {
     }
 }
 
+void ApplyContrastAdaptation(MonitorLayer &layer, size_t colorIdx, float &v, float &s) {
+    double bgL = layer.bgLch_L;
+    double bgC = layer.bgLch_C;
+
+    v = (bgL > 60.0) ? std::clamp(v, 0.25f, 0.70f)
+                     : std::clamp(v, 0.50f, 0.90f);
+
+    if (s > 0.05f) {
+        float targetS = 0.25f + static_cast<float>(bgC * 0.004);
+        targetS       = std::clamp(targetS, 0.25f, 0.75f);
+        if (s < targetS) { s += (targetS - s) * 0.5f; }
+    }
+
+    if (layer.smoothV.at(colorIdx) > 0.01f) {
+        v = layer.smoothV.at(colorIdx) * 0.8f + v * 0.2f;
+        s = layer.smoothS.at(colorIdx) * 0.8f + s * 0.2f;
+    }
+    layer.smoothV.at(colorIdx) = v;
+    layer.smoothS.at(colorIdx) = s;
+}
+
+std::array<std::wstring, 9> SplitSymbolColors(const std::wstring &colorStr, int symCount) {
+    std::array<std::wstring, 9> symColors;
+    size_t                      pos = 0;
+    for (int i = 0; i < symCount; ++i) {
+        size_t next     = colorStr.find(L'_', pos);
+        symColors.at(i) = (next == std::wstring::npos)
+                              ? colorStr.substr(pos)
+                              : colorStr.substr(pos, next - pos);
+        pos             = (next == std::wstring::npos) ? colorStr.size() : next + 1;
+    }
+    return symColors;
+}
+
+bool SampleLayerBackground(MonitorLayer &layer, HDC hdcScreen) {
+    RECT wr;
+    GetWindowRect(layer.hwnd, &wr);
+    int wx = wr.left, wy = wr.top;
+    int ww = wr.right - wr.left, wh = wr.bottom - wr.top;
+    if (ww <= 0 || wh <= 0) { return false; }
+
+    constexpr int expand = 8;
+    int           cx = wx - expand, cy = wy - expand;
+    int           cw = ww + expand * 2, ch = wh + expand * 2;
+
+    HDC hdcMem = CreateCompatibleDC(hdcScreen);
+    if (hdcMem == nullptr) { return false; }
+
+    HBITMAP hBmp = CreateCompatibleBitmap(hdcScreen, cw, ch);
+    if (hBmp == nullptr) {
+        DeleteDC(hdcMem);
+        return false;
+    }
+
+    auto *oldBmp = SelectObject(hdcMem, hBmp);
+    BOOL  ok     = BitBlt(hdcMem, 0, 0, cw, ch, hdcScreen, cx, cy, SRCCOPY);
+
+    if (ok != 0) {
+        BITMAPINFO bmi              = {};
+        bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth       = cw;
+        bmi.bmiHeader.biHeight      = -ch;
+        bmi.bmiHeader.biPlanes      = 1;
+        bmi.bmiHeader.biBitCount    = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+
+        std::vector<DWORD> pixels(static_cast<size_t>(cw) * ch);
+        if (GetDIBits(hdcMem, hBmp, 0, ch, pixels.data(), &bmi, DIB_RGB_COLORS) != 0) {
+            int totalR = 0, totalG = 0, totalB = 0, count = 0;
+            int innerL = expand, innerT = expand;
+            int innerR = expand + ww, innerB = expand + wh;
+            for (int y = 0; y < ch; ++y) {
+                for (int x = 0; x < cw; ++x) {
+                    if (x >= innerL && x < innerR && y >= innerT && y < innerB) { continue; }
+                    DWORD px = pixels[static_cast<size_t>(y) * cw + x];
+                    totalR += GetRValue(px);
+                    totalG += GetGValue(px);
+                    totalB += GetBValue(px);
+                    ++count;
+                }
+            }
+            if (count > 0) {
+                COLORREF avgColor = RGB(totalR / count, totalG / count, totalB / count);
+                double   h{};
+                RGBToLCh(avgColor, layer.bgLch_L, layer.bgLch_C, h);
+                layer.bgSampleValid = true;
+            }
+        }
+    }
+
+    SelectObject(hdcMem, oldBmp);
+    DeleteObject(hBmp);
+    DeleteDC(hdcMem);
+    return true;
+}
+
 } // namespace
 
 HHOOK             DesktopIndicator::s_dragHook = nullptr;
@@ -504,64 +600,7 @@ void DesktopIndicator::SampleBackground() {
     if (hdcScreen == nullptr) { return; }
 
     for (auto &l : m_layers) {
-        RECT wr;
-        GetWindowRect(l.hwnd, &wr);
-        int wx = wr.left, wy = wr.top;
-        int ww = wr.right - wr.left, wh = wr.bottom - wr.top;
-        if (ww <= 0 || wh <= 0) { continue; }
-
-        constexpr int expand = 8;
-        int           cx = wx - expand, cy = wy - expand;
-        int           cw = ww + expand * 2, ch = wh + expand * 2;
-
-        HDC hdcMem = CreateCompatibleDC(hdcScreen);
-        if (hdcMem == nullptr) { continue; }
-
-        HBITMAP hBmp = CreateCompatibleBitmap(hdcScreen, cw, ch);
-        if (hBmp == nullptr) {
-            DeleteDC(hdcMem);
-            continue;
-        }
-
-        auto *oldBmp = SelectObject(hdcMem, hBmp);
-        BOOL  ok     = BitBlt(hdcMem, 0, 0, cw, ch, hdcScreen, cx, cy, SRCCOPY);
-
-        if (ok != 0) {
-            BITMAPINFO bmi              = {};
-            bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-            bmi.bmiHeader.biWidth       = cw;
-            bmi.bmiHeader.biHeight      = -ch;
-            bmi.bmiHeader.biPlanes      = 1;
-            bmi.bmiHeader.biBitCount    = 32;
-            bmi.bmiHeader.biCompression = BI_RGB;
-
-            std::vector<DWORD> pixels(static_cast<size_t>(cw) * ch);
-            if (GetDIBits(hdcMem, hBmp, 0, ch, pixels.data(), &bmi, DIB_RGB_COLORS) != 0) {
-                int totalR = 0, totalG = 0, totalB = 0, count = 0;
-                int innerL = expand, innerT = expand;
-                int innerR = expand + ww, innerB = expand + wh;
-                for (int y = 0; y < ch; ++y) {
-                    for (int x = 0; x < cw; ++x) {
-                        if (x >= innerL && x < innerR && y >= innerT && y < innerB) { continue; }
-                        DWORD px = pixels[static_cast<size_t>(y) * cw + x];
-                        totalR += GetRValue(px);
-                        totalG += GetGValue(px);
-                        totalB += GetBValue(px);
-                        ++count;
-                    }
-                }
-                if (count > 0) {
-                    COLORREF avgColor = RGB(totalR / count, totalG / count, totalB / count);
-                    double   h{};
-                    RGBToLCh(avgColor, l.bgLch_L, l.bgLch_C, h);
-                    l.bgSampleValid = true;
-                }
-            }
-        }
-
-        SelectObject(hdcMem, oldBmp);
-        DeleteObject(hBmp);
-        DeleteDC(hdcMem);
+        SampleLayerBackground(l, hdcScreen);
     }
     ReleaseDC(nullptr, hdcScreen);
 }
@@ -605,35 +644,14 @@ std::wstring DesktopIndicator::BuildLayerColors(MonitorLayer &layer, float hueOf
         float h{}, s{}, v{};
         RGBToHSV(baseColors.at(i), h, s, v);
 
-        // 呼吸色相旋转
         if (m_pCfg->animMode != 0) {
             h = fmod(h + hueOff, 360.0f);
         }
 
-        // HSV 自适应: 基于背景 L* 和 C*
         if (m_pCfg->autoContrast && layer.bgSampleValid) {
-            double bgL = layer.bgLch_L;
-            double bgC = layer.bgLch_C;
-
-            // V 调整: 亮底压暗, 暗底提亮
-            v = (bgL > 60.0) ? std::clamp(v, 0.25f, 0.70f)
-                             : std::clamp(v, 0.50f, 0.90f);
-
-            // S 调整: 低饱和度拉升（放过灰度色）
-            if (s > 0.05f) {
-                float targetS = 0.25f + static_cast<float>(bgC * 0.004);
-                targetS       = (std::clamp)(targetS, 0.25f, 0.75f);
-                if (s < targetS) { s += (targetS - s) * 0.5f; }
-            }
-
-            // 平滑: 保留 80% 上帧状态 + 20% 新值
-            if (layer.smoothV.at(i) > 0.01f) {
-                v = layer.smoothV.at(i) * 0.8f + v * 0.2f;
-                s = layer.smoothS.at(i) * 0.8f + s * 0.2f;
-            }
-            layer.smoothV.at(i) = v;
-            layer.smoothS.at(i) = s;
+            ApplyContrastAdaptation(layer, i, v, s);
         }
+
         COLORREF               c = HSVToRGB(h, s, v);
         std::array<wchar_t, 8> buf{};
         swprintf_s(buf.data(), buf.size(), L"#%02X%02X%02X", GetRValue(c), GetGValue(c), GetBValue(c)); // NOLINT
@@ -643,25 +661,131 @@ std::wstring DesktopIndicator::BuildLayerColors(MonitorLayer &layer, float hueOf
     return colorStr;
 }
 
+void DesktopIndicator::RenderLayer(MonitorLayer &layer, float hueOff,
+                                   const std::array<COLORREF, 5> &baseColors, size_t colorCount,
+                                   bool isDragging, HDC hdcScreen, HDC hdcMem, BLENDFUNCTION *blend) {
+    auto colorStr = BuildLayerColors(layer, hueOff, baseColors, colorCount);
+    int  baseFont = MulDiv(m_pCfg->fontSize, layer.dpi, 96);
+
+    if (layer.symbolScales[0] < 0.01f) { layer.symbolScales.fill(1.0f); }
+
+    const int symCount  = static_cast<int>(m_text.size());
+    auto      symColors = SplitSymbolColors(colorStr, symCount);
+    const int padding   = 8;
+
+    std::array<float, 9> nominalWidths{};
+    float                nominalTotalW = 0;
+    for (int i = 0; i < symCount; ++i) {
+        int sw = 0, sh = 0;
+        m_renderer->Measure(std::wstring(1, m_text[i]).c_str(), baseFont, &sw, &sh);
+        nominalWidths.at(i) = static_cast<float>(sw);
+        nominalTotalW += nominalWidths.at(i);
+    }
+
+    int spaceW = 0, dummy = 0;
+    m_renderer->Measure(L" ", baseFont, &spaceW, &dummy);
+    int gap = m_pCfg->charSpacing * spaceW;
+    if (symCount > 1) { nominalTotalW += static_cast<float>(gap * (symCount - 1)); }
+
+    float avgSymW  = (symCount > 0) ? nominalTotalW / static_cast<float>(symCount) : 0.0f;
+    float sigma    = std::max(avgSymW * 1.5f, 20.0f);
+    float maxExtra = 1.0f;
+
+    POINT cursorPt{};
+    RECT  layerRect{};
+    if (isDragging) {
+        GetCursorPos(&cursorPt);
+        GetWindowRect(layer.hwnd, &layerRect);
+    }
+
+    std::array<int, 9>   symWidths{};
+    std::array<float, 9> symScales{};
+    int                  totalW = 0;
+    int                  maxH   = 0;
+
+    for (int i = 0; i < symCount; ++i) {
+        float targetScale = 1.0f;
+        if (isDragging) {
+            auto  cursorClientX = static_cast<float>(cursorPt.x - layerRect.left);
+            float symCenterX    = static_cast<float>(padding) + avgSymW * (static_cast<float>(i) + 0.5f);
+            float dist          = std::fabs(cursorClientX - symCenterX);
+            targetScale         = 1.0f + maxExtra * std::exp(-dist * dist / (2.0f * sigma * sigma));
+        }
+
+        float &cur  = layer.symbolScales.at(i);
+        float  rate = (targetScale > cur) ? 0.4f : 0.15f;
+        cur += (targetScale - cur) * rate;
+        symScales.at(i) = cur;
+
+        int          symFont = static_cast<int>(static_cast<float>(baseFont) * symScales.at(i));
+        int          sw = 0, sh = 0;
+        std::wstring sym(1, m_text[i]);
+        m_renderer->Measure(sym.c_str(), symFont, &sw, &sh);
+        symWidths.at(i) = sw;
+        totalW += sw;
+        maxH = std::max(sh, maxH);
+    }
+
+    if (symCount > 1) { totalW += gap * (symCount - 1); }
+
+    int w = std::max(totalW + padding * 2, 50);
+    int h = std::max(maxH + padding * 2, 20);
+
+    if (hdcMem == nullptr) { return; }
+
+    BITMAPINFO bmi              = {};
+    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth       = w;
+    bmi.bmiHeader.biHeight      = -h;
+    bmi.bmiHeader.biPlanes      = 1;
+    bmi.bmiHeader.biBitCount    = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    void   *bits = nullptr;
+    HBITMAP hDib = CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if ((hDib == nullptr) || (bits == nullptr)) {
+        if (hDib != nullptr) { DeleteObject(hDib); }
+        return;
+    }
+
+    auto *hOldBmp = SelectObject(hdcMem, hDib);
+    DWORD clear   = m_editMode ? 0x55000000 : 0x00000000;
+    std::fill_n(static_cast<DWORD *>(bits), w * h, clear);
+
+    int curX = padding;
+    for (int i = 0; i < symCount; ++i) {
+        int          symFont = static_cast<int>(static_cast<float>(baseFont) * symScales.at(i));
+        std::wstring sym(1, m_text[i]);
+        m_renderer->Render(bits, w, h, curX, padding, symWidths.at(i), h - padding * 2,
+                           sym.c_str(), symColors.at(i), symFont);
+        layer.symbolCenters.at(i)    = static_cast<float>(curX) + static_cast<float>(symWidths.at(i)) * 0.5f;
+        layer.symbolHalfWidths.at(i) = static_cast<float>(symWidths.at(i)) * 0.5f;
+        curX += symWidths.at(i) + gap;
+    }
+
+    RECT wr;
+    GetWindowRect(layer.hwnd, &wr);
+    POINT pos  = {wr.left, wr.top};
+    SIZE  size = {w, h};
+    POINT src  = {0, 0};
+    UpdateLayeredWindow(layer.hwnd, hdcScreen, &pos, &size, hdcMem, &src, 0, blend, ULW_ALPHA);
+
+    SelectObject(hdcMem, hOldBmp);
+    DeleteObject(hDib);
+}
+
 void DesktopIndicator::Render() {
-    if (m_layers.empty() || m_pCfg == nullptr) { return; }
+    if (m_layers.empty() || m_pCfg == nullptr || m_renderer == nullptr) { return; }
 
-    if (m_renderer == nullptr) { return; }
-
-    // Shared hue offset for breathing
     float hueOff = 0.0f;
     if (m_pCfg->animMode != 0) {
         ULONGLONG ms = GetTickCount64();
         hueOff       = static_cast<float>(fmod(static_cast<double>(ms) / 12000.0 * 360.0, 360.0));
     }
 
-    // Parse base colors once (shared across layers)
     std::array<COLORREF, 5> baseColors{};
     size_t                  colorCount = ParseMultiColorString(m_pCfg->textColor, baseColors.data(), 5);
-
-    const int padding    = 8;
-    const int symCount   = static_cast<int>(m_text.size());
-    bool      isDragging = (m_dragHwnd != nullptr && !m_editMode);
+    bool                    isDragging = (m_dragHwnd != nullptr && !m_editMode);
 
     BLENDFUNCTION blend       = {};
     blend.BlendOp             = AC_SRC_OVER;
@@ -672,130 +796,9 @@ void DesktopIndicator::Render() {
     HDC hdcMem    = (hdcScreen != nullptr) ? CreateCompatibleDC(hdcScreen) : nullptr;
 
     for (auto &l : m_layers) {
-        auto colorStr = BuildLayerColors(l, hueOff, baseColors, colorCount);
-        int  baseFont = MulDiv(m_pCfg->fontSize, l.dpi, 96);
-
-        // Init scales on first frame
-        if (l.symbolScales[0] < 0.01f) { l.symbolScales.fill(1.0f); }
-
-        // Split per-symbol colors
-        std::array<std::wstring, 9> symColors;
-        {
-            size_t pos = 0;
-            for (size_t i = 0; i < static_cast<size_t>(symCount); ++i) {
-                size_t next     = colorStr.find(L'_', pos);
-                symColors.at(i) = (next == std::wstring::npos)
-                                      ? colorStr.substr(pos)
-                                      : colorStr.substr(pos, next - pos);
-                pos             = (next == std::wstring::npos) ? colorStr.size() : next + 1;
-            }
-        }
-
-        // Per-symbol nominal widths for Dock center calculation
-        std::array<float, 9> nominalWidths{};
-        float                nominalTotalW = 0;
-        for (int i = 0; i < symCount; ++i) {
-            int sw = 0, sh = 0;
-            m_renderer->Measure(std::wstring(1, m_text[i]).c_str(), baseFont, &sw, &sh);
-            nominalWidths.at(i) = static_cast<float>(sw);
-            nominalTotalW += nominalWidths.at(i);
-        }
-
-        // Gap between symbols
-        int spaceW = 0, dummy = 0;
-        m_renderer->Measure(L" ", baseFont, &spaceW, &dummy);
-        int gap = m_pCfg->charSpacing * spaceW;
-        if (symCount > 1) { nominalTotalW += static_cast<float>(gap * (symCount - 1)); }
-
-        // Dock parameters
-        float avgSymW  = (symCount > 0) ? nominalTotalW / static_cast<float>(symCount) : 0.0f;
-        float sigma    = std::max(avgSymW * 1.5f, 20.0f);
-        float maxExtra = 1.0f;
-
-        POINT cursorPt{};
-        RECT  layerRect{};
-        if (isDragging) {
-            GetCursorPos(&cursorPt);
-            GetWindowRect(l.hwnd, &layerRect);
-        }
-
-        // Per-symbol measure & scale
-        std::array<int, 9>   symWidths{};
-        std::array<float, 9> symScales{};
-        int                  totalW = 0;
-        int                  maxH   = 0;
-
-        for (int i = 0; i < symCount; ++i) {
-            float targetScale = 1.0f;
-            if (isDragging) {
-                auto  cursorClientX = static_cast<float>(cursorPt.x - layerRect.left);
-                float symCenterX    = static_cast<float>(padding) + avgSymW * (static_cast<float>(i) + 0.5f);
-                float dist          = std::fabs(cursorClientX - symCenterX);
-                targetScale         = 1.0f + maxExtra * std::exp(-dist * dist / (2.0f * sigma * sigma));
-            }
-
-            float &cur  = l.symbolScales.at(i);
-            float  rate = (targetScale > cur) ? 0.4f : 0.15f;
-            cur += (targetScale - cur) * rate;
-            symScales.at(i) = cur;
-
-            int          symFont = static_cast<int>(static_cast<float>(baseFont) * symScales.at(i));
-            int          sw = 0, sh = 0;
-            std::wstring sym(1, m_text[i]);
-            m_renderer->Measure(sym.c_str(), symFont, &sw, &sh);
-            symWidths.at(i) = sw;
-            totalW += sw;
-            maxH = std::max(sh, maxH);
-        }
-
-        if (symCount > 1) { totalW += gap * (symCount - 1); }
-
-        int w = std::max(totalW + padding * 2, 50);
-        int h = std::max(maxH + padding * 2, 20);
-
-        if (hdcMem == nullptr) { continue; }
-
-        BITMAPINFO bmi              = {};
-        bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-        bmi.bmiHeader.biWidth       = w;
-        bmi.bmiHeader.biHeight      = -h;
-        bmi.bmiHeader.biPlanes      = 1;
-        bmi.bmiHeader.biBitCount    = 32;
-        bmi.bmiHeader.biCompression = BI_RGB;
-
-        void   *bits = nullptr;
-        HBITMAP hDib = CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
-        if ((hDib == nullptr) || (bits == nullptr)) {
-            if (hDib != nullptr) { DeleteObject(hDib); }
-            continue;
-        }
-
-        auto *hOldBmp = SelectObject(hdcMem, hDib);
-        DWORD clear   = m_editMode ? 0x55000000 : 0x00000000;
-        std::fill_n(static_cast<DWORD *>(bits), w * h, clear);
-
-        // Per-symbol render
-        int curX = padding;
-        for (int i = 0; i < symCount; ++i) {
-            int          symFont = static_cast<int>(static_cast<float>(baseFont) * symScales.at(i));
-            std::wstring sym(1, m_text[i]);
-            m_renderer->Render(bits, w, h, curX, padding, symWidths.at(i), h - padding * 2,
-                               sym.c_str(), symColors.at(i), symFont);
-            l.symbolCenters.at(i)    = static_cast<float>(curX) + static_cast<float>(symWidths.at(i)) * 0.5f;
-            l.symbolHalfWidths.at(i) = static_cast<float>(symWidths.at(i)) * 0.5f;
-            curX += symWidths.at(i) + gap;
-        }
-
-        RECT wr;
-        GetWindowRect(l.hwnd, &wr);
-        POINT pos  = {wr.left, wr.top};
-        SIZE  size = {w, h};
-        POINT src  = {0, 0};
-        UpdateLayeredWindow(l.hwnd, hdcScreen, &pos, &size, hdcMem, &src, 0, &blend, ULW_ALPHA);
-
-        SelectObject(hdcMem, hOldBmp);
-        DeleteObject(hDib);
+        RenderLayer(l, hueOff, baseColors, colorCount, isDragging, hdcScreen, hdcMem, &blend);
     }
+
     if (hdcMem != nullptr) { DeleteDC(hdcMem); }
     if (hdcScreen != nullptr) { ReleaseDC(nullptr, hdcScreen); }
 }
@@ -840,6 +843,63 @@ void DesktopIndicator::Rebuild() {
     RegisterMouseWheelInput();
 }
 
+bool DesktopIndicator::HandleRawInput(HWND /*hwnd*/, LPARAM lp) {
+    UINT sz = 0;
+    GetRawInputData(reinterpret_cast<HRAWINPUT>(lp), RID_INPUT, nullptr, &sz, sizeof(RAWINPUTHEADER)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+    if (sz <= 0) { return false; }
+
+    std::vector<BYTE> buf(sz);
+    if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lp), RID_INPUT, // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+                        buf.data(), &sz, sizeof(RAWINPUTHEADER))
+        != sz) { return false; }
+
+    auto *raw = reinterpret_cast<RAWINPUT *>(buf.data()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    if (raw->header.dwType != RIM_TYPEMOUSE
+        || (raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL) == 0) { // NOLINT(cppcoreguidelines-pro-type-union-access)
+        return false;
+    }
+
+    POINT cursorPt;
+    GetCursorPos(&cursorPt);
+    bool overIndicator = false;
+    for (const auto &l : m_layers) {
+        RECT wr;
+        GetWindowRect(l.hwnd, &wr);
+        if (PtInRect(&wr, cursorPt) != 0) {
+            overIndicator = true;
+            break;
+        }
+    }
+
+    if (!overIndicator || !m_scrollSwitchFn || m_desktopCount <= 0 || m_editMode) { return false; }
+
+    auto delta  = static_cast<int16_t>(raw->data.mouse.usButtonData); // NOLINT(cppcoreguidelines-pro-type-union-access)
+    int  target = m_currentDesktop + ((delta > 0) ? -1 : 1);
+    if (target >= 0 && target < m_desktopCount) {
+        m_scrollSwitchFn(target);
+        return true;
+    }
+    return false;
+}
+
+bool DesktopIndicator::HandleDragStart(HWND hwnd, LPARAM lp) {
+    if (!m_editMode) { return false; }
+    POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+    ClientToScreen(hwnd, &pt);
+    auto it = std::ranges::find_if(m_layers,
+                                   [hwnd](const MonitorLayer &l) {
+                                       return l.hwnd == hwnd;
+                                   });
+    if (it == m_layers.end()) { return true; }
+    int winLeft    = m_pCfg->windowPos.x + (it->monitor.left - m_layers[0].monitor.left);
+    int winTop     = m_pCfg->windowPos.y + (it->monitor.top - m_layers[0].monitor.top);
+    m_dragOffset.x = pt.x - winLeft;
+    m_dragOffset.y = pt.y - winTop;
+    m_dragging     = true;
+    SetCapture(hwnd);
+    return true;
+}
+
 LRESULT CALLBACK DesktopIndicator::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     auto *overlay = GetWndUserData<DesktopIndicator>(hwnd);
     if (overlay != nullptr) {
@@ -867,62 +927,13 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         }
         return 0;
 
-    case WM_INPUT: {
-        bool handled = false;
-        UINT sz      = 0;
-        GetRawInputData(reinterpret_cast<HRAWINPUT>(lp), RID_INPUT, nullptr, &sz, sizeof(RAWINPUTHEADER)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
-        if (sz > 0) {
-            std::vector<BYTE> buf(sz);
-            if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lp), RID_INPUT, // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
-                                buf.data(), &sz, sizeof(RAWINPUTHEADER))
-                == sz) {
-                auto *raw = reinterpret_cast<RAWINPUT *>(buf.data()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-                if (raw->header.dwType == RIM_TYPEMOUSE
-                    && (raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL) != 0) { // NOLINT(cppcoreguidelines-pro-type-union-access)
-                    POINT cursorPt;
-                    GetCursorPos(&cursorPt);
-                    bool overIndicator = false;
-                    for (const auto &l : m_layers) {
-                        RECT wr;
-                        GetWindowRect(l.hwnd, &wr);
-                        if (PtInRect(&wr, cursorPt) != 0) {
-                            overIndicator = true;
-                            break;
-                        }
-                    }
-                    if (overIndicator && m_scrollSwitchFn && m_desktopCount > 0 && !m_editMode) {
-                        auto delta  = static_cast<int16_t>(raw->data.mouse.usButtonData); // NOLINT(cppcoreguidelines-pro-type-union-access)
-                        int  target = m_currentDesktop + ((delta > 0) ? -1 : 1);
-                        if (target >= 0 && target < m_desktopCount) {
-                            m_scrollSwitchFn(target);
-                            handled = true;
-                        }
-                    }
-                }
-            }
-        }
-        if (handled) { return 0; }
+    case WM_INPUT:
+        if (HandleRawInput(hwnd, lp)) { return 0; }
         break;
-    }
 
-    case WM_LBUTTONDOWN: {
-        if (!m_editMode) { return DefWindowProcW(hwnd, msg, wp, lp); }
-        POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
-        ClientToScreen(hwnd, &pt);
-        auto it = std::ranges::find_if(m_layers,
-                                       [hwnd](const MonitorLayer &l) {
-                                           return l.hwnd == hwnd;
-                                       });
-        if (it != m_layers.end()) {
-            int winLeft    = m_pCfg->windowPos.x + (it->monitor.left - m_layers[0].monitor.left);
-            int winTop     = m_pCfg->windowPos.y + (it->monitor.top - m_layers[0].monitor.top);
-            m_dragOffset.x = pt.x - winLeft;
-            m_dragOffset.y = pt.y - winTop;
-            m_dragging     = true;
-            SetCapture(hwnd);
-        }
-        return 0;
-    }
+    case WM_LBUTTONDOWN:
+        if (HandleDragStart(hwnd, lp)) { return 0; }
+        return DefWindowProcW(hwnd, msg, wp, lp);
 
     case WM_MOUSEMOVE:
         if (m_dragging && ((wp & MK_LBUTTON) != 0u)) {

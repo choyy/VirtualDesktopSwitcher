@@ -92,11 +92,14 @@ private:
     void         StopBgSampleTimer();
     void         RebuildText();
     std::wstring BuildLayerColors(MonitorLayer &layer, float hueOff, const std::array<COLORREF, 5> &baseColors, size_t colorCount) const;
+    void         RenderLayer(MonitorLayer &layer, float hueOff, const std::array<COLORREF, 5> &baseColors, size_t colorCount, bool isDragging, HDC hdcScreen, HDC hdcMem, BLENDFUNCTION *blend);
     void         Render();
     void         ApplyPresetPosition();
     void         MoveByDelta(int dx, int dy);
     void         EnumerateMonitors(HINSTANCE hInstance);
     void         RegisterMouseWheelInput();
+    bool         HandleRawInput(HWND hwnd, LPARAM lp);
+    bool         HandleDragStart(HWND hwnd, LPARAM lp);
     static void  InstallDragHook();
     static void  UninstallDragHook();
     bool         GetSymbolIndexAt(POINT screenPt, int &outIndex) const;

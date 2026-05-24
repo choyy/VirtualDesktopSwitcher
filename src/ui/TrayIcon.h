@@ -57,4 +57,15 @@ private:
     void BuildMenu();
     void HandleCommand(WPARAM wParam);
     void DrawColorSwatch(LPDRAWITEMSTRUCT dis) const;
+
+    static void HandleRunAsAdmin();
+    static void HandleReset();
+    static void HandleExit();
+    void        HandleAnimMode();
+    void        HandleAutoContrast();
+    void        HandleToggleShow();
+    void        HandleToggleAutoStart();
+    void        HandleShowModeCommand(int mode);
+    void        HandlePositionCommand(int preset);
+    void        HandleColorCommand(int index);
 };
