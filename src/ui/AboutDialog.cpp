@@ -20,8 +20,6 @@ constexpr int IDC_STATIC_HOMEPAGE = 203;
 
 struct AboutData {
     bool  autoCheckUpdates = false;
-    HWND  hHomepage        = nullptr;
-    RECT  homepageRect     = {};
     HICON hIcon            = nullptr;
     HFONT hFont            = nullptr;
 };
@@ -72,9 +70,6 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SendDlgItemMessageW(hwnd, IDC_AUTO_CHECK, BM_SETCHECK, BST_CHECKED, 0);
         }
 
-        data->hHomepage    = GetDlgItem(hwnd, IDC_HOMEPAGE);
-        data->homepageRect = GetChildRect(hwnd, data->hHomepage);
-
         return TRUE;
     }
 
@@ -83,12 +78,6 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         int   id   = LOWORD(wp);
         if (id == IDC_CHECK_UPDATES) {
             UpdateChecker::CheckAndDownload(hwnd);
-            return TRUE;
-        }
-        if (id == IDC_HOMEPAGE && HIWORD(wp) == 0) {
-            ShellExecuteW(hwnd, L"open",
-                          L"https://github.com/choyy/VirtualDesktopSwitcher",
-                          nullptr, nullptr, SW_SHOW);
             return TRUE;
         }
         if (id == IDOK || id == IDCANCEL) {
@@ -102,30 +91,9 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 
     case WM_CTLCOLORDLG:
+    case WM_CTLCOLORSTATIC:
         return PtrToIntPtr(GetSysColorBrush(COLOR_WINDOW));
 
-    case WM_CTLCOLORSTATIC: {
-        auto *data = GetWndUserData<AboutData>(hwnd, DWLP_USER);
-        if (data != nullptr && data->hHomepage != nullptr && reinterpret_cast<HWND>(lp) == data->hHomepage) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
-            SetTextColor(reinterpret_cast<HDC>(wp), RGB(0, 102, 204));                                        // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
-            SetBkMode(reinterpret_cast<HDC>(wp), TRANSPARENT);                                                // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
-        }
-        return PtrToIntPtr(GetSysColorBrush(COLOR_WINDOW));
-    }
-
-    case WM_SETCURSOR: {
-        auto *data = GetWndUserData<AboutData>(hwnd, DWLP_USER);
-        if (data != nullptr && data->hHomepage != nullptr) {
-            POINT pt;
-            GetCursorPos(&pt);
-            ScreenToClient(hwnd, &pt);
-            if (PtInRect(&data->homepageRect, pt) != 0) {
-                SetCursor(LoadCursor(nullptr, IDC_HAND));
-                return TRUE;
-            }
-        }
-        return FALSE;
-    }
     default: break;
     }
     return FALSE;

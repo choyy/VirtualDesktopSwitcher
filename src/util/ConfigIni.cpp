@@ -1,14 +1,18 @@
 #include "ConfigIni.h"
 
+#include <windows.h>
+
+#include <knownfolders.h>
 #include <shlobj.h>
 
 #include <array>
 
 namespace {
 std::wstring InitAppDataDir() {
-    std::array<wchar_t, MAX_PATH> appData{};
-    if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appData.data()))) {
-        std::wstring p = std::wstring(appData.data()) + L"\\VirtualDesktopSwitcher";
+    PWSTR raw = nullptr;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &raw))) {
+        std::wstring p = std::wstring(raw) + L"\\VirtualDesktopSwitcher";
+        CoTaskMemFree(raw);
         CreateDirectoryW(p.c_str(), nullptr);
         return p;
     }

@@ -24,7 +24,7 @@ BEGIN
     ICON          101,                              IDC_ABOUT_ICON,         12, 12,  44, 48
     LTEXT         "Virtual Desktop Switcher",       IDC_ABOUT_TITLE,        84, 14, 190, 18
     LTEXT         "Homepage:",                      IDC_STATIC_HOMEPAGE,    84, 36,  55, 10
-    LTEXT         "github.com/choyy/VirtualDesktopSwitcher", IDC_HOMEPAGE, 125, 36, 150, 10, 0x100
+    CONTROL       "<a href=""https://github.com/choyy/VirtualDesktopSwitcher"">github.com/choyy/VirtualDesktopSwitcher</a>", IDC_HOMEPAGE, "SysLink", 0, 125, 36, 150, 12
     LTEXT         "Version:",                       IDC_STATIC_VERSION,     84, 50,  40, 10
     LTEXT         "",                               IDC_VERSION,           124, 50,  80, 10
     CONTROL       "Auto check updates",             IDC_AUTO_CHECK,   "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 165, 48, 115, 12

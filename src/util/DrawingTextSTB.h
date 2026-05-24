@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include <string>
+#include <vector>
 
 #include "stb_truetype.h"
 
@@ -26,16 +27,13 @@ public:
                 const std::wstring &colorStr, int fontSize) const;
 
 private:
-    bool           m_loaded = false;
-    stbtt_fontinfo m_fontInfo{};
-    unsigned char *m_fontBuffer  = nullptr;
-    HANDLE         m_fontFile    = INVALID_HANDLE_VALUE;
-    HANDLE         m_fontMapping = nullptr;
+    bool                       m_loaded = false;
+    stbtt_fontinfo             m_fontInfo{};
+    unsigned char             *m_fontBuffer = nullptr;
+    std::vector<unsigned char> m_fontData;
 
-    void                Cleanup();
-    static std::wstring FindSystemFontPath(const std::wstring &fontName);
-    bool                LoadFontFile(const std::wstring &path);
-    void                UnloadFontFile();
+    void Cleanup();
+    bool LoadFontData(const std::wstring &fontName);
 
     [[nodiscard]] float GetCodepointAdvance(wchar_t codepoint, wchar_t nextCodepoint, float scale) const;
     [[nodiscard]] int   GetGlyphIndex(wchar_t codepoint) const;

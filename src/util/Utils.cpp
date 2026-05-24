@@ -17,7 +17,6 @@ void ActivateWindow(HWND hwnd) {
         }
     }
 
-    BringWindowToTop(hwnd);
     SetForegroundWindow(hwnd);
 
     if (attached != FALSE) {
