@@ -72,7 +72,8 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
         break;
     }
 
-    if (uMsg == pApp->m_uTaskbarCreated) {
+    static UINT uTaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
+    if (uMsg == uTaskbarCreated) {
         pApp->OnSystemResume();
         return 0;
     }
@@ -313,8 +314,6 @@ bool Application::Initialize() {
     }
 
     SetupTrayCallbacks();
-
-    m_uTaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
 
     if (m_autoCheckUpdates) {
         SpawnUpdateCheckProcess();

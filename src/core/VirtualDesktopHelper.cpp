@@ -62,6 +62,12 @@ VirtualDesktopHelper::~VirtualDesktopHelper() {
     }
 }
 
+bool VirtualDesktopHelper::GetDesktopArray(Microsoft::WRL::ComPtr<IObjectArray> &desktops, UINT &count) const {
+    if (m_virtualDesktopManagerInternal == nullptr) { return false; }
+    if (FAILED(m_virtualDesktopManagerInternal->GetDesktops(&desktops))) { return false; }
+    return SUCCEEDED(desktops->GetCount(&count));
+}
+
 bool VirtualDesktopHelper::InitImmersiveShell(Microsoft::WRL::ComPtr<IUnknown> &shell) {
     HRESULT hr = CoCreateInstance(CLSID_ImmersiveShell, nullptr, CLSCTX_LOCAL_SERVER,
                                   IID_IUnknown, ComPtrAsVoid(shell));
@@ -179,38 +185,20 @@ void VirtualDesktopHelper::InitDesktopManager() {
 }
 
 int VirtualDesktopHelper::GetDesktopCount() const {
-    if (m_virtualDesktopManagerInternal == nullptr) {
-        return 0;
-    }
-
     Microsoft::WRL::ComPtr<IObjectArray> desktops;
-    if (FAILED(m_virtualDesktopManagerInternal->GetDesktops(&desktops))) {
-        return 0;
-    }
-
-    UINT count = 0;
-    return SUCCEEDED(desktops->GetCount(&count)) ? static_cast<int>(count) : 0;
+    UINT                                 count = 0;
+    return GetDesktopArray(desktops, count) ? static_cast<int>(count) : 0;
 }
 
 int VirtualDesktopHelper::GetCurrentDesktopIndex() const {
-    if (m_virtualDesktopManagerInternal == nullptr) {
-        return -1;
-    }
+    if (m_virtualDesktopManagerInternal == nullptr) { return -1; }
 
     Microsoft::WRL::ComPtr<IVirtualDesktop> currentDesktop;
-    if (FAILED(m_virtualDesktopManagerInternal->GetCurrentDesktop(&currentDesktop))) {
-        return -1;
-    }
+    if (FAILED(m_virtualDesktopManagerInternal->GetCurrentDesktop(&currentDesktop))) { return -1; }
 
     Microsoft::WRL::ComPtr<IObjectArray> desktops;
-    if (FAILED(m_virtualDesktopManagerInternal->GetDesktops(&desktops))) {
-        return -1;
-    }
-
-    UINT count = 0;
-    if (FAILED(desktops->GetCount(&count))) {
-        return -1;
-    }
+    UINT                                 count = 0;
+    if (!GetDesktopArray(desktops, count)) { return -1; }
 
     for (UINT i = 0; i < count; ++i) {
         Microsoft::WRL::ComPtr<IVirtualDesktop> desktop;
@@ -228,19 +216,9 @@ int VirtualDesktopHelper::GetCurrentDesktopIndex() const {
 }
 
 void VirtualDesktopHelper::SwitchToDesktop(int index) const {
-    if (m_virtualDesktopManagerInternal == nullptr) {
-        return;
-    }
-
     Microsoft::WRL::ComPtr<IObjectArray> desktops;
-    if (FAILED(m_virtualDesktopManagerInternal->GetDesktops(&desktops))) {
-        return;
-    }
-
-    UINT count = 0;
-    if (FAILED(desktops->GetCount(&count)) || static_cast<size_t>(index) >= static_cast<size_t>(count)) {
-        return;
-    }
+    UINT                                 count = 0;
+    if (!GetDesktopArray(desktops, count) || static_cast<size_t>(index) >= static_cast<size_t>(count)) { return; }
 
     Microsoft::WRL::ComPtr<IVirtualDesktop> targetDesktop;
     if (FAILED(desktops->GetAt(index, m_iidVirtualDesktop,
@@ -256,26 +234,23 @@ void VirtualDesktopHelper::MoveWindowToDesktop(HWND hwnd, int targetIndex) const
         return;
     }
 
+    auto title = GetWindowTitle(hwnd);
+
     Microsoft::WRL::ComPtr<IUnknown> view;
     HRESULT                          hr = m_viewCollection->GetViewForHwnd(hwnd, &view);
     if (FAILED(hr) || view == nullptr) {
-        std::array<wchar_t, 128> titleBuf = {};
-        GetWindowTextW(hwnd, titleBuf.data(), static_cast<int>(titleBuf.size()));
-        Log(L"[ERROR] MoveWindowToDesktop: GetViewForHwnd failed for \""
-            + std::wstring(titleBuf.data()) + L"\"");
+        Log(L"[ERROR] MoveWindowToDesktop: GetViewForHwnd failed for \"" + title + L"\"");
         return;
     }
 
     Microsoft::WRL::ComPtr<IObjectArray> desktops;
-    hr = m_virtualDesktopManagerInternal->GetDesktops(&desktops);
-    if (FAILED(hr)) {
+    UINT                                 count = 0;
+    if (!GetDesktopArray(desktops, count)) {
         Log(L"[ERROR] MoveWindowToDesktop: GetDesktops failed");
         return;
     }
 
-    UINT count = 0;
-    hr         = desktops->GetCount(&count);
-    if (FAILED(hr) || static_cast<size_t>(targetIndex) >= static_cast<size_t>(count)) {
+    if (static_cast<size_t>(targetIndex) >= static_cast<size_t>(count)) {
         Log(L"[ERROR] MoveWindowToDesktop: bad index " + std::to_wstring(targetIndex)
             + L" count=" + std::to_wstring(count));
         return;
@@ -289,10 +264,8 @@ void VirtualDesktopHelper::MoveWindowToDesktop(HWND hwnd, int targetIndex) const
         return;
     }
 
-    hr                                = m_virtualDesktopManagerInternal->MoveViewToDesktop(view.Get(), targetDesktop.Get());
-    std::array<wchar_t, 128> titleBuf = {};
-    GetWindowTextW(hwnd, titleBuf.data(), static_cast<int>(titleBuf.size()));
-    Log(L"[INFO] MoveWindowToDesktop: \"" + std::wstring(titleBuf.data()) + L"\" -> desktop "
+    hr = m_virtualDesktopManagerInternal->MoveViewToDesktop(view.Get(), targetDesktop.Get());
+    Log(L"[INFO] MoveWindowToDesktop: \"" + title + L"\" -> desktop "
         + std::to_wstring(targetIndex));
 }
 
@@ -348,19 +321,11 @@ bool VirtualDesktopHelper::CheckViaDesktopManager(HWND hwnd) const {
 
 std::array<bool, kMaxDesktops> VirtualDesktopHelper::GetDesktopEmptyMask() const {
     std::array<bool, kMaxDesktops> emptyMask{};
-    if ((m_virtualDesktopManagerInternal == nullptr) || (m_viewCollection == nullptr)) {
-        return emptyMask;
-    }
+    if (m_viewCollection == nullptr) { return emptyMask; }
 
     Microsoft::WRL::ComPtr<IObjectArray> desktops;
-    if (FAILED(m_virtualDesktopManagerInternal->GetDesktops(&desktops))) {
-        return emptyMask;
-    }
-
-    UINT desktopCount = 0;
-    if (FAILED(desktops->GetCount(&desktopCount)) || desktopCount == 0) {
-        return emptyMask;
-    }
+    UINT                                 desktopCount = 0;
+    if (!GetDesktopArray(desktops, desktopCount) || desktopCount == 0) { return emptyMask; }
 
     Microsoft::WRL::ComPtr<IObjectArray> views;
     if (FAILED(m_viewCollection->GetViews(&views))) {

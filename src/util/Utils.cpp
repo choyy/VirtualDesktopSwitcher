@@ -34,16 +34,6 @@ std::wstring GetWindowTitle(HWND hwnd) {
     return buffer;
 }
 
-std::wstring Utf8ToWide(const std::string &str) {
-    if (str.empty()) { return {}; }
-    const int len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
-    if (len <= 0) { return {}; }
-    std::wstring result(len, L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, result.data(), len);
-    result.resize(len - 1);
-    return result;
-}
-
 bool IsAdminProcess() {
     HANDLE hToken{};
     if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken) == 0) { return false; }
@@ -152,21 +142,10 @@ double SRGBToLinear(double c) {
     return std::pow((c + 0.055) / 1.055, 2.4);
 }
 
-double LinearToSRGB(double c) {
-    if (c <= 0.0031308) { return c * 12.92; }
-    return 1.055 * std::pow(c, 1.0 / 2.4) - 0.055;
-}
-
 double LabF(double t) {
     constexpr double delta = 6.0 / 29.0;
     if (t > delta * delta * delta) { return std::cbrt(t); }
     return t / (3.0 * delta * delta) + 4.0 / 29.0;
-}
-
-double LabFInv(double t) {
-    constexpr double delta = 6.0 / 29.0;
-    if (t > delta) { return t * t * t; }
-    return 3.0 * delta * delta * (t - 4.0 / 29.0);
 }
 
 } // namespace
@@ -195,37 +174,6 @@ void RGBToLCh(COLORREF color, double &L, double &C, double &h) {
     C = std::sqrt(a * a + bStar * bStar);
     h = std::atan2(bStar, a) * 180.0 / kPi;
     if (h < 0) { h += 360.0; }
-}
-
-COLORREF LChToRGB(double L, double C, double h) {
-    // LCh → Lab
-    double hRad  = h * kPi / 180.0;
-    double a     = C * std::cos(hRad);
-    double bStar = C * std::sin(hRad);
-
-    // Lab → XYZ
-    double fy = (L + 16.0) / 116.0;
-    double fx = a / 500.0 + fy;
-    double fz = fy - bStar / 200.0;
-
-    double X = kXn * LabFInv(fx);
-    double Y = kYn * LabFInv(fy);
-    double Z = kZn * LabFInv(fz);
-
-    // XYZ → Linear sRGB
-    double r = 3.2404542 * X - 1.5371385 * Y - 0.4985314 * Z;
-    double g = -0.9692660 * X + 1.8760108 * Y + 0.0415560 * Z;
-    double b = 0.0556434 * X - 0.2040259 * Y + 1.0572252 * Z;
-
-    // Clamp & Linear → sRGB
-    r = std::clamp(r, 0.0, 1.0);
-    g = std::clamp(g, 0.0, 1.0);
-    b = std::clamp(b, 0.0, 1.0);
-
-    return RGB(
-        static_cast<int>(std::round(LinearToSRGB(r) * 255.0)),
-        static_cast<int>(std::round(LinearToSRGB(g) * 255.0)),
-        static_cast<int>(std::round(LinearToSRGB(b) * 255.0)));
 }
 
 void RGBToHSV(COLORREF rgb, float &h, float &s, float &v) {

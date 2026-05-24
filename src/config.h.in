@@ -1,6 +1,7 @@
 #pragma once
 
 #define APP_VERSION       "${VERSION}"
+#define APP_VERSION_W    L"${VERSION}"
 #define APP_VERSION_MAJOR ${VERSION_MAJOR}
 #define APP_VERSION_MINOR ${VERSION_MINOR}
 #define APP_VERSION_ALTER ${VERSION_ALTER}

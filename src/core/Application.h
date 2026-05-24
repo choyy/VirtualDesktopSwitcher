@@ -65,6 +65,5 @@ private:
     int                                     m_lastDesktopCount = 0;
     uint8_t                                 m_modMask          = 1;
     bool                                    m_autoCheckUpdates = true;
-    UINT                                    m_uTaskbarCreated  = 0;
     HANDLE                                  m_hUpdateProcess   = nullptr;
 };

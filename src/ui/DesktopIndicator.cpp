@@ -21,6 +21,9 @@ constexpr int      kAnimIntervalMs   = 16;
 constexpr int      kSampleIntervalMs = 2500;
 constexpr int      kAutoHideShow1sMs = 1000;
 constexpr int      kAutoHideShow3sMs = 3000;
+// 1 秒收敛至 99%：coeff ^ (1000 / kAnimIntervalMs) == 0.01
+const float kSmoothKeep  = std::pow(0.01f, kAnimIntervalMs / 1000.0f);
+const float kSmoothBlend = 1.0f - kSmoothKeep;
 
 constexpr UINT WM_INDICATOR_MOVE_WINDOW = WM_USER + 50;
 
@@ -89,8 +92,8 @@ void ApplyContrastAdaptation(MonitorLayer &layer, size_t colorIdx, float &v, flo
     }
 
     if (layer.smoothV.at(colorIdx) > 0.01f) {
-        v = layer.smoothV.at(colorIdx) * 0.8f + v * 0.2f;
-        s = layer.smoothS.at(colorIdx) * 0.8f + s * 0.2f;
+        v = layer.smoothV.at(colorIdx) * kSmoothKeep + v * kSmoothBlend;
+        s = layer.smoothS.at(colorIdx) * kSmoothKeep + s * kSmoothBlend;
     }
     layer.smoothV.at(colorIdx) = v;
     layer.smoothS.at(colorIdx) = s;

@@ -54,8 +54,7 @@ COLORREF HSVToRGB(float h, float s, float v);
 
 // --- CIE LCh Color Space ---
 
-void     RGBToLCh(COLORREF color, double &L, double &C, double &h);
-COLORREF LChToRGB(double L, double C, double h);
+void RGBToLCh(COLORREF color, double &L, double &C, double &h);
 
 // --- System & Window Helpers ---
 
@@ -68,8 +67,6 @@ inline std::wstring GetCurrentExePath() {
 bool         IsAdminProcess();
 void         ActivateWindow(HWND hwnd);
 std::wstring GetWindowTitle(HWND hwnd);
-
-std::wstring Utf8ToWide(const std::string &str);
 
 // --- Win32 Cast Helpers ---
 
@@ -105,16 +102,6 @@ inline INT_PTR PtrToIntPtr(T value) {
 
 // --- Dialog Layout Helpers ---
 
-inline RECT GetChildRect(HWND parent, int childId) {
-    RECT rc{};
-    HWND hChild = GetDlgItem(parent, childId);
-    if (hChild != nullptr) {
-        GetWindowRect(hChild, &rc);
-        MapWindowPoints(HWND_DESKTOP, parent, reinterpret_cast<LPPOINT>(&rc), 2); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    }
-    return rc;
-}
-
 inline RECT GetChildRect(HWND parent, HWND hChild) {
     RECT rc{};
     if (hChild != nullptr) {
@@ -122,6 +109,10 @@ inline RECT GetChildRect(HWND parent, HWND hChild) {
         MapWindowPoints(HWND_DESKTOP, parent, reinterpret_cast<LPPOINT>(&rc), 2); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
     }
     return rc;
+}
+
+inline RECT GetChildRect(HWND parent, int childId) {
+    return GetChildRect(parent, GetDlgItem(parent, childId));
 }
 
 inline void MoveWindowTo(HWND hWnd, int x, int y) {

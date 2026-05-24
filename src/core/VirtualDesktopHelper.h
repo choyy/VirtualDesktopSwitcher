@@ -72,6 +72,7 @@ private:
 
     [[nodiscard]] bool CheckViaViewCollection(HWND hwnd) const;
     [[nodiscard]] bool CheckViaDesktopManager(HWND hwnd) const;
+    [[nodiscard]] bool GetDesktopArray(Microsoft::WRL::ComPtr<IObjectArray> &desktops, UINT &count) const;
 
     static bool InitImmersiveShell(Microsoft::WRL::ComPtr<IUnknown> &shell);
     static bool InitServiceProvider(Microsoft::WRL::ComPtr<IUnknown> &shell, Microsoft::WRL::ComPtr<IServiceProvider> &sp);

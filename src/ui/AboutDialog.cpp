@@ -1,6 +1,6 @@
 #include "AboutDialog.h"
 
-#include <string>
+#include <commctrl.h>
 
 #include "config.h"
 #include "util/Lang.h"
@@ -59,7 +59,7 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SendDlgItemMessageW(hwnd, IDC_ABOUT_TITLE, WM_SETFONT, HandleToWParam(data->hFont), TRUE);
         }
 
-        SetDlgItemTextW(hwnd, IDC_VERSION, Utf8ToWide(APP_VERSION).c_str());
+        SetDlgItemTextW(hwnd, IDC_VERSION, APP_VERSION_W);
 
         int labelLeft = GetChildRect(hwnd, IDC_STATIC_HOMEPAGE).left;
         int maxW      = MeasureMaxLabelWidth(hwnd, {IDC_STATIC_HOMEPAGE, IDC_STATIC_VERSION});
@@ -93,6 +93,17 @@ INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CTLCOLORDLG:
     case WM_CTLCOLORSTATIC:
         return PtrToIntPtr(GetSysColorBrush(COLOR_WINDOW));
+
+    case WM_NOTIFY: {
+        auto *nmhdr = reinterpret_cast<NMHDR *>(lp); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+        if (nmhdr->idFrom == IDC_HOMEPAGE && nmhdr->code == NM_CLICK) {
+            ShellExecuteW(hwnd, L"open",
+                          L"https://github.com/choyy/VirtualDesktopSwitcher",
+                          nullptr, nullptr, SW_SHOW);
+            return TRUE;
+        }
+        break;
+    }
 
     default: break;
     }
