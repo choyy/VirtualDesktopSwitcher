@@ -113,6 +113,13 @@ Change the dropdown to **"On all desktops"** to see window icons from other virt
 
 </details>
 
+<details>
+<summary><b>Disable the snap layout popup at the top when dragging windows in Windows 11</b></summary>
+
+**Settings → System → Multitasking → Snap windows**, turn it off to disable.
+
+</details>
+
 ## 🤝 Acknowledgments
 
 The desktop indicator component is ported from [vladelaina](https://github.com/vladelaina)'s open-source project [Catime](https://github.com/vladelaina/Catime). Thanks to the original author for the excellent work!

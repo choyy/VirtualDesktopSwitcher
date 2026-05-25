@@ -113,6 +113,13 @@ xmake project -k vsxmake
 
 </details>
 
+<details>
+<summary><b>关闭Win11拖动窗口时顶部的贴靠窗口自动布局</b></summary>
+
+**设置 → 系统 → 多任务处理 → 贴靠窗口**，将其关闭即可。
+
+</details>
+
 ## 🤝 致谢
 
 本项目的桌面指示器部分移植自 [vladelaina](https://github.com/vladelaina) 的开源项目 [Catime](https://github.com/vladelaina/Catime)，感谢原作者的优秀作品!
