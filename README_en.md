@@ -15,7 +15,8 @@
 
 ## ✨ Features
 
-- **Hotkey switching**: `Alt + 1` ~ `Alt + 9` to jump directly to the corresponding virtual desktop
+- **Hotkey switching**: `Alt + 1` ~ `Alt + 9` to jump directly to the corresponding virtual desktop (keys and modifier keys are customizable)
+- **Return to previous desktop**: ``Alt + ` `` to switch back to the previously active virtual desktop
 - **Desktop indicator**: Uses distinct symbols for different desktop states — **◉ current** desktop, **○ non-empty** desktops, and **◌ empty** desktops. Fully customizable position, size, and style.
 - **Scroll to switch**: Scroll the mouse wheel while hovering over the indicator to quickly switch to the previous/next virtual desktop.
 - **Drag to move**: Drag any window onto an indicator symbol to move it to that virtual desktop and automatically switch to it.
@@ -29,17 +30,29 @@ To build from source, see [Building from Source](#building-from-source) below.
 
 ## 🚀 Usage
 
-1. Launch `VirtualDesktopSwitcher.exe`
-2. The desktop indicator appears on screen, and the program icon shows in the system tray
-3. Use `Alt + 1` ~ `Alt + 9` to switch between virtual desktops
-4. **Scroll** the mouse wheel while hovering over the indicator to switch desktops
-5. **Drag a window** onto an indicator symbol to move it to that desktop and switch to it automatically
-6. Right-click the tray icon to configure:
+- Launch `VirtualDesktopSwitcher.exe`
+- The desktop indicator appears on screen, and the program icon shows in the system tray
+- Use `Alt + 1` ~ `Alt + 9` to switch between virtual desktops
+- Use ``Alt + ` `` to return to the previous virtual desktop
+- **Scroll** the mouse wheel while hovering over the indicator to switch desktops
+- **Drag a window** onto an indicator symbol to move it to that desktop and switch to it automatically
+- Right-click the tray icon to configure:
    - Adjust indicator **position**, **size**, **style**, **hotkeys**, and **display**
    - Toggle auto-start and run as administrator
-7. Double-click the tray icon to quickly **show/hide the indicator**
+- Double-click the tray icon to quickly **show/hide the indicator**
 
-All settings and log files are saved to `%LOCALAPPDATA%\VirtualDesktopSwitcher`.
+## 📝 INI Configuration
+
+Configuration file is saved to `%LOCALAPPDATA%\VirtualDesktopSwitcher\config.ini`.
+
+If you need to customize the keys for switching virtual desktops, you can modify the configuration file as follows:
+
+| Key | Description | Default Value |
+|---|---|---|
+| `DesktopKey1` ~ `DesktopKey9` | Virtual key codes for desktops 1~9 | `49`\~`57` (keys `1`\~`9`) |
+| `PrevDesktopKey` | Virtual key code for returning to previous desktop | `192` (key `` ` ``) |
+
+For virtual key codes, refer to [Virtual-Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes). For example, numpad 1~9 correspond to `97`~`105`.
 
 ## 🔧 Building from Source
 

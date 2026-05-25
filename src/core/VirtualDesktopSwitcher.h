@@ -34,6 +34,10 @@ public:
     void RefreshCOM();
 
     static void SetModMask(uint8_t mask) { s_modMask = static_cast<ModMask>(mask); }
+    static void SetPrevDesktopKey(uint8_t vk) { s_prevDesktopKey = vk; }
+    static void SetDesktopKey(int index, uint8_t vk) {
+        if (index >= 0 && index < static_cast<int>(kMaxDesktops)) { s_desktopKeys.at(index) = vk; }
+    }
 
     [[nodiscard]] int                            GetDesktopCount() const;
     [[nodiscard]] int                            GetCurrentDesktopIndex() const;
@@ -41,11 +45,14 @@ public:
 
 private:
     std::unique_ptr<class VirtualDesktopHelper> m_pVDeskHelper;
-    HHOOK                                       m_hHook = nullptr;
-    HWND                                        m_hwnd  = nullptr;
+    HHOOK                                       m_hHook           = nullptr;
+    HWND                                        m_hwnd            = nullptr;
+    int                                         m_previousDesktop = -1;
 
-    static VirtualDesktopSwitcher *s_active;
-    static ModMask                 s_modMask;
+    static VirtualDesktopSwitcher           *s_active;
+    static ModMask                           s_modMask;
+    static uint8_t                           s_prevDesktopKey;
+    static std::array<uint8_t, kMaxDesktops> s_desktopKeys;
 
     static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
 };

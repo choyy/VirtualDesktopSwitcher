@@ -41,8 +41,10 @@ HWND FindTopOnDesktop(const VirtualDesktopHelper *pHelper) {
 
 } // namespace
 
-VirtualDesktopSwitcher *VirtualDesktopSwitcher::s_active  = nullptr;
-ModMask                 VirtualDesktopSwitcher::s_modMask = ModMask::Alt;
+VirtualDesktopSwitcher           *VirtualDesktopSwitcher::s_active         = nullptr;
+ModMask                           VirtualDesktopSwitcher::s_modMask        = ModMask::Alt;
+uint8_t                           VirtualDesktopSwitcher::s_prevDesktopKey = VK_OEM_3;
+std::array<uint8_t, kMaxDesktops> VirtualDesktopSwitcher::s_desktopKeys    = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
 
 VirtualDesktopSwitcher::VirtualDesktopSwitcher()
     : m_pVDeskHelper(std::make_unique<VirtualDesktopHelper>()) {
@@ -73,9 +75,17 @@ LRESULT CALLBACK VirtualDesktopSwitcher::LowLevelKeyboardProc(int nCode, WPARAM 
     uint8_t held  = (alt ? ModMask::Alt : 0u) | (ctrl ? ModMask::Ctrl : 0u) | (shift ? ModMask::Shift : 0u) | (win ? ModMask::Win : 0u);
     bool    match = held != 0 && held == s_modMask;
 
-    if (match && pKeyboard->vkCode >= '1' && pKeyboard->vkCode <= '9') {
-        const int desktopIndex = static_cast<int>(pKeyboard->vkCode - '1');
-        PostMessage(s_active->m_hwnd, WM_SWITCH_DESKTOP, desktopIndex, 0);
+    if (match) {
+        for (int i = 0; i < static_cast<int>(kMaxDesktops); ++i) {
+            if (pKeyboard->vkCode == s_desktopKeys.at(i)) {
+                PostMessage(s_active->m_hwnd, WM_SWITCH_DESKTOP, i, 0);
+                return 1;
+            }
+        }
+    }
+
+    if (match && pKeyboard->vkCode == s_prevDesktopKey && s_active->m_previousDesktop >= 0) {
+        PostMessage(s_active->m_hwnd, WM_SWITCH_DESKTOP, s_active->m_previousDesktop, 0);
         return 1;
     }
 
@@ -121,6 +131,7 @@ void VirtualDesktopSwitcher::SwitchToDesktop(int index) {
 
     const int currentIndex = GetCurrentDesktopIndex();
     if (index == currentIndex) { return; }
+    m_previousDesktop = currentIndex;
 
     m_pVDeskHelper->SwitchToDesktop(index);
     for (int retry = 0; retry < 20; ++retry) {

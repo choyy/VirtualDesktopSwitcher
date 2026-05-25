@@ -200,6 +200,13 @@ void Application::LoadConfiguration() {
     m_modMask          = static_cast<uint8_t>(ReadIniInt(L"General", L"ModMask", 1));
     m_indicatorCfg.LoadFromIni();
     VirtualDesktopSwitcher::SetModMask(m_modMask);
+    VirtualDesktopSwitcher::SetPrevDesktopKey(
+        static_cast<uint8_t>(ReadIniInt(L"General", L"PrevDesktopKey", VK_OEM_3)));
+    for (int i = 0; i < static_cast<int>(kMaxDesktops); ++i) {
+        std::wstring keyName = L"DesktopKey" + std::to_wstring(i + 1);
+        VirtualDesktopSwitcher::SetDesktopKey(i,
+                                              static_cast<uint8_t>(ReadIniInt(L"General", keyName, '1' + i)));
+    }
 }
 
 void Application::InitializeOverlay() {
