@@ -405,13 +405,17 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
         }
     }
     if (!m_pCfg->posInitialized && !m_layers.empty()) {
-        int  fs                = MulDiv(m_pCfg->fontSize, m_layers[0].dpi, 96);
-        auto spacedtext        = BuildSpacedText(m_text, m_pCfg->charSpacing);
-        auto size              = m_renderer->Measure(spacedtext.c_str(), fs);
-        int  w                 = std::max(static_cast<int>(size.cx) + kPadding * 2, kMinWidth);
-        m_pCfg->windowPos.x    = m_layers[0].monitor.left + (m_layers[0].monitor.right - m_layers[0].monitor.left - w) / 2;
-        m_pCfg->windowPos.y    = m_layers[0].monitor.top - 4;
-        m_pCfg->posInitialized = true;
+        if (m_pCfg->positionPreset >= 0) {
+            SetPositionPreset(m_pCfg->positionPreset);
+        } else {
+            int  fs                = MulDiv(m_pCfg->fontSize, m_layers[0].dpi, 96);
+            auto spacedtext        = BuildSpacedText(m_text, m_pCfg->charSpacing);
+            auto size              = m_renderer->Measure(spacedtext.c_str(), fs);
+            int  w                 = std::max(static_cast<int>(size.cx) + kPadding * 2, kMinWidth);
+            m_pCfg->windowPos.x    = m_layers[0].monitor.left + (m_layers[0].monitor.right - m_layers[0].monitor.left - w) / 2;
+            m_pCfg->windowPos.y    = m_layers[0].monitor.top - 4;
+            m_pCfg->posInitialized = true;
+        }
     }
 
     // 5. Build initial text and apply display mode
@@ -518,7 +522,6 @@ void DesktopIndicator::RebuildText() {
     }
     m_text = text;
     Render();
-    if (m_pCfg->positionPreset >= 0) { ApplyPresetPosition(); }
 }
 
 void DesktopIndicator::SetColor(const std::wstring &hexColor) {
@@ -781,20 +784,13 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
         curX += metrics.widths.at(i) + metrics.spacing;
     }
 
-    POINT pos  = {0, 0};
-    SIZE  size = {w, h};
-    POINT src  = {0, 0};
-    if (layer.monitor.left != layer.monitor.right) {
-        int anchorX = m_pCfg->windowPos.x + (layer.monitor.left - m_layers[0].monitor.left);
-        int anchorY = m_pCfg->windowPos.y + (layer.monitor.top - m_layers[0].monitor.top);
-        if (w != centerW) {
-            int cx = anchorX - (w - centerW) / 2;
-            cx     = std::clamp(cx, static_cast<int>(layer.monitor.left), static_cast<int>(layer.monitor.right - w));
-            pos    = {cx, anchorY};
-        } else {
-            pos = {anchorX, anchorY};
-        }
-    }
+    int anchorX         = m_pCfg->windowPos.x + (layer.monitor.left - m_layers[0].monitor.left);
+    int anchorY         = m_pCfg->windowPos.y + (layer.monitor.top - m_layers[0].monitor.top);
+    int cx              = anchorX - (w - centerW) / 2;
+    cx                  = std::clamp(cx, static_cast<int>(layer.monitor.left), static_cast<int>(layer.monitor.right - w));
+    POINT         pos   = {cx, anchorY};
+    SIZE          size  = {w, h};
+    POINT         src   = {0, 0};
     BLENDFUNCTION blend = {.BlendOp = AC_SRC_OVER, .SourceConstantAlpha = 255, .AlphaFormat = AC_SRC_ALPHA};
     UpdateLayeredWindow(layer.hwnd, hdcScreen, &pos, &size, hdcMem, &src, 0, &blend, ULW_ALPHA);
 
