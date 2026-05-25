@@ -15,6 +15,13 @@
 
 class FontRenderer;
 
+struct SymbolMetrics {
+    std::array<int, 9> widths{};
+    int                fontSize = 0;
+    int                spacing  = 0;
+    SIZE               dibSize{};
+};
+
 struct MonitorLayer {
     HWND                 hwnd{};
     RECT                 monitor{}; // rcMonitor
@@ -94,8 +101,11 @@ private:
     void         StartBgSampleTimer();
     void         StopBgSampleTimer();
     void         RebuildText();
-    std::wstring BuildLayerColors(MonitorLayer &layer, float hueOff, const std::array<COLORREF, 5> &baseColors, size_t colorCount) const;
-    void         RenderLayer(MonitorLayer &layer, float hueOff, const std::array<COLORREF, 5> &baseColors, size_t colorCount, bool isDragging, HDC hdcScreen, HDC hdcMem, BLENDFUNCTION *blend);
+    std::wstring BuildLayerColors(MonitorLayer &layer, const std::array<COLORREF, 5> &baseColors, size_t colorCount) const;
+    void         RenderLayer(MonitorLayer &layer, HDC hdcScreen, HDC hdcMem);
+    void         PresentLayer(MonitorLayer &layer, const SymbolMetrics &metrics,
+                              int centerW, const ColorArray &colors,
+                              HDC hdcScreen, HDC hdcMem);
     void         Render();
     void         ApplyPresetPosition();
     void         MoveByDelta(int dx, int dy);

@@ -82,10 +82,8 @@ int FontRenderer::GetGlyphIndex(wchar_t codepoint) const {
     return stbtt_FindGlyphIndex(&m_fontInfo, codepoint);
 }
 
-bool FontRenderer::Measure(const wchar_t *text, int fontSize, int *width, int *height) const {
-    if (!m_loaded || text == nullptr || width == nullptr || height == nullptr) {
-        return false;
-    }
+SIZE FontRenderer::Measure(const wchar_t *text, int fontSize) const {
+    if (!m_loaded || text == nullptr) { return {0, 0}; }
 
     float sc = stbtt_ScaleForPixelHeight(&m_fontInfo, static_cast<float>(fontSize));
     int   a = 0, d = 0;
@@ -97,9 +95,7 @@ bool FontRenderer::Measure(const wchar_t *text, int fontSize, int *width, int *h
         wchar_t next = (i + 1 < len) ? text[i + 1] : 0;
         x += GetCodepointAdvance(text[i], next, sc);
     }
-    *width  = static_cast<int>(x + 1);
-    *height = static_cast<int>(static_cast<float>(a - d) * sc + 1);
-    return true;
+    return {static_cast<int>(x + 1), static_cast<int>(static_cast<float>(a - d) * sc + 1)};
 }
 
 void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
@@ -111,23 +107,19 @@ void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
         return;
     }
 
-    std::array<COLORREF, 5> colors{};
-    size_t                  colorCount = ParseMultiColorString(colorStr, colors.data(), colors.size());
+    auto colors = ParseMultiColorString(colorStr);
 
     float sc = stbtt_ScaleForPixelHeight(&m_fontInfo, static_cast<float>(fontSize));
     int   a = 0, d = 0;
     stbtt_GetFontVMetrics(&m_fontInfo, &a, &d, nullptr);
 
-    int tw = 0, th = 0;
-    Measure(text, fontSize, &tw, &th);
-    if (tw <= 0) {
-        return;
-    }
+    auto m = Measure(text, fontSize);
+    if (m.cx <= 0) { return; }
 
-    int sx = textOffsetX + (textAreaW - tw) / 2;
-    int bl = textOffsetY + (textAreaH - th) / 2 + static_cast<int>(static_cast<float>(a) * sc);
+    int sx = textOffsetX + (textAreaW - m.cx) / 2;
+    int bl = textOffsetY + (textAreaH - m.cy) / 2 + static_cast<int>(static_cast<float>(a) * sc);
 
-    bool   isGradient = colorCount > 1;
+    bool   isGradient = colors.count > 1;
     float  x          = 0;
     size_t len        = wcslen(text);
 
@@ -165,8 +157,8 @@ void FontRenderer::Render(void *bits, int bufWidth, int bufHeight,
                 }
 
                 COLORREF pixelColor = isGradient
-                                          ? InterpolateGradientColor(colors.data(), colorCount, static_cast<float>(dx) / static_cast<float>(bufWidth))
-                                          : colors.at(0);
+                                          ? InterpolateGradientColor(colors.colors.data(), colors.count, static_cast<float>(dx) / static_cast<float>(bufWidth))
+                                          : colors.colors.at(0);
                 int      rr = GetRValue(pixelColor), gg = GetGValue(pixelColor), bb = GetBValue(pixelColor);
 
                 auto *pixels        = static_cast<DWORD *>(bits);

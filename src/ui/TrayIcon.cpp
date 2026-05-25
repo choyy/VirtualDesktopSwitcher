@@ -42,20 +42,19 @@ constexpr std::array kPositionKeys = {
 };
 
 void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
-    std::array<COLORREF, 5> colors{};
-    size_t                  colorCount = ParseMultiColorString(hex, colors.data(), 5);
+    auto colors = ParseMultiColorString(hex);
 
-    if (colorCount >= 2) {
+    if (colors.count >= 2) {
         const int sw = rect.right - rect.left;
         const int sh = rect.bottom - rect.top;
         for (int sx = 0; sx < sw; ++sx) {
-            COLORREF col = InterpolateGradientColor(colors.data(), colorCount, static_cast<float>(sx) / static_cast<float>(sw));
+            COLORREF col = InterpolateGradientColor(colors.colors.data(), colors.count, static_cast<float>(sx) / static_cast<float>(sw));
             for (int sy = 0; sy < sh; ++sy) {
                 SetPixel(hdc, rect.left + sx, rect.top + sy, col);
             }
         }
-    } else if (colorCount == 1) {
-        HBRUSH hb = CreateSolidBrush(colors[0]);
+    } else if (colors.count == 1) {
+        HBRUSH hb = CreateSolidBrush(colors.colors[0]);
         FillRect(hdc, &rect, hb);
         DeleteObject(hb);
     }

@@ -21,7 +21,7 @@ public:
 
     bool Init(const std::wstring &fontName);
 
-    bool Measure(const wchar_t *text, int fontSize, int *width, int *height) const;
+    SIZE Measure(const wchar_t *text, int fontSize) const;
     void Render(void *bits, int bufWidth, int bufHeight, int textOffsetX, int textOffsetY,
                 int textAreaW, int textAreaH, const wchar_t *text,
                 const std::wstring &colorStr, int fontSize) const;

@@ -29,6 +29,10 @@ constexpr UINT WM_INDICATOR_MOVE_WINDOW = WM_USER + 50;
 
 const HCURSOR s_hArrow = LoadCursor(nullptr, IDC_ARROW);
 
+constexpr int kPadding   = 8;
+constexpr int kMinWidth  = 50;
+constexpr int kMinHeight = 20;
+
 struct EnumCtx {
     std::vector<MonitorLayer> *vec;
     DesktopIndicator          *self;
@@ -161,6 +165,53 @@ bool SampleLayerBackground(MonitorLayer &layer, HDC hdcScreen) {
     DeleteObject(hBmp);
     DeleteDC(hdcMem);
     return true;
+}
+
+void ComputeScales(MonitorLayer &layer, float avgSymW, bool isDragging) {
+    constexpr float maxExtra = 1.0f;
+    POINT           cursorPt{};
+    RECT            layerRect{};
+    if (isDragging) {
+        GetCursorPos(&cursorPt);
+        GetWindowRect(layer.hwnd, &layerRect);
+    }
+
+    for (int i = 0; i < static_cast<int>(layer.symbolScales.size()); ++i) {
+        float targetScale = 1.0f;
+        if (isDragging) {
+            float symCenterX = static_cast<float>(kPadding) + avgSymW * (static_cast<float>(i) + 0.5f);
+            float symCenterY = static_cast<float>(layerRect.bottom - layerRect.top) * 0.5f;
+            float sigmaX     = std::max(avgSymW * 4.0f, 300.0f);
+            float sigmaY     = sigmaX / 2.0f;
+            float dx         = static_cast<float>(cursorPt.x - layerRect.left) - symCenterX;
+            float dy         = static_cast<float>(cursorPt.y - layerRect.top) - symCenterY;
+            float dist2      = (dx * dx) / (sigmaX * sigmaX) + (dy * dy) / (sigmaY * sigmaY);
+            targetScale      = 1.0f + maxExtra * std::exp(-0.5f * dist2);
+        }
+        float &cur  = layer.symbolScales.at(i);
+        float  rate = (targetScale > cur) ? 0.4f : 0.15f;
+        cur += (targetScale - cur) * rate;
+    }
+}
+
+SymbolMetrics CalcSymbolMetrics(FontRenderer &renderer, const IndicatorConfig &cfg,
+                                const std::wstring &text, const MonitorLayer &layer) {
+    SymbolMetrics s;
+    s.fontSize = MulDiv(cfg.fontSize, layer.dpi, 96);
+    s.spacing  = cfg.charSpacing * renderer.Measure(L" ", s.fontSize).cx;
+
+    int symCount = static_cast<int>(text.size());
+    int totalW = 0, maxH = 0;
+    for (int i = 0; i < symCount; ++i) {
+        int  symFont   = static_cast<int>(static_cast<float>(s.fontSize) * layer.symbolScales.at(i));
+        auto size      = renderer.Measure(std::wstring(1, text[i]).c_str(), symFont);
+        s.widths.at(i) = size.cx;
+        totalW += size.cx;
+        maxH = std::max(static_cast<int>(size.cy), maxH);
+    }
+    if (symCount > 1) { totalW += s.spacing * (symCount - 1); }
+    s.dibSize = {std::max(totalW + kPadding * 2, kMinWidth), std::max(maxH + kPadding * 2, kMinHeight)};
+    return s;
 }
 
 } // namespace
@@ -354,11 +405,10 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
         }
     }
     if (!m_pCfg->posInitialized && !m_layers.empty()) {
-        int  fs = MulDiv(m_pCfg->fontSize, m_layers[0].dpi, 96);
-        int  tw = 0, th = 0;
-        auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
-        m_renderer->Measure(spacedtext.c_str(), fs, &tw, &th);
-        int w                  = std::max(tw + 16, 50);
+        int  fs                = MulDiv(m_pCfg->fontSize, m_layers[0].dpi, 96);
+        auto spacedtext        = BuildSpacedText(m_text, m_pCfg->charSpacing);
+        auto size              = m_renderer->Measure(spacedtext.c_str(), fs);
+        int  w                 = std::max(static_cast<int>(size.cx) + kPadding * 2, kMinWidth);
         m_pCfg->windowPos.x    = m_layers[0].monitor.left + (m_layers[0].monitor.right - m_layers[0].monitor.left - w) / 2;
         m_pCfg->windowPos.y    = m_layers[0].monitor.top - 4;
         m_pCfg->posInitialized = true;
@@ -568,14 +618,12 @@ void DesktopIndicator::ApplyPresetPosition() {
     if (preset < 0 || preset >= static_cast<int>(PositionPreset::Count)) { return; }
 
     auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
-    int  padding    = 8;
 
     for (auto &l : m_layers) {
-        int fs = MulDiv(m_pCfg->fontSize, l.dpi, 96);
-        int tw = 0, th = 0;
-        m_renderer->Measure(spacedtext.c_str(), fs, &tw, &th);
-        int w = std::max(tw + padding * 2, 50);
-        int h = std::max(th + padding * 2, 20);
+        int  fs   = MulDiv(m_pCfg->fontSize, l.dpi, 96);
+        auto size = m_renderer->Measure(spacedtext.c_str(), fs);
+        int  w    = std::max(static_cast<int>(size.cx) + kPadding * 2, kMinWidth);
+        int  h    = std::max(static_cast<int>(size.cy) + kPadding * 2, kMinHeight);
 
         POINT pos = CalcPresetPos(preset, l.monitor, l.work, w, h);
         if (&l == m_layers.data()) { m_pCfg->windowPos = pos; }
@@ -655,10 +703,16 @@ void DesktopIndicator::StopBgSampleTimer() {
     for (auto &l : m_layers) { l.bgSampleValid = false; }
 }
 
-std::wstring DesktopIndicator::BuildLayerColors(MonitorLayer &layer, float hueOff,
+std::wstring DesktopIndicator::BuildLayerColors(MonitorLayer                  &layer,
                                                 const std::array<COLORREF, 5> &baseColors, size_t colorCount) const {
     if (m_hasPreview) { return m_previewColor; }
     if (colorCount == 0) { return m_pCfg->textColor; }
+
+    float hueOff = 0.0f;
+    if (m_pCfg->animMode != 0) {
+        ULONGLONG ms = GetTickCount64();
+        hueOff       = static_cast<float>(fmod(static_cast<double>(ms) / 12000.0 * 360.0, 360.0));
+    }
 
     std::wstring colorStr;
     for (size_t i = 0; i < colorCount; ++i) {
@@ -682,81 +736,12 @@ std::wstring DesktopIndicator::BuildLayerColors(MonitorLayer &layer, float hueOf
     return colorStr;
 }
 
-void DesktopIndicator::RenderLayer(MonitorLayer &layer, float hueOff,
-                                   const std::array<COLORREF, 5> &baseColors, size_t colorCount,
-                                   bool isDragging, HDC hdcScreen, HDC hdcMem, BLENDFUNCTION *blend) {
-    auto                    colorStr = BuildLayerColors(layer, hueOff, baseColors, colorCount);
-    std::array<COLORREF, 5> actualColors{};
-    size_t                  actualCount = ParseMultiColorString(colorStr, actualColors.data(), actualColors.size());
-    int                     baseFont    = MulDiv(m_pCfg->fontSize, layer.dpi, 96);
-
-    if (layer.symbolScales[0] < 0.01f) { layer.symbolScales.fill(1.0f); }
-
-    const int symCount = static_cast<int>(m_text.size());
-    const int padding  = 8;
-
-    std::array<float, 9> nominalWidths{};
-    float                nominalTotalW = 0;
-    for (int i = 0; i < symCount; ++i) {
-        int sw = 0, sh = 0;
-        m_renderer->Measure(std::wstring(1, m_text[i]).c_str(), baseFont, &sw, &sh);
-        nominalWidths.at(i) = static_cast<float>(sw);
-        nominalTotalW += nominalWidths.at(i);
-    }
-
-    int spaceW = 0, dummy = 0;
-    m_renderer->Measure(L" ", baseFont, &spaceW, &dummy);
-    int gap = m_pCfg->charSpacing * spaceW;
-    if (symCount > 1) { nominalTotalW += static_cast<float>(gap * (symCount - 1)); }
-
-    float avgSymW  = (symCount > 0) ? nominalTotalW / static_cast<float>(symCount) : 0.0f;
-    float maxExtra = 1.0f;
-
-    POINT cursorPt{};
-    RECT  layerRect{};
-    if (isDragging) {
-        GetCursorPos(&cursorPt);
-        GetWindowRect(layer.hwnd, &layerRect);
-    }
-
-    std::array<int, 9>   symWidths{};
-    std::array<float, 9> symScales{};
-    int                  totalW = 0;
-    int                  maxH   = 0;
-
-    for (int i = 0; i < symCount; ++i) {
-        float targetScale = 1.0f;
-        if (isDragging) {
-            float symCenterX = static_cast<float>(padding) + avgSymW * (static_cast<float>(i) + 0.5f);
-            float symCenterY = static_cast<float>(layerRect.bottom - layerRect.top) * 0.5f;
-            float sigmaX     = std::max(avgSymW * 4.0f, 300.0f);
-            float sigmaY     = sigmaX / 2.0f;
-            float dx         = static_cast<float>(cursorPt.x - layerRect.left) - symCenterX;
-            float dy         = static_cast<float>(cursorPt.y - layerRect.top) - symCenterY;
-            float dist2      = (dx * dx) / (sigmaX * sigmaX) + (dy * dy) / (sigmaY * sigmaY);
-            targetScale      = 1.0f + maxExtra * std::exp(-0.5f * dist2);
-        }
-
-        float &cur  = layer.symbolScales.at(i);
-        float  rate = (targetScale > cur) ? 0.4f : 0.15f;
-        cur += (targetScale - cur) * rate;
-        symScales.at(i) = cur;
-
-        int          symFont = static_cast<int>(static_cast<float>(baseFont) * symScales.at(i));
-        int          sw = 0, sh = 0;
-        std::wstring sym(1, m_text[i]);
-        m_renderer->Measure(sym.c_str(), symFont, &sw, &sh);
-        symWidths.at(i) = sw;
-        totalW += sw;
-        maxH = std::max(sh, maxH);
-    }
-
-    if (symCount > 1) { totalW += gap * (symCount - 1); }
-
-    int w = std::max(totalW + padding * 2, 50);
-    int h = std::max(maxH + padding * 2, 20);
-
-    if (hdcMem == nullptr) { return; }
+void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
+                                    const SymbolMetrics &metrics,
+                                    int centerW, const ColorArray &colors,
+                                    HDC hdcScreen, HDC hdcMem) {
+    int w = metrics.dibSize.cx;
+    int h = metrics.dibSize.cy;
 
     BITMAPINFO bmi              = {};
     bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
@@ -768,7 +753,7 @@ void DesktopIndicator::RenderLayer(MonitorLayer &layer, float hueOff,
 
     void   *bits = nullptr;
     HBITMAP hDib = CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
-    if ((hDib == nullptr) || (bits == nullptr)) {
+    if (hDib == nullptr || bits == nullptr) {
         if (hDib != nullptr) { DeleteObject(hDib); }
         return;
     }
@@ -777,69 +762,85 @@ void DesktopIndicator::RenderLayer(MonitorLayer &layer, float hueOff,
     DWORD clear   = m_editMode ? 0x55000000 : 0x00000000;
     std::fill_n(static_cast<DWORD *>(bits), w * h, clear);
 
-    int curX = padding;
-    for (int i = 0; i < symCount; ++i) {
-        int                    symFont  = static_cast<int>(static_cast<float>(baseFont) * symScales.at(i));
-        COLORREF               symColor = (actualCount >= 2)
-                                              ? InterpolateGradientColor(actualColors.data(), actualCount,
-                                                                         static_cast<float>(i) / static_cast<float>(std::max(symCount - 1, 1)))
-                                              : actualColors[0];
+    int curX = kPadding;
+    for (int i = 0; i < static_cast<int>(m_text.size()); ++i) {
+        int                    symFont  = static_cast<int>(static_cast<float>(metrics.fontSize) * layer.symbolScales.at(i));
+        COLORREF               symColor = (colors.count >= 2)
+                                              ? InterpolateGradientColor(colors.colors.data(), colors.count,
+                                                                         static_cast<float>(i) / static_cast<float>(std::max(static_cast<int>(m_text.size()) - 1, 1)))
+                                              : colors.colors[0];
         std::array<wchar_t, 8> colorBuf{};
-        swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X",             // NOLINT
-                   GetRValue(symColor), GetGValue(symColor), GetBValue(symColor)); // NOLINT
+        swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X", // NOLINT
+                   GetRValue(symColor), GetGValue(symColor), GetBValue(symColor));
         std::wstring symColorStr(colorBuf.data());
         std::wstring sym(1, m_text[i]);
-        m_renderer->Render(bits, w, h, curX, padding, symWidths.at(i), h - padding * 2,
+        m_renderer->Render(bits, w, h, curX, kPadding, metrics.widths.at(i), h - kPadding * 2,
                            sym.c_str(), symColorStr, symFont);
-        layer.symbolCenters.at(i)    = static_cast<float>(curX) + static_cast<float>(symWidths.at(i)) * 0.5f;
-        layer.symbolHalfWidths.at(i) = static_cast<float>(symWidths.at(i)) * 0.5f;
-        curX += symWidths.at(i) + gap;
+        layer.symbolCenters.at(i)    = static_cast<float>(curX) + static_cast<float>(metrics.widths.at(i)) * 0.5f;
+        layer.symbolHalfWidths.at(i) = static_cast<float>(metrics.widths.at(i)) * 0.5f;
+        curX += metrics.widths.at(i) + metrics.spacing;
     }
 
     POINT pos  = {0, 0};
     SIZE  size = {w, h};
     POINT src  = {0, 0};
     if (layer.monitor.left != layer.monitor.right) {
-        int restW   = std::max(static_cast<int>(nominalTotalW) + padding * 2, 50);
         int anchorX = m_pCfg->windowPos.x + (layer.monitor.left - m_layers[0].monitor.left);
         int anchorY = m_pCfg->windowPos.y + (layer.monitor.top - m_layers[0].monitor.top);
-        if (w != restW) {
-            int cx = anchorX - (w - restW) / 2;
+        if (w != centerW) {
+            int cx = anchorX - (w - centerW) / 2;
             cx     = std::clamp(cx, static_cast<int>(layer.monitor.left), static_cast<int>(layer.monitor.right - w));
             pos    = {cx, anchorY};
         } else {
             pos = {anchorX, anchorY};
         }
     }
-    UpdateLayeredWindow(layer.hwnd, hdcScreen, &pos, &size, hdcMem, &src, 0, blend, ULW_ALPHA);
+    BLENDFUNCTION blend = {.BlendOp = AC_SRC_OVER, .SourceConstantAlpha = 255, .AlphaFormat = AC_SRC_ALPHA};
+    UpdateLayeredWindow(layer.hwnd, hdcScreen, &pos, &size, hdcMem, &src, 0, &blend, ULW_ALPHA);
 
     SelectObject(hdcMem, hOldBmp);
     DeleteObject(hDib);
 }
 
+void DesktopIndicator::RenderLayer(MonitorLayer &layer, HDC hdcScreen, HDC hdcMem) {
+    auto baseColors   = ParseMultiColorString(m_pCfg->textColor);
+    auto colorStr     = BuildLayerColors(layer, baseColors.colors, baseColors.count);
+    auto actualColors = ParseMultiColorString(colorStr);
+
+    if (layer.symbolScales[0] < 0.01f) { layer.symbolScales.fill(1.0f); }
+    int fontSize = MulDiv(m_pCfg->fontSize, layer.dpi, 96);
+
+    // 1. 基准测量
+    float unscaledW = 0;
+    int   symCount  = static_cast<int>(m_text.size());
+    for (int i = 0; i < symCount; ++i) {
+        auto size = m_renderer->Measure(std::wstring(1, m_text[i]).c_str(), fontSize);
+        unscaledW += static_cast<float>(size.cx);
+    }
+    int spacing = m_pCfg->charSpacing * m_renderer->Measure(L" ", fontSize).cx;
+    if (symCount > 1) { unscaledW += static_cast<float>(spacing * (symCount - 1)); }
+    float avgSymW = (symCount > 0) ? unscaledW / static_cast<float>(symCount) : 0.0f;
+    int   centerW = std::max(static_cast<int>(unscaledW) + kPadding * 2, kMinWidth);
+
+    // 2. 缩放计算
+    bool isDragging = (m_draggingWindow && !m_editMode);
+    ComputeScales(layer, avgSymW, isDragging);
+
+    // 3. 缩放后布局
+    auto metrics = CalcSymbolMetrics(*m_renderer, *m_pCfg, m_text, layer);
+
+    // 4. 渲染提交
+    PresentLayer(layer, metrics, centerW, actualColors, hdcScreen, hdcMem);
+}
+
 void DesktopIndicator::Render() {
     if (m_layers.empty() || m_pCfg == nullptr || m_renderer == nullptr) { return; }
-
-    float hueOff = 0.0f;
-    if (m_pCfg->animMode != 0) {
-        ULONGLONG ms = GetTickCount64();
-        hueOff       = static_cast<float>(fmod(static_cast<double>(ms) / 12000.0 * 360.0, 360.0));
-    }
-
-    std::array<COLORREF, 5> baseColors{};
-    size_t                  colorCount = ParseMultiColorString(m_pCfg->textColor, baseColors.data(), 5);
-    bool                    isDragging = (m_draggingWindow && !m_editMode);
-
-    BLENDFUNCTION blend       = {};
-    blend.BlendOp             = AC_SRC_OVER;
-    blend.SourceConstantAlpha = 255;
-    blend.AlphaFormat         = AC_SRC_ALPHA;
 
     HDC hdcScreen = GetDC(nullptr);
     HDC hdcMem    = (hdcScreen != nullptr) ? CreateCompatibleDC(hdcScreen) : nullptr;
 
     for (auto &l : m_layers) {
-        RenderLayer(l, hueOff, baseColors, colorCount, isDragging, hdcScreen, hdcMem, &blend);
+        RenderLayer(l, hdcScreen, hdcMem);
     }
 
     if (hdcMem != nullptr) { DeleteDC(hdcMem); }
@@ -934,6 +935,7 @@ bool DesktopIndicator::HandleDragStart(HWND hwnd, LPARAM lp) {
                                        return l.hwnd == hwnd;
                                    });
     if (it == m_layers.end()) { return true; }
+
     int winLeft    = m_pCfg->windowPos.x + (it->monitor.left - m_layers[0].monitor.left);
     int winTop     = m_pCfg->windowPos.y + (it->monitor.top - m_layers[0].monitor.top);
     m_dragOffset.x = pt.x - winLeft;

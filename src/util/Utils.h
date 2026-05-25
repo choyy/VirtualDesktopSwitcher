@@ -43,9 +43,14 @@ constexpr std::array kPredefinedColors = {
 
 // --- Color Parsing ---
 
-COLORREF ParseColorString(const std::wstring &colorStr);
-size_t   ParseMultiColorString(const std::wstring &colorStr, COLORREF *outColors, size_t maxColors);
-COLORREF InterpolateGradientColor(const COLORREF *colors, size_t colorCount, float t);
+struct ColorArray {
+    std::array<COLORREF, 5> colors{};
+    size_t                  count = 0;
+};
+
+COLORREF   ParseColorString(const std::wstring &colorStr);
+ColorArray ParseMultiColorString(const std::wstring &colorStr);
+COLORREF   InterpolateGradientColor(const COLORREF *colors, size_t colorCount, float t);
 
 // --- HSV Color Space ---
 

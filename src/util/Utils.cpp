@@ -72,19 +72,19 @@ COLORREF ParseColorString(const std::wstring &colorStr) {
     return RGB(r, g, b);
 }
 
-size_t ParseMultiColorString(const std::wstring &colorStr, COLORREF *outColors, size_t maxColors) {
-    size_t count = 0;
-    size_t start = 0;
-    while (start < colorStr.size() && count < maxColors) {
+ColorArray ParseMultiColorString(const std::wstring &colorStr) {
+    ColorArray result;
+    size_t     start = 0;
+    while (start < colorStr.size() && result.count < result.colors.size()) {
         size_t end = colorStr.find(L'_', start);
         if (end == std::wstring::npos) {
-            outColors[count++] = ParseColorString(colorStr.substr(start));
+            result.colors.at(result.count++) = ParseColorString(colorStr.substr(start));
             break;
         }
-        outColors[count++] = ParseColorString(colorStr.substr(start, end - start));
-        start              = end + 1;
+        result.colors.at(result.count++) = ParseColorString(colorStr.substr(start, end - start));
+        start                            = end + 1;
     }
-    return count;
+    return result;
 }
 
 int MeasureLabelWidth(HWND parent, int id) {
