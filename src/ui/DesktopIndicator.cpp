@@ -796,11 +796,21 @@ void DesktopIndicator::RenderLayer(MonitorLayer &layer, float hueOff,
         curX += symWidths.at(i) + gap;
     }
 
-    RECT wr;
-    GetWindowRect(layer.hwnd, &wr);
-    POINT pos  = {wr.left, wr.top};
+    POINT pos  = {0, 0};
     SIZE  size = {w, h};
     POINT src  = {0, 0};
+    if (layer.monitor.left != layer.monitor.right) {
+        int restW   = std::max(static_cast<int>(nominalTotalW) + padding * 2, 50);
+        int anchorX = m_pCfg->windowPos.x + (layer.monitor.left - m_layers[0].monitor.left);
+        int anchorY = m_pCfg->windowPos.y + (layer.monitor.top - m_layers[0].monitor.top);
+        if (w != restW) {
+            int cx = anchorX - (w - restW) / 2;
+            cx     = std::clamp(cx, static_cast<int>(layer.monitor.left), static_cast<int>(layer.monitor.right - w));
+            pos    = {cx, anchorY};
+        } else {
+            pos = {anchorX, anchorY};
+        }
+    }
     UpdateLayeredWindow(layer.hwnd, hdcScreen, &pos, &size, hdcMem, &src, 0, blend, ULW_ALPHA);
 
     SelectObject(hdcMem, hOldBmp);
