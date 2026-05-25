@@ -45,7 +45,7 @@
 
 配置文件保存至 `%LOCALAPPDATA%\VirtualDesktopSwitcher\config.ini`。
 
-如果需要自定义切换虚拟桌面的键，可按照以下说明修改配置文件：
+如果需要自定义切换虚拟桌面的键，例如使用 `Alt + qweasdzxc` 切换桌面 `1~9`，可按照以下说明修改配置文件：
 
 | 键 | 说明 | 默认值 |
 |---|---|---|
@@ -53,6 +53,21 @@
 | `PrevDesktopKey` | 返回上一桌面的按键虚拟键码 | `192`（按键`` ` ``） |
 
 虚拟键码可参考 [Virtual-Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes)。例如数字键盘 1~9 对应 `97`~`105`。
+
+例如 `Alt + qweasdzxc` 的配置：
+
+```ini
+[General]
+DesktopKey1=81    ; Q
+DesktopKey2=87    ; W
+DesktopKey3=69    ; E
+DesktopKey4=65    ; A
+DesktopKey5=83    ; S
+DesktopKey6=68    ; D
+DesktopKey7=90    ; Z
+DesktopKey8=88    ; X
+DesktopKey9=67    ; C
+```
 
 ## 🔧 从源码编译
 

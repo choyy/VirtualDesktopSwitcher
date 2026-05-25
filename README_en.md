@@ -45,7 +45,7 @@ To build from source, see [Building from Source](#building-from-source) below.
 
 Configuration file is saved to `%LOCALAPPDATA%\VirtualDesktopSwitcher\config.ini`.
 
-If you need to customize the keys for switching virtual desktops, you can modify the configuration file as follows:
+If you need to customize the keys for switching virtual desktops, for example using `Alt + qweasdzxc` for desktops `1~9`, you can modify the configuration file as follows:
 
 | Key | Description | Default Value |
 |---|---|---|
@@ -53,6 +53,21 @@ If you need to customize the keys for switching virtual desktops, you can modify
 | `PrevDesktopKey` | Virtual key code for returning to previous desktop | `192` (key `` ` ``) |
 
 For virtual key codes, refer to [Virtual-Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes). For example, numpad 1~9 correspond to `97`~`105`.
+
+Example configuration for `Alt + qweasdzxc`:
+
+```ini
+[General]
+DesktopKey1=81    ; Q
+DesktopKey2=87    ; W
+DesktopKey3=69    ; E
+DesktopKey4=65    ; A
+DesktopKey5=83    ; S
+DesktopKey6=68    ; D
+DesktopKey7=90    ; Z
+DesktopKey8=88    ; X
+DesktopKey9=67    ; C
+```
 
 ## 🔧 Building from Source
 
