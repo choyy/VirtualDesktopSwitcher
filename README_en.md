@@ -17,7 +17,7 @@
 
 - **Hotkey switching**: `Alt + 1` ~ `Alt + 9` to jump directly to the corresponding virtual desktop (keys and modifier keys are customizable)
 - **Return to previous desktop**: ``Alt + ` `` to switch back to the previously active virtual desktop
-- **Pin window to all desktops**: `Alt + D` to pin the current window to all virtual desktops (or unpin). The window stays visible when switching desktops.
+- **Pin window to all desktops**: `Alt + D` to pin (or unpin) the current window to all virtual desktops, keeping it visible across desktop switches.
 - **Desktop indicator**: Uses distinct symbols for different desktop states — **◉ current** desktop, **○ non-empty** desktops, and **◌ empty** desktops. Fully customizable position, size, and style.
 - **Scroll to switch**: Scroll the mouse wheel while hovering over the indicator to quickly switch to the previous/next virtual desktop.
 - **Drag to move**: Drag any window onto an indicator symbol to move it to that virtual desktop and automatically switch to it.
@@ -35,7 +35,7 @@ To build from source, see [Building from Source](#building-from-source) below.
 - The desktop indicator appears on screen, and the program icon shows in the system tray
 - Use `Alt + 1` ~ `Alt + 9` to switch between virtual desktops
 - Use ``Alt + ` `` to return to the previous virtual desktop
-- Press `Alt + D` to pin/unpin the current window to all desktops
+- Use `Alt + D` to pin (or unpin) the current window to all desktops
 - **Scroll** the mouse wheel while hovering over the indicator to switch desktops
 - **Drag a window** onto an indicator symbol to move it to that desktop and switch to it automatically
 - Right-click the tray icon to configure:
@@ -45,19 +45,17 @@ To build from source, see [Building from Source](#building-from-source) below.
 
 ## 📝 INI Configuration
 
-Configuration file is saved to `%LOCALAPPDATA%\VirtualDesktopSwitcher\config.ini`.
-
-If you need to customize the keys for switching virtual desktops, for example using `Alt + qweasdzxc` for desktops `1~9`, you can modify the configuration file as follows:
+Configuration file is saved to `%LOCALAPPDATA%\VirtualDesktopSwitcher\config.ini`. You can customize the keys for switching and pinning virtual desktops in this file.
 
 | Key | Description | Default Value |
 |---|---|---|
 | `DesktopKey1` ~ `DesktopKey9` | Virtual key codes for desktops 1~9 | `49`\~`57` (keys `1`\~`9`) |
 | `PrevDesktopKey` | Virtual key code for returning to previous desktop | `192` (key `` ` ``) |
-| `PinAllDesktopsKey` | Virtual key code for pin/unpin window to all desktops | `68` (key `D`) |
+| `PinAllDesktopsKey` | Virtual key code for pinning/unpinning window to all desktops | `68` (key `D`) |
 
 For virtual key codes, refer to [Virtual-Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes). For example, numpad 1~9 correspond to `97`~`105`.
 
-Example configuration for `Alt + qweasdzxc`:
+To customize the keys for switching desktops, modify the configuration file according to the table above. For example, use `Alt + qweasdzxc` to switch to desktops `1~9`:
 
 ```ini
 [General]
