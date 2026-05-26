@@ -204,12 +204,18 @@ void VirtualDesktopHelper::PinWindow(HWND hwnd) const {
     Microsoft::WRL::ComPtr<IApplicationView> view;
     if (FAILED(m_viewCollection->GetViewForHwnd(hwnd, &view)) || view == nullptr) { return; }
 
-    PWSTR appId = nullptr;
-    if (FAILED(view->GetAppUserModelId(&appId)) || appId == nullptr) { return; }
-
-    m_pinnedApps->PinAppID(appId);
+    if (!m_pinByApp) {
+        m_pinnedApps->PinView(view.Get());
+    } else {
+        PWSTR appId = nullptr;
+        if (FAILED(view->GetAppUserModelId(&appId)) || appId == nullptr) {
+            Log(L"[WARN] PinWindow: GetAppUserModelId failed for " + GetWindowTitle(hwnd));
+            return;
+        }
+        m_pinnedApps->PinAppID(appId);
+        CoTaskMemFree(appId);
+    }
     Log(L"[INFO] PinWindow: " + GetWindowTitle(hwnd));
-    CoTaskMemFree(appId);
 }
 
 void VirtualDesktopHelper::UnpinWindow(HWND hwnd) const {
@@ -218,12 +224,18 @@ void VirtualDesktopHelper::UnpinWindow(HWND hwnd) const {
     Microsoft::WRL::ComPtr<IApplicationView> view;
     if (FAILED(m_viewCollection->GetViewForHwnd(hwnd, &view)) || view == nullptr) { return; }
 
-    PWSTR appId = nullptr;
-    if (FAILED(view->GetAppUserModelId(&appId)) || appId == nullptr) { return; }
-
-    m_pinnedApps->UnpinAppID(appId);
+    if (!m_pinByApp) {
+        m_pinnedApps->UnpinView(view.Get());
+    } else {
+        PWSTR appId = nullptr;
+        if (FAILED(view->GetAppUserModelId(&appId)) || appId == nullptr) {
+            Log(L"[WARN] UnpinWindow: GetAppUserModelId failed for " + GetWindowTitle(hwnd));
+            return;
+        }
+        m_pinnedApps->UnpinAppID(appId);
+        CoTaskMemFree(appId);
+    }
     Log(L"[INFO] UnpinWindow: " + GetWindowTitle(hwnd));
-    CoTaskMemFree(appId);
 }
 
 bool VirtualDesktopHelper::IsWindowPinned(HWND hwnd) const {
@@ -232,13 +244,15 @@ bool VirtualDesktopHelper::IsWindowPinned(HWND hwnd) const {
     Microsoft::WRL::ComPtr<IApplicationView> view;
     if (FAILED(m_viewCollection->GetViewForHwnd(hwnd, &view)) || view == nullptr) { return false; }
 
+    BOOL pinned = FALSE;
+    if (!m_pinByApp) {
+        return SUCCEEDED(m_pinnedApps->IsViewPinned(view.Get(), &pinned)) && (pinned != 0);
+    }
     PWSTR appId = nullptr;
     if (FAILED(view->GetAppUserModelId(&appId)) || appId == nullptr) { return false; }
-
-    BOOL    pinned = FALSE;
-    HRESULT hr     = m_pinnedApps->IsAppIdPinned(appId, &pinned);
+    HRESULT hr = m_pinnedApps->IsAppIdPinned(appId, &pinned);
     CoTaskMemFree(appId);
-    return SUCCEEDED(hr) && pinned != FALSE;
+    return SUCCEEDED(hr) && (pinned != 0);
 }
 
 int VirtualDesktopHelper::GetDesktopCount() const {

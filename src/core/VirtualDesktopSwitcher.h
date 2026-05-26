@@ -35,6 +35,7 @@ public:
     void PinWindow(HWND hwnd) const;
     void UnpinWindow(HWND hwnd) const;
     bool IsWindowPinned(HWND hwnd) const;
+    void SetPinByApp(bool use);
     void RefreshCOM();
 
     static void SetModMask(uint8_t mask) { s_modMask = static_cast<ModMask>(mask); }

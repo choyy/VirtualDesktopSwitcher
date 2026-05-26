@@ -28,6 +28,9 @@ constexpr int IDC_MODKEY_ALT   = 113;
 constexpr int IDC_MODKEY_CTRL  = 114;
 constexpr int IDC_MODKEY_SHIFT = 115;
 constexpr int IDC_MODKEY_WIN   = 116;
+constexpr int IDC_ST_PIN_MODE  = 117;
+constexpr int IDC_PIN_WINDOW   = 118;
+constexpr int IDC_PIN_APP      = 119;
 
 constexpr std::array kSymbolList = {
     L"\u00B7",
@@ -176,10 +179,14 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SetDlgItemTextW(hwnd, IDC_ST_FONT, Lang::Get(L"Settings.LabelFont"));
         SetDlgItemTextW(hwnd, IDC_ST_SPACING, Lang::Get(L"Settings.LabelSpacing"));
         SetDlgItemTextW(hwnd, IDC_ST_MODKEY, Lang::Get(L"Settings.ModKey"));
+        SetDlgItemTextW(hwnd, IDC_ST_PIN_MODE, Lang::Get(L"Settings.PinMode"));
+        SetDlgItemTextW(hwnd, IDC_PIN_WINDOW, Lang::Get(L"Settings.PinModeWindow"));
+        SetDlgItemTextW(hwnd, IDC_PIN_APP, Lang::Get(L"Settings.PinModeApp"));
         SetDlgItemTextW(hwnd, IDOK, Lang::Get(L"Settings.BtnOK"));
         SetDlgItemTextW(hwnd, IDCANCEL, Lang::Get(L"Settings.BtnCancel"));
 
         uint8_t mask = data->result.modMask;
+        SendDlgItemMessageW(hwnd, data->result.pinByApp ? IDC_PIN_APP : IDC_PIN_WINDOW, BM_SETCHECK, BST_CHECKED, 0);
         SendDlgItemMessageW(hwnd, IDC_MODKEY_ALT, BM_SETCHECK, ((mask & ModMask::Alt) != 0) ? BST_CHECKED : BST_UNCHECKED, 0);
         SendDlgItemMessageW(hwnd, IDC_MODKEY_CTRL, BM_SETCHECK, ((mask & ModMask::Ctrl) != 0) ? BST_CHECKED : BST_UNCHECKED, 0);
         SendDlgItemMessageW(hwnd, IDC_MODKEY_SHIFT, BM_SETCHECK, ((mask & ModMask::Shift) != 0) ? BST_CHECKED : BST_UNCHECKED, 0);
@@ -194,13 +201,13 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SendDlgItemMessageW(hwnd, IDC_SPIN, UDM_SETPOS, 0, data->result.charSpacing);
 
         int labelLeft = GetChildRect(hwnd, IDC_ST_CUR_SYM).left;
-        int maxW      = MeasureLabelWidth(hwnd, IDC_ST_OTH_SYM);
+        int maxW      = std::max(MeasureLabelWidth(hwnd, IDC_ST_OTH_SYM), MeasureLabelWidth(hwnd, IDC_ST_PIN_MODE));
         int vx        = labelLeft + maxW + 4;
         int dx        = vx - GetChildRect(hwnd, IDC_CUR_SYM).left;
 
-        MoveChildrenToX(hwnd, {IDC_CUR_SYM, IDC_OTH_SYM, IDC_EMP_SYM, IDC_FONT, IDC_SPACING, IDC_MODKEY_ALT}, vx);
+        MoveChildrenToX(hwnd, {IDC_CUR_SYM, IDC_OTH_SYM, IDC_EMP_SYM, IDC_FONT, IDC_SPACING, IDC_MODKEY_ALT, IDC_PIN_WINDOW}, vx);
         if (dx != 0) {
-            for (int id : {IDC_SPIN, IDC_MODKEY_CTRL, IDC_MODKEY_SHIFT, IDC_MODKEY_WIN}) {
+            for (int id : {IDC_SPIN, IDC_MODKEY_CTRL, IDC_MODKEY_SHIFT, IDC_MODKEY_WIN, IDC_PIN_APP}) {
                 HWND h = GetDlgItem(hwnd, id);
                 if (h == nullptr) { break; }
                 RECT rc = GetChildRect(hwnd, h);
@@ -298,6 +305,7 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case IDOK: {
             data->result.charSpacing = ReadSpacing();
             data->result.accepted    = true;
+            data->result.pinByApp    = SendDlgItemMessageW(hwnd, IDC_PIN_APP, BM_GETCHECK, 0, 0) == BST_CHECKED;
             uint8_t mask             = 0;
             if (SendDlgItemMessageW(hwnd, IDC_MODKEY_ALT, BM_GETCHECK, 0, 0) == BST_CHECKED) { mask |= ModMask::Alt; }
             if (SendDlgItemMessageW(hwnd, IDC_MODKEY_CTRL, BM_GETCHECK, 0, 0) == BST_CHECKED) { mask |= ModMask::Ctrl; }

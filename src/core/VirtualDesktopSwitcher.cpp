@@ -182,3 +182,7 @@ bool VirtualDesktopSwitcher::IsWindowPinned(HWND hwnd) const {
     if (hwnd == nullptr || m_pVDeskHelper == nullptr) { return false; }
     return m_pVDeskHelper->IsWindowPinned(hwnd);
 }
+
+void VirtualDesktopSwitcher::SetPinByApp(bool use) {
+    if (m_pVDeskHelper) { m_pVDeskHelper->SetPinByApp(use); }
+}

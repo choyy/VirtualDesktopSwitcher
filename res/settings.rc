@@ -21,8 +21,11 @@
 #define IDC_MODKEY_CTRL 114
 #define IDC_MODKEY_SHIFT 115
 #define IDC_MODKEY_WIN   116
+#define IDC_ST_PIN_MODE  117
+#define IDC_PIN_WINDOW   118
+#define IDC_PIN_APP      119
 
-IDD_SETTINGS DIALOGEX 0, 0, 280, 155
+IDD_SETTINGS DIALOGEX 0, 0, 280, 170
 STYLE        DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION      "Desktop Indicator Settings"
 FONT         9, "Segoe UI", 400, 0, 0
@@ -44,7 +47,10 @@ BEGIN
     AUTOCHECKBOX    "Ctrl",                         IDC_MODKEY_CTRL,     147,  95,  30, 14
     AUTOCHECKBOX    "Shift",                        IDC_MODKEY_SHIFT,    179,  95,  35, 14
     AUTOCHECKBOX    "Win",                          IDC_MODKEY_WIN,      214,  95,  30, 14
-    DEFPUSHBUTTON   "OK",                           IDOK,                 60, 130,  60, 14
-    PUSHBUTTON      "Cancel",                       IDCANCEL,            150, 130,  60, 14
+    LTEXT           "Pin to all desktops:",         IDC_ST_PIN_MODE,     15,  114, 105, 10
+    AUTORADIOBUTTON "Current window",               IDC_PIN_WINDOW,      111, 112,  80, 14, WS_TABSTOP | WS_GROUP
+    AUTORADIOBUTTON "All app windows",              IDC_PIN_APP,         190, 112,  78, 14
+    DEFPUSHBUTTON   "OK",                           IDOK,                60,  145,  60, 14
+    PUSHBUTTON      "Cancel",                       IDCANCEL,            150, 145,  60, 14
 END
 

@@ -107,6 +107,7 @@ public:
     [[nodiscard]] std::array<bool, kMaxDesktops> GetDesktopEmptyMask() const;
     void                                         SwitchToDesktop(int index) const;
     void                                         MoveWindowToDesktop(HWND hwnd, int targetIndex) const;
+    void                                         SetPinByApp(bool on) { m_pinByApp = on; }
     void                                         PinWindow(HWND hwnd) const;
     void                                         UnpinWindow(HWND hwnd) const;
     [[nodiscard]] bool                           IsWindowPinned(HWND hwnd) const;
@@ -132,5 +133,6 @@ private:
     Microsoft::WRL::ComPtr<IVirtualDesktopManager>         m_virtualDesktopManager;
     Microsoft::WRL::ComPtr<IApplicationViewCollection>     m_viewCollection;
     Microsoft::WRL::ComPtr<IVirtualDesktopPinnedApps>      m_pinnedApps;
+    bool                                                   m_pinByApp          = false;
     IID                                                    m_iidVirtualDesktop = __uuidof(IVirtualDesktop);
 };

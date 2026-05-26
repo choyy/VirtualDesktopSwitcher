@@ -208,6 +208,7 @@ bool Application::CreateHiddenWindow() {
 void Application::LoadConfiguration() {
     m_autoCheckUpdates = ReadIniInt(L"General", L"AutoCheckUpdates", 1) != 0;
     m_modMask          = static_cast<uint8_t>(ReadIniInt(L"General", L"ModMask", 1));
+    m_pinByApp         = ReadIniInt(L"General", L"PinByApp", 0) != 0;
     m_indicatorCfg.LoadFromIni();
     VirtualDesktopSwitcher::SetModMask(m_modMask);
     VirtualDesktopSwitcher::SetPrevDesktopKey(
@@ -261,7 +262,8 @@ void Application::SetupTrayCallbacks() {
             .emptySymbol   = m_indicatorCfg.emptySymbol,
             .fontName      = m_indicatorCfg.fontName,
             .charSpacing   = m_indicatorCfg.charSpacing,
-            .modMask       = m_modMask};
+            .modMask       = m_modMask,
+            .pinByApp      = m_pinByApp};
 
         SettingsDialog::Result res = SettingsDialog::Show(m_hwnd, cur,
                                                           [this](const SettingsDialog::Result &preview) {
@@ -274,6 +276,11 @@ void Application::SetupTrayCallbacks() {
                 m_modMask = res.modMask;
                 WriteIniInt(L"General", L"ModMask", m_modMask);
                 VirtualDesktopSwitcher::SetModMask(m_modMask);
+            }
+            if (res.pinByApp != m_pinByApp) {
+                m_pinByApp = res.pinByApp;
+                WriteIniInt(L"General", L"PinByApp", m_pinByApp ? 1 : 0);
+                m_switcher->SetPinByApp(m_pinByApp);
             }
         } else {
             ApplySettingsPreview(cur);
@@ -305,6 +312,7 @@ bool Application::Initialize() {
     if (!CreateHiddenWindow()) { return false; }
 
     LoadConfiguration();
+    m_switcher->SetPinByApp(m_pinByApp);
 
     InitializeOverlay();
 

@@ -64,6 +64,7 @@ private:
     int                                     m_lastDesktopIndex = -1;
     int                                     m_lastDesktopCount = 0;
     uint8_t                                 m_modMask          = 1;
+    bool                                    m_pinByApp         = false;
     bool                                    m_autoCheckUpdates = true;
     HANDLE                                  m_hUpdateProcess   = nullptr;
 };
