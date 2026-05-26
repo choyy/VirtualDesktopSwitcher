@@ -51,6 +51,16 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
         pApp->OnDesktopSwitch(wParam);
         return 0;
 
+    case WM_TOGGLE_PIN_ALL_DESKTOPS:
+        if (HWND fore = GetForegroundWindow()) {
+            if (pApp->m_switcher->IsWindowPinned(fore)) {
+                pApp->m_switcher->UnpinWindow(fore);
+            } else {
+                pApp->m_switcher->PinWindow(fore);
+            }
+        }
+        return 0;
+
     case WM_TIMER:
         pApp->OnTimerTick();
         return 0;
@@ -202,6 +212,8 @@ void Application::LoadConfiguration() {
     VirtualDesktopSwitcher::SetModMask(m_modMask);
     VirtualDesktopSwitcher::SetPrevDesktopKey(
         static_cast<uint8_t>(ReadIniInt(L"General", L"PrevDesktopKey", VK_OEM_3)));
+    VirtualDesktopSwitcher::SetPinAllDesktopsKey(
+        static_cast<uint8_t>(ReadIniInt(L"General", L"PinAllDesktopsKey", 'D')));
     for (int i = 0; i < static_cast<int>(kMaxDesktops); ++i) {
         std::wstring keyName = L"DesktopKey" + std::to_wstring(i + 1);
         VirtualDesktopSwitcher::SetDesktopKey(i,

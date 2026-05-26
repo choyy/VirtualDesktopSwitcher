@@ -17,6 +17,7 @@ void **ComPtrAsVoid(Microsoft::WRL::ComPtr<T> &ptr) {
 // CLSID and IID definitions
 const CLSID CLSID_ImmersiveShell                       = {.Data1 = 0xC2F03A33, .Data2 = 0x21F5, .Data3 = 0x47FA, .Data4 = {0xB4, 0xBB, 0x15, 0x63, 0x62, 0xA2, 0xF2, 0x39}};
 const CLSID CLSID_VirtualDesktopManager                = {.Data1 = 0xaa509086, .Data2 = 0x5ca9, .Data3 = 0x4c25, .Data4 = {0x8f, 0x95, 0x58, 0x9d, 0x3c, 0x07, 0xb4, 0x8a}};
+const CLSID CLSID_VirtualDesktopPinnedApps             = {.Data1 = 0xb5a399e7, .Data2 = 0x1c87, .Data3 = 0x46b8, .Data4 = {0x88, 0xe9, 0xfc, 0x57, 0x47, 0xb1, 0x71, 0xbd}};
 const IID   IID_IApplicationViewCollection_1809        = {.Data1 = 0x2C08ADF0, .Data2 = 0xA386, .Data3 = 0x4B35, .Data4 = {0x92, 0x50, 0x0F, 0xE1, 0x83, 0x47, 0x6F, 0xCC}};
 const IID   IID_IApplicationViewCollection_1903        = {.Data1 = 0x1841C6D7, .Data2 = 0x4F9D, .Data3 = 0x42C0, .Data4 = {0xAF, 0x41, 0x87, 0x47, 0x53, 0x8F, 0x10, 0xE5}};
 const IID   IID_IVirtualDesktopManager                 = {.Data1 = 0xa5cd92ff, .Data2 = 0x29be, .Data3 = 0x454c, .Data4 = {0x8d, 0x04, 0xd8, 0x28, 0x79, 0xfb, 0x3f, 0x1b}};
@@ -38,6 +39,7 @@ bool VirtualDesktopHelper::InitCOMServices() {
     VerifyDesktopIID();
     InitViewCollection(serviceProvider);
     InitDesktopManager();
+    InitPinnedApps(serviceProvider);
     return true;
 }
 
@@ -53,6 +55,7 @@ void VirtualDesktopHelper::Refresh() {
     m_virtualDesktopManagerInternal = nullptr;
     m_virtualDesktopManager         = nullptr;
     m_viewCollection                = nullptr;
+    m_pinnedApps                    = nullptr;
     InitCOMServices();
 }
 
@@ -184,6 +187,60 @@ void VirtualDesktopHelper::InitDesktopManager() {
     }
 }
 
+void VirtualDesktopHelper::InitPinnedApps(Microsoft::WRL::ComPtr<IServiceProvider> &sp) {
+    HRESULT hr = sp->QueryService(CLSID_VirtualDesktopPinnedApps,
+                                  __uuidof(IVirtualDesktopPinnedApps),
+                                  ComPtrAsVoid(m_pinnedApps));
+    if (SUCCEEDED(hr)) {
+        Log(L"[INFO] IVirtualDesktopPinnedApps created successfully");
+    } else {
+        Log(L"[ERROR] Failed to query IVirtualDesktopPinnedApps");
+    }
+}
+
+void VirtualDesktopHelper::PinWindow(HWND hwnd) const {
+    if (m_viewCollection == nullptr || m_pinnedApps == nullptr || hwnd == nullptr) { return; }
+
+    Microsoft::WRL::ComPtr<IApplicationView> view;
+    if (FAILED(m_viewCollection->GetViewForHwnd(hwnd, &view)) || view == nullptr) { return; }
+
+    PWSTR appId = nullptr;
+    if (FAILED(view->GetAppUserModelId(&appId)) || appId == nullptr) { return; }
+
+    m_pinnedApps->PinAppID(appId);
+    Log(L"[INFO] PinWindow: " + GetWindowTitle(hwnd));
+    CoTaskMemFree(appId);
+}
+
+void VirtualDesktopHelper::UnpinWindow(HWND hwnd) const {
+    if (m_viewCollection == nullptr || m_pinnedApps == nullptr || hwnd == nullptr) { return; }
+
+    Microsoft::WRL::ComPtr<IApplicationView> view;
+    if (FAILED(m_viewCollection->GetViewForHwnd(hwnd, &view)) || view == nullptr) { return; }
+
+    PWSTR appId = nullptr;
+    if (FAILED(view->GetAppUserModelId(&appId)) || appId == nullptr) { return; }
+
+    m_pinnedApps->UnpinAppID(appId);
+    Log(L"[INFO] UnpinWindow: " + GetWindowTitle(hwnd));
+    CoTaskMemFree(appId);
+}
+
+bool VirtualDesktopHelper::IsWindowPinned(HWND hwnd) const {
+    if (m_viewCollection == nullptr || m_pinnedApps == nullptr || hwnd == nullptr) { return false; }
+
+    Microsoft::WRL::ComPtr<IApplicationView> view;
+    if (FAILED(m_viewCollection->GetViewForHwnd(hwnd, &view)) || view == nullptr) { return false; }
+
+    PWSTR appId = nullptr;
+    if (FAILED(view->GetAppUserModelId(&appId)) || appId == nullptr) { return false; }
+
+    BOOL    pinned = FALSE;
+    HRESULT hr     = m_pinnedApps->IsAppIdPinned(appId, &pinned);
+    CoTaskMemFree(appId);
+    return SUCCEEDED(hr) && pinned != FALSE;
+}
+
 int VirtualDesktopHelper::GetDesktopCount() const {
     Microsoft::WRL::ComPtr<IObjectArray> desktops;
     UINT                                 count = 0;
@@ -236,10 +293,10 @@ void VirtualDesktopHelper::MoveWindowToDesktop(HWND hwnd, int targetIndex) const
 
     auto title = GetWindowTitle(hwnd);
 
-    Microsoft::WRL::ComPtr<IUnknown> view;
-    HRESULT                          hr = m_viewCollection->GetViewForHwnd(hwnd, &view);
+    Microsoft::WRL::ComPtr<IApplicationView> view;
+    HRESULT                                  hr = m_viewCollection->GetViewForHwnd(hwnd, &view);
     if (FAILED(hr) || view == nullptr) {
-        Log(L"[ERROR] MoveWindowToDesktop: GetViewForHwnd failed for \"" + title + L"\"");
+        Log(L"[ERROR] MoveWindowToDesktop: GetViewForHwnd failed for " + title);
         return;
     }
 
@@ -265,7 +322,7 @@ void VirtualDesktopHelper::MoveWindowToDesktop(HWND hwnd, int targetIndex) const
     }
 
     hr = m_virtualDesktopManagerInternal->MoveViewToDesktop(view.Get(), targetDesktop.Get());
-    Log(L"[INFO] MoveWindowToDesktop: \"" + title + L"\" -> desktop "
+    Log(L"[INFO] MoveWindowToDesktop: " + title + L" -> desktop "
         + std::to_wstring(targetIndex));
 }
 
@@ -281,8 +338,8 @@ bool VirtualDesktopHelper::CheckViaViewCollection(HWND hwnd) const {
         return false;
     }
 
-    Microsoft::WRL::ComPtr<IUnknown> view;
-    if (FAILED(m_viewCollection->GetViewForHwnd(hwnd, view.GetAddressOf())) || (view == nullptr)) {
+    Microsoft::WRL::ComPtr<IApplicationView> view;
+    if (FAILED(m_viewCollection->GetViewForHwnd(hwnd, &view)) || (view == nullptr)) {
         return false;
     }
 

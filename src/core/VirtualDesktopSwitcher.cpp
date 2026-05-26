@@ -41,10 +41,11 @@ HWND FindTopOnDesktop(const VirtualDesktopHelper *pHelper) {
 
 } // namespace
 
-VirtualDesktopSwitcher           *VirtualDesktopSwitcher::s_active         = nullptr;
-ModMask                           VirtualDesktopSwitcher::s_modMask        = ModMask::Alt;
-uint8_t                           VirtualDesktopSwitcher::s_prevDesktopKey = VK_OEM_3;
-std::array<uint8_t, kMaxDesktops> VirtualDesktopSwitcher::s_desktopKeys    = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+VirtualDesktopSwitcher           *VirtualDesktopSwitcher::s_active            = nullptr;
+ModMask                           VirtualDesktopSwitcher::s_modMask           = ModMask::Alt;
+uint8_t                           VirtualDesktopSwitcher::s_prevDesktopKey    = VK_OEM_3;
+uint8_t                           VirtualDesktopSwitcher::s_pinAllDesktopsKey = 'D';
+std::array<uint8_t, kMaxDesktops> VirtualDesktopSwitcher::s_desktopKeys       = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
 
 VirtualDesktopSwitcher::VirtualDesktopSwitcher()
     : m_pVDeskHelper(std::make_unique<VirtualDesktopHelper>()) {
@@ -86,6 +87,11 @@ LRESULT CALLBACK VirtualDesktopSwitcher::LowLevelKeyboardProc(int nCode, WPARAM 
 
     if (match && pKeyboard->vkCode == s_prevDesktopKey && s_active->m_previousDesktop >= 0) {
         PostMessage(s_active->m_hwnd, WM_SWITCH_DESKTOP, s_active->m_previousDesktop, 0);
+        return 1;
+    }
+
+    if (match && pKeyboard->vkCode == s_pinAllDesktopsKey) {
+        PostMessage(s_active->m_hwnd, WM_TOGGLE_PIN_ALL_DESKTOPS, 0, 0);
         return 1;
     }
 
@@ -160,4 +166,19 @@ void VirtualDesktopSwitcher::SwitchToDesktop(int index) {
 void VirtualDesktopSwitcher::MoveWindowToDesktop(HWND hwnd, int targetIndex) {
     if (hwnd == nullptr || m_pVDeskHelper == nullptr) { return; }
     m_pVDeskHelper->MoveWindowToDesktop(hwnd, targetIndex);
+}
+
+void VirtualDesktopSwitcher::PinWindow(HWND hwnd) const {
+    if (hwnd == nullptr || m_pVDeskHelper == nullptr) { return; }
+    m_pVDeskHelper->PinWindow(hwnd);
+}
+
+void VirtualDesktopSwitcher::UnpinWindow(HWND hwnd) const {
+    if (hwnd == nullptr || m_pVDeskHelper == nullptr) { return; }
+    m_pVDeskHelper->UnpinWindow(hwnd);
+}
+
+bool VirtualDesktopSwitcher::IsWindowPinned(HWND hwnd) const {
+    if (hwnd == nullptr || m_pVDeskHelper == nullptr) { return false; }
+    return m_pVDeskHelper->IsWindowPinned(hwnd);
 }

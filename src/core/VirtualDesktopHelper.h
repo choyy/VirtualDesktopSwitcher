@@ -39,6 +39,47 @@ public:
     virtual HRESULT STDMETHODCALLTYPE MoveWindowToDesktop(HWND topLevelHwnd, REFGUID desktopId)                     = 0;
 };
 
+// IApplicationView接口定义
+MIDL_INTERFACE("372E1D3B-38D3-42E4-A15B-8AB2B178F513")
+IApplicationView : public IUnknown { // NOLINT(cppcoreguidelines-virtual-class-destructor)
+public:
+    // IInspectable methods (3)
+    virtual HRESULT STDMETHODCALLTYPE GetIids(ULONG *, IID **)     = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetRuntimeClassName(void **) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetTrustLevel(int *)         = 0;
+
+    // IApplicationView methods before GetAppUserModelId (11)
+    virtual HRESULT STDMETHODCALLTYPE SetFocus()                       = 0;
+    virtual HRESULT STDMETHODCALLTYPE SwitchTo()                       = 0;
+    virtual HRESULT STDMETHODCALLTYPE TryInvokeBack(void *)            = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetThumbnailWindow(HWND *)       = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetMonitor(void **)              = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetVisibility(int *)             = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetCloak(int, int)               = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetPosition(REFIID, void **)     = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetPosition(void *)              = 0;
+    virtual HRESULT STDMETHODCALLTYPE InsertAfterWindow(HWND)          = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetExtendedFramePosition(RECT *) = 0;
+
+    // slot 17 — the one we actually call
+    virtual HRESULT STDMETHODCALLTYPE GetAppUserModelId(PWSTR *) = 0;
+};
+
+// IVirtualDesktopPinnedApps接口定义
+MIDL_INTERFACE("4CE81583-1E4C-4632-A621-07A53543148F")
+IVirtualDesktopPinnedApps : public IUnknown { // NOLINT(cppcoreguidelines-virtual-class-destructor)
+public:
+    // AppId-based methods
+    virtual HRESULT STDMETHODCALLTYPE IsAppIdPinned(PCWSTR appId, BOOL * pinned) = 0;
+    virtual HRESULT STDMETHODCALLTYPE PinAppID(PCWSTR appId)                     = 0;
+    virtual HRESULT STDMETHODCALLTYPE UnpinAppID(PCWSTR appId)                   = 0;
+
+    // View-based methods
+    virtual HRESULT STDMETHODCALLTYPE IsViewPinned(IApplicationView * view, BOOL * pinned) = 0;
+    virtual HRESULT STDMETHODCALLTYPE PinView(IApplicationView * view)                     = 0;
+    virtual HRESULT STDMETHODCALLTYPE UnpinView(IApplicationView * view)                   = 0;
+};
+
 // IApplicationViewCollection接口定义
 MIDL_INTERFACE("1841C6D7-4F9D-42C0-AF41-8747538F10E5")
 IApplicationViewCollection : public IUnknown { // NOLINT(cppcoreguidelines-virtual-class-destructor)
@@ -46,7 +87,7 @@ public:
     virtual HRESULT STDMETHODCALLTYPE GetViews(IObjectArray * *ppViews)                             = 0;
     virtual HRESULT STDMETHODCALLTYPE GetViewsByZOrder(IObjectArray * *ppViews)                     = 0;
     virtual HRESULT STDMETHODCALLTYPE GetViewsByAppUserModelId(LPCWSTR id, IObjectArray * *ppViews) = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetViewForHwnd(HWND hwnd, IUnknown * *ppView)                 = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetViewForHwnd(HWND hwnd, IApplicationView * *ppView)         = 0;
 };
 
 class VirtualDesktopHelper {
@@ -66,6 +107,9 @@ public:
     [[nodiscard]] std::array<bool, kMaxDesktops> GetDesktopEmptyMask() const;
     void                                         SwitchToDesktop(int index) const;
     void                                         MoveWindowToDesktop(HWND hwnd, int targetIndex) const;
+    void                                         PinWindow(HWND hwnd) const;
+    void                                         UnpinWindow(HWND hwnd) const;
+    [[nodiscard]] bool                           IsWindowPinned(HWND hwnd) const;
 
 private:
     bool InitCOMServices();
@@ -80,11 +124,13 @@ private:
     void        VerifyDesktopIID();
     void        InitViewCollection(Microsoft::WRL::ComPtr<IServiceProvider> &sp);
     void        InitDesktopManager();
+    void        InitPinnedApps(Microsoft::WRL::ComPtr<IServiceProvider> &sp);
 
     // --- Member Variables ---
     HRESULT                                                m_comInitResult = E_FAIL;
     Microsoft::WRL::ComPtr<IVirtualDesktopManagerInternal> m_virtualDesktopManagerInternal;
     Microsoft::WRL::ComPtr<IVirtualDesktopManager>         m_virtualDesktopManager;
     Microsoft::WRL::ComPtr<IApplicationViewCollection>     m_viewCollection;
+    Microsoft::WRL::ComPtr<IVirtualDesktopPinnedApps>      m_pinnedApps;
     IID                                                    m_iidVirtualDesktop = __uuidof(IVirtualDesktop);
 };
