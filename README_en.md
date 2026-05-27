@@ -53,7 +53,7 @@ Configuration file is saved to `%LOCALAPPDATA%\VirtualDesktopSwitcher\config.ini
 | `PrevDesktopKey` | Virtual key code for returning to previous desktop | `192` (key `` ` ``) |
 | `PinAllDesktopsKey` | Virtual key code for pinning/unpinning window to all desktops | `68` (key `D`) |
 
-For virtual key codes, refer to [Virtual-Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes). For example, numpad 1~9 correspond to `97`~`105`.
+For virtual key codes, refer to [Virtual-Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes). For example, numpad 1\~9 correspond to `97`\~`105`.
 
 To customize the keys for switching desktops, modify the configuration file according to the table above. For example, use `Alt + qweasdzxc` to switch to desktops `1~9`:
 

@@ -53,7 +53,7 @@
 | `PrevDesktopKey` | 返回上一桌面的按键虚拟键码 | `192`（按键`` ` ``） |
 | `PinAllDesktopsKey` | 固定/取消固定窗口到所有桌面的按键虚拟键码 | `68`（按键`D`） |
 
-虚拟键码可参考 [Virtual-Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes)。例如数字键盘 1~9 对应 `97`~`105`。
+虚拟键码可参考 [Virtual-Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes)。例如数字键盘 1\~9 对应 `97`\~`105`。
 
 如果需要自定义切换虚拟桌面的键，可按照上述表格说明修改配置文件，例如使用 `Alt + qweasdzxc` 切换桌面 `1~9`：
 
