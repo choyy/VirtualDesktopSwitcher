@@ -403,6 +403,7 @@ LRESULT CALLBACK DesktopIndicator::DragHookProc(int nCode, WPARAM wParam, LPARAM
                     s_instance->m_dragHwnd       = info.hwndMoveSize;
                     s_instance->m_draggingWindow = true;
                     s_instance->UpdateRenderTimer();
+                    s_instance->ShowDragOverlay();
                 }
             }
         } else {
@@ -585,7 +586,7 @@ void DesktopIndicator::SetAutoContrast(bool on) {
 void CALLBACK DesktopIndicator::RenderTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR /*idEvent*/, DWORD /*dwTime*/) {
     auto *overlay = GetWndUserData<DesktopIndicator>(hwnd);
     if (overlay == nullptr || overlay->m_pCfg == nullptr) { return; }
-    if (overlay->m_pCfg->showMode == ShowMode::AlwaysHide) { return; }
+    if (overlay->m_pCfg->showMode == ShowMode::AlwaysHide && !overlay->m_dragOverlayActive) { return; }
     if (overlay->m_pCfg->showMode >= ShowMode::Show1s && IsWindowVisible(hwnd) == 0) { return; }
     overlay->Render();
 }
@@ -706,7 +707,7 @@ void DesktopIndicator::SetPositionPreset(PositionPreset preset) {
     if (wasEmbedded != willEmbed) {
         RebuildToPreset(preset);
     } else {
-        ApplyPresetPosition();
+        ApplyPresetPosition(preset);
     }
 }
 
@@ -716,9 +717,8 @@ void DesktopIndicator::UnembedTaskbarIndicator() {
     RebuildToPreset(PositionPreset::Custom);
 }
 
-void DesktopIndicator::ApplyPresetPosition() {
+void DesktopIndicator::ApplyPresetPosition(PositionPreset preset) {
     if (m_pCfg == nullptr || m_renderer == nullptr) { return; }
-    PositionPreset preset = m_pCfg->positionPreset;
     if (preset >= PositionPreset::Count) { return; }
 
     bool isEmbed    = (preset == PositionPreset::EmbedTaskbarRight || preset == PositionPreset::EmbedTaskbarLeft);
@@ -766,12 +766,27 @@ void DesktopIndicator::RebuildToPreset(PositionPreset preset) {
     EnumerateMonitors(GetModuleHandle(nullptr));
     if (m_layers.empty()) { return; }
 
-    ApplyPresetPosition();
+    ApplyPresetPosition(preset);
     RegisterMouseWheelInput();
     UpdateRenderTimer();
     if (m_pCfg != nullptr && m_pCfg->autoContrast && m_pCfg->showMode != ShowMode::AlwaysHide) {
         StartBgSampleTimer();
     }
+}
+
+void DesktopIndicator::ShowDragOverlay() {
+    if (m_dragOverlayActive || m_layers.empty()) { return; }
+    if (!m_isTaskbarEmbedded && IsWindowVisible(m_layers[0].hwnd) != 0) { return; }
+
+    m_dragOverlayActive = true;
+    RebuildToPreset(PositionPreset::TopCenter);
+}
+
+void DesktopIndicator::HideDragOverlay() {
+    if (!m_dragOverlayActive) { return; }
+    m_dragOverlayActive = false;
+    ApplyPresetPosition(m_pCfg->positionPreset);
+    ApplyShowMode(m_pCfg->showMode);
 }
 
 void DesktopIndicator::MoveByDelta(int dx, int dy) {
@@ -832,7 +847,8 @@ void DesktopIndicator::SampleBackground() {
 
 void DesktopIndicator::UpdateRenderTimer() {
     if (m_layers.empty()) { return; }
-    bool needsTimer = (m_pCfg != nullptr) && m_pCfg->showMode != ShowMode::AlwaysHide
+    bool needsTimer = (m_pCfg != nullptr)
+                      && (m_pCfg->showMode != ShowMode::AlwaysHide || m_dragOverlayActive)
                       && (m_pCfg->animMode != 0 || m_pCfg->autoContrast || m_draggingWindow || NeedsSettleRender());
     if (needsTimer) {
         SetTimer(m_layers[0].hwnd, kRenderTimerId, kRenderIntervalMs, RenderTimer);
@@ -842,6 +858,7 @@ void DesktopIndicator::UpdateRenderTimer() {
 }
 
 void DesktopIndicator::ResetDragState() {
+    if (m_dragOverlayActive) { HideDragOverlay(); }
     m_pendingDrag     = false;
     m_dragHwnd        = nullptr;
     m_draggingWindow  = false;
@@ -1030,6 +1047,7 @@ void DesktopIndicator::Rebuild() {
     m_layers.clear();
     UninstallTrayHook();
     m_isTaskbarEmbedded = false;
+    m_dragOverlayActive = false;
     m_editMode          = false;
     m_dragging          = false;
     ReleaseCapture();
@@ -1039,7 +1057,7 @@ void DesktopIndicator::Rebuild() {
 
     if (savedPreset < PositionPreset::Count) {
         if (m_pCfg != nullptr) { m_pCfg->positionPreset = savedPreset; }
-        ApplyPresetPosition();
+        ApplyPresetPosition(savedPreset);
     } else if (m_pCfg != nullptr && m_pCfg->posInitialized) {
         m_pCfg->windowPos = savedWndPos;
         for (auto &l : m_layers) {

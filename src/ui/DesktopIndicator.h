@@ -100,7 +100,10 @@ private:
     bool                           m_pendingDrag       = false;
     int                            m_lastHoverSymbol   = -1;
     bool                           m_isTaskbarEmbedded = false;
+    bool                           m_dragOverlayActive = false;
 
+    void               ShowDragOverlay();
+    void               HideDragOverlay();
     void               ApplyShowMode(ShowMode mode);
     void               SampleBackground();
     void               UpdateRenderTimer();
@@ -115,7 +118,7 @@ private:
                                     int centerW, const ColorArray &colors,
                                     HDC hdcScreen, HDC hdcMem);
     void               Render();
-    void               ApplyPresetPosition();
+    void               ApplyPresetPosition(PositionPreset preset);
     void               RebuildToPreset(PositionPreset preset);
     void               MoveByDelta(int dx, int dy);
     void               EnumerateMonitors(HINSTANCE hInstance);
