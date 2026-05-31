@@ -7,6 +7,8 @@
 #include <functional>
 #include <string>
 
+#include "core/IndicatorConfig.h"
+
 constexpr UINT WM_TRAYICON            = WM_USER + 2;
 constexpr UINT WM_TRAY_LANG_CHINESE   = WM_USER + 50;
 constexpr UINT WM_TRAY_LANG_ENGLISH   = WM_USER + 51;
@@ -27,7 +29,7 @@ public:
     void HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
     void UpdateTooltip(const std::wstring &tooltip);
 
-    void SetActivePositionPreset(int preset) { m_activePositionPreset = preset; }
+    void SetActivePositionPreset(PositionPreset preset) { m_activePositionPreset = preset; }
     void SetEditModeCallback(std::function<void()> cb) { m_editModeFn = std::move(cb); }
     void SetPositionCallback(std::function<void(int)> cb) { m_positionFn = std::move(cb); }
     void SetColorCallback(std::function<void(const std::wstring &)> cb) { m_colorFn = std::move(cb); }
@@ -41,7 +43,7 @@ private:
     NOTIFYICONDATAW m_nid{};
     HMENU           m_hMenu                = nullptr;
     bool            m_autoStartEnabled     = false;
-    int             m_activePositionPreset = 1;
+    PositionPreset  m_activePositionPreset = PositionPreset::TopCenter;
     int             m_menuAveWidth         = 6;
     int             m_dpi                  = 96;
 

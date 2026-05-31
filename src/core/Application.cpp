@@ -245,11 +245,14 @@ void Application::SetupTrayCallbacks() {
         }
     });
     m_pTrayIcon->SetEditModeCallback([this]() {
-        if (m_pOverlay) { m_pOverlay->ToggleEditMode(); }
+        if (m_pOverlay) {
+            m_pOverlay->UnembedTaskbarIndicator();
+            m_pOverlay->ToggleEditMode();
+        }
     });
     m_pTrayIcon->SetPositionCallback([this](int preset) {
         if (m_pOverlay) {
-            m_pOverlay->SetPositionPreset(preset);
+            m_pOverlay->SetPositionPreset(static_cast<PositionPreset>(preset));
             m_indicatorCfg.SaveToIni();
         }
     });
@@ -382,6 +385,9 @@ void Application::OnSystemResume() {
     m_switcher->RefreshCOM();
     m_pTrayIcon->Reinitialize();
     SyncDesktopState();
+    if (m_pOverlay) {
+        m_pOverlay->SetPositionPreset(m_indicatorCfg.positionPreset);
+    }
 }
 
 int Application::Run() {

@@ -26,7 +26,10 @@ void IndicatorConfig::LoadFromIni() {
     std::wstring fn = ReadIniString(L"Display", L"FontName", L"Segoe UI Symbol");
     if (!fn.empty()) { fontName = fn; }
 
-    positionPreset = ReadIniInt(L"Display", L"PositionPreset", 1);
+    int presetVal  = ReadIniInt(L"Display", L"PositionPreset", static_cast<int>(PositionPreset::TopCenter));
+    positionPreset = (presetVal >= 0 && presetVal < static_cast<int>(PositionPreset::Count))
+                         ? static_cast<PositionPreset>(presetVal)
+                         : PositionPreset::Custom;
     showMode       = static_cast<ShowMode>(ReadIniInt(L"Display", L"ShowMode", 0));
     animMode       = ReadIniInt(L"Display", L"AnimMode", 1);
     autoContrast   = ReadIniInt(L"Display", L"AutoContrast", 1) != 0;
@@ -42,7 +45,7 @@ void IndicatorConfig::SaveToIni() const {
     WriteIniString(L"Display", L"EmptySymbol", EncodeSymbol(emptySymbol));
     WriteIniInt(L"Display", L"CharSpacing", charSpacing);
     WriteIniString(L"Display", L"FontName", fontName);
-    WriteIniInt(L"Display", L"PositionPreset", positionPreset);
+    WriteIniInt(L"Display", L"PositionPreset", static_cast<int>(positionPreset));
     WriteIniInt(L"Display", L"ShowMode", static_cast<int>(showMode));
     WriteIniInt(L"Display", L"AnimMode", animMode);
     WriteIniInt(L"Display", L"AutoContrast", autoContrast ? 1 : 0);

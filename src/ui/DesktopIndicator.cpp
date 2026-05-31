@@ -214,10 +214,86 @@ SymbolMetrics CalcSymbolMetrics(FontRenderer &renderer, const IndicatorConfig &c
     return s;
 }
 
+HWND FindTaskbarForMonitor(const RECT &monitorRect) {
+    HMONITOR hMonTarget = MonitorFromRect(&monitorRect, MONITOR_DEFAULTTONEAREST);
+    HWND     hTray      = FindWindowW(L"Shell_TrayWnd", nullptr);
+    if (hTray != nullptr) {
+        RECT tr;
+        GetWindowRect(hTray, &tr);
+        if (MonitorFromRect(&tr, MONITOR_DEFAULTTONEAREST) == hMonTarget) { return hTray; }
+    }
+    HWND hSec = FindWindowExW(nullptr, nullptr, L"Shell_SecondaryTrayWnd", nullptr);
+    while (hSec != nullptr) {
+        RECT tr;
+        GetWindowRect(hSec, &tr);
+        if (MonitorFromRect(&tr, MONITOR_DEFAULTTONEAREST) == hMonTarget) { return hSec; }
+        hSec = FindWindowExW(nullptr, hSec, L"Shell_SecondaryTrayWnd", nullptr);
+    }
+    return nullptr;
+}
+
+void PositionInTaskbar(MonitorLayer &layer, HWND hTaskbar, int w, int h, TaskbarSide side) {
+    if (hTaskbar == nullptr) { return; }
+    RECT clientRect;
+    GetClientRect(hTaskbar, &clientRect);
+    int posX = 0, posY = 0;
+    if (side == TaskbarSide::Left) {
+        posX = kPadding;
+    } else {
+        HWND hTrayNotify = FindWindowExW(hTaskbar, nullptr, L"TrayNotifyWnd", nullptr);
+        if (hTrayNotify != nullptr) {
+            RECT trayRect;
+            GetWindowRect(hTrayNotify, &trayRect);
+            POINT pt = {trayRect.left, 0};
+            ScreenToClient(hTaskbar, &pt);
+            posX = std::max(static_cast<int>(pt.x - w), 0);
+        } else {
+            posX = std::max(static_cast<int>(clientRect.right - w), 0);
+        }
+    }
+    posY = std::max(0, static_cast<int>((clientRect.bottom - h) / 2));
+    SetWindowPos(layer.hwnd, HWND_TOP, posX, posY, w, h, SWP_NOACTIVATE);
+}
+
+void SyncSinglePosition(MonitorLayer &layer) {
+    HWND hParent = layer.taskbarHwnd;
+    if (hParent == nullptr) { return; }
+    RECT wr;
+    GetWindowRect(layer.hwnd, &wr);
+    int w = wr.right - wr.left;
+    int h = wr.bottom - wr.top;
+    PositionInTaskbar(layer, layer.taskbarHwnd, w, h, layer.taskbarSide);
+}
+
+void ApplyEmbedLayer(MonitorLayer &layer, int w, int h, TaskbarSide side) {
+    HWND hTaskbar = FindTaskbarForMonitor(layer.monitor);
+    if (hTaskbar == nullptr) {
+        layer.hasTaskbar  = false;
+        layer.taskbarHwnd = nullptr;
+        SetWindowPos(layer.hwnd, nullptr, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOZORDER);
+        Log(L"[INFO] Embed layer skipped: no taskbar on this monitor");
+        return;
+    }
+    layer.hasTaskbar  = true;
+    layer.taskbarHwnd = hTaskbar;
+    layer.taskbarSide = side;
+
+    SetParent(layer.hwnd, hTaskbar);
+    auto ex = static_cast<DWORD>(GetWindowLong(layer.hwnd, GWL_EXSTYLE));
+    if ((ex & WS_EX_TOPMOST) != 0) {
+        SetWindowLong(layer.hwnd, GWL_EXSTYLE, static_cast<LONG>(ex & ~static_cast<DWORD>(WS_EX_TOPMOST)));
+        SetWindowPos(layer.hwnd, nullptr, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+    }
+
+    PositionInTaskbar(layer, layer.taskbarHwnd, w, h, side);
+}
+
 } // namespace
 
-HHOOK             DesktopIndicator::s_dragHook = nullptr;
-DesktopIndicator *DesktopIndicator::s_instance = nullptr;
+HHOOK             DesktopIndicator::s_dragHook  = nullptr;
+DesktopIndicator *DesktopIndicator::s_instance  = nullptr;
+HWINEVENTHOOK     DesktopIndicator::s_eventHook = nullptr;
 
 void DesktopIndicator::EnumerateMonitors(HINSTANCE hInstance) {
     EnumCtx ctx = {&m_layers, this, hInstance};
@@ -235,6 +311,7 @@ DesktopIndicator::DesktopIndicator() {
 
 DesktopIndicator::~DesktopIndicator() {
     UninstallDragHook();
+    UninstallTrayHook();
     if (s_instance == this) { s_instance = nullptr; }
     for (auto &l : m_layers) {
         if (l.hwnd != nullptr) { DestroyWindow(l.hwnd); }
@@ -393,7 +470,7 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
 
     // 4. Restore or calculate default window positions
     if (m_pCfg->posInitialized && !m_layers.empty()) {
-        if (m_pCfg->positionPreset >= 0) {
+        if (m_pCfg->positionPreset < PositionPreset::Count) {
             SetPositionPreset(m_pCfg->positionPreset);
         } else {
             for (auto &l : m_layers) {
@@ -405,7 +482,7 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
         }
     }
     if (!m_pCfg->posInitialized && !m_layers.empty()) {
-        if (m_pCfg->positionPreset >= 0) {
+        if (m_pCfg->positionPreset < PositionPreset::Count) {
             SetPositionPreset(m_pCfg->positionPreset);
         } else {
             int  fs                = MulDiv(m_pCfg->fontSize, m_layers[0].dpi, 96);
@@ -434,6 +511,17 @@ void DesktopIndicator::SetDesktopState(int count, int currentIndex,
     m_currentDesktop = currentIndex;
     m_emptyDesktops  = emptyDesktops;
     RebuildText();
+    if (m_isTaskbarEmbedded) {
+        auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
+        for (auto &l : m_layers) {
+            if (!l.hasTaskbar || l.taskbarHwnd == nullptr) { continue; }
+            int  fs   = MulDiv(m_pCfg->fontSize, l.dpi, 96);
+            auto size = m_renderer->Measure(spacedtext.c_str(), fs);
+            int  w    = std::max(static_cast<int>(size.cx) + kPadding * 2, kMinWidth);
+            int  h    = std::max(static_cast<int>(size.cy) + kPadding * 2, kMinHeight);
+            PositionInTaskbar(l, l.taskbarHwnd, w, h, l.taskbarSide);
+        }
+    }
 }
 
 void DesktopIndicator::ShowTemporarily() {
@@ -583,7 +671,7 @@ void DesktopIndicator::ToggleEditMode() {
 
 void DesktopIndicator::SetEditMode(bool edit) {
     m_editMode = edit;
-    if (m_pCfg != nullptr && m_editMode) { m_pCfg->positionPreset = -1; }
+    if (m_pCfg != nullptr && m_editMode) { m_pCfg->positionPreset = PositionPreset::Custom; }
     for (auto &l : m_layers) {
         auto ex = static_cast<DWORD>(GetWindowLong(l.hwnd, GWL_EXSTYLE));
         if (m_editMode) {
@@ -603,23 +691,37 @@ void DesktopIndicator::SetEditMode(bool edit) {
     Render();
 }
 
-void DesktopIndicator::SetPositionPreset(int preset) {
+void DesktopIndicator::SetPositionPreset(PositionPreset preset) {
     if (m_pCfg == nullptr || m_renderer == nullptr) { return; }
-    if (preset < 0 || preset >= static_cast<int>(PositionPreset::Count)) { return; }
+    if (preset >= PositionPreset::Count) { return; }
 
-    Log(L"[INFO] SetPositionPreset: preset=" + std::to_wstring(preset));
+    Log(L"[INFO] SetPositionPreset: preset=" + std::to_wstring(static_cast<int>(preset)));
+    bool wasEmbedded = m_isTaskbarEmbedded;
+    bool willEmbed   = (preset == PositionPreset::EmbedTaskbarRight || preset == PositionPreset::EmbedTaskbarLeft);
+
     m_pCfg->positionPreset = preset;
     m_pCfg->posInitialized = true;
     if (m_editMode) { SetEditMode(false); }
 
-    ApplyPresetPosition();
+    if (wasEmbedded != willEmbed) {
+        RebuildToPreset(preset);
+    } else {
+        ApplyPresetPosition();
+    }
+}
+
+void DesktopIndicator::UnembedTaskbarIndicator() {
+    if (!m_isTaskbarEmbedded) { return; }
+    m_pCfg->positionPreset = PositionPreset::Custom;
+    RebuildToPreset(PositionPreset::Custom);
 }
 
 void DesktopIndicator::ApplyPresetPosition() {
     if (m_pCfg == nullptr || m_renderer == nullptr) { return; }
-    int preset = m_pCfg->positionPreset;
-    if (preset < 0 || preset >= static_cast<int>(PositionPreset::Count)) { return; }
+    PositionPreset preset = m_pCfg->positionPreset;
+    if (preset >= PositionPreset::Count) { return; }
 
+    bool isEmbed    = (preset == PositionPreset::EmbedTaskbarRight || preset == PositionPreset::EmbedTaskbarLeft);
     auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
 
     for (auto &l : m_layers) {
@@ -628,10 +730,47 @@ void DesktopIndicator::ApplyPresetPosition() {
         int  w    = std::max(static_cast<int>(size.cx) + kPadding * 2, kMinWidth);
         int  h    = std::max(static_cast<int>(size.cy) + kPadding * 2, kMinHeight);
 
-        POINT pos = CalcPresetPos(preset, l.monitor, l.work, w, h);
-        if (&l == m_layers.data()) { m_pCfg->windowPos = pos; }
-        SetWindowPos(l.hwnd, nullptr, pos.x, pos.y, 0, 0,
-                     SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        if (isEmbed) {
+            TaskbarSide side = (preset == PositionPreset::EmbedTaskbarRight) ? TaskbarSide::Right : TaskbarSide::Left;
+            ApplyEmbedLayer(l, w, h, side);
+        } else {
+            l.hasTaskbar = false;
+            POINT pos    = CalcPresetPos(static_cast<int>(preset), l.monitor, l.work, w, h);
+            if (&l == m_layers.data()) { m_pCfg->windowPos = pos; }
+            SetWindowPos(l.hwnd, nullptr, pos.x, pos.y, 0, 0,
+                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    }
+
+    if (isEmbed) {
+        if (!m_isTaskbarEmbedded) {
+            m_isTaskbarEmbedded = true;
+            InstallTrayHook();
+        }
+    } else if (m_isTaskbarEmbedded) {
+        m_isTaskbarEmbedded = false;
+        UninstallTrayHook();
+    }
+    for (auto &l : m_layers) {
+        ShowWindow(l.hwnd, SW_SHOW);
+    }
+    Render();
+}
+
+void DesktopIndicator::RebuildToPreset(PositionPreset preset) {
+    for (auto &l : m_layers) { DestroyWindow(l.hwnd); }
+    m_layers.clear();
+    UninstallTrayHook();
+    m_isTaskbarEmbedded = false;
+
+    EnumerateMonitors(GetModuleHandle(nullptr));
+    if (m_layers.empty()) { return; }
+
+    ApplyPresetPosition();
+    RegisterMouseWheelInput();
+    UpdateRenderTimer();
+    if (m_pCfg != nullptr && m_pCfg->autoContrast && m_pCfg->showMode != ShowMode::AlwaysHide) {
+        StartBgSampleTimer();
     }
 }
 
@@ -648,7 +787,37 @@ void DesktopIndicator::MoveByDelta(int dx, int dy) {
                      SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
     m_pCfg->posInitialized = true;
-    m_pCfg->positionPreset = -1;
+    m_pCfg->positionPreset = PositionPreset::Custom;
+}
+
+void CALLBACK DesktopIndicator::WinEventProc(HWINEVENTHOOK /*hWinEventHook*/, DWORD /*event*/,
+                                             HWND hwnd, LONG idObject, LONG idChild,
+                                             DWORD /*dwEventThread*/, DWORD /*dwmsEventTime*/) {
+    if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF) { return; }
+    if ((s_instance == nullptr) || !s_instance->m_isTaskbarEmbedded) { return; }
+
+    for (auto &l : s_instance->m_layers) {
+        HWND hTaskbar = l.taskbarHwnd;
+        if (hTaskbar == nullptr) { continue; }
+        HWND hTrayNotify = FindWindowExW(hTaskbar, nullptr, L"TrayNotifyWnd", nullptr);
+        if (hwnd == hTrayNotify) {
+            SyncSinglePosition(l);
+            break;
+        }
+    }
+}
+
+void DesktopIndicator::InstallTrayHook() {
+    if (s_eventHook != nullptr) { return; }
+    s_eventHook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE,
+                                  nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+}
+
+void DesktopIndicator::UninstallTrayHook() {
+    if (s_eventHook != nullptr) {
+        UnhookWinEvent(s_eventHook);
+        s_eventHook = nullptr;
+    }
 }
 
 void DesktopIndicator::SampleBackground() {
@@ -784,21 +953,27 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
         curX += metrics.widths.at(i) + metrics.spacing;
     }
 
-    int anchorX         = m_pCfg->windowPos.x + (layer.monitor.left - m_layers[0].monitor.left);
-    int anchorY         = m_pCfg->windowPos.y + (layer.monitor.top - m_layers[0].monitor.top);
-    int cx              = anchorX - (w - centerW) / 2;
-    cx                  = std::clamp(cx, static_cast<int>(layer.monitor.left), static_cast<int>(layer.monitor.right - w));
-    POINT         pos   = {cx, anchorY};
     SIZE          size  = {w, h};
     POINT         src   = {0, 0};
     BLENDFUNCTION blend = {.BlendOp = AC_SRC_OVER, .SourceConstantAlpha = 255, .AlphaFormat = AC_SRC_ALPHA};
-    UpdateLayeredWindow(layer.hwnd, hdcScreen, &pos, &size, hdcMem, &src, 0, &blend, ULW_ALPHA);
+
+    if (m_isTaskbarEmbedded && layer.hasTaskbar) {
+        UpdateLayeredWindow(layer.hwnd, hdcScreen, nullptr, &size, hdcMem, &src, 0, &blend, ULW_ALPHA);
+    } else {
+        int anchorX = m_pCfg->windowPos.x + (layer.monitor.left - m_layers[0].monitor.left);
+        int anchorY = m_pCfg->windowPos.y + (layer.monitor.top - m_layers[0].monitor.top);
+        int cx      = anchorX - (w - centerW) / 2;
+        cx          = std::clamp(cx, static_cast<int>(layer.monitor.left), static_cast<int>(layer.monitor.right - w));
+        POINT pos   = {cx, anchorY};
+        UpdateLayeredWindow(layer.hwnd, hdcScreen, &pos, &size, hdcMem, &src, 0, &blend, ULW_ALPHA);
+    }
 
     SelectObject(hdcMem, hOldBmp);
     DeleteObject(hDib);
 }
 
 void DesktopIndicator::RenderLayer(MonitorLayer &layer, HDC hdcScreen, HDC hdcMem) {
+    if (m_isTaskbarEmbedded && !layer.hasTaskbar) { return; }
     auto baseColors   = ParseMultiColorString(m_pCfg->textColor);
     auto colorStr     = BuildLayerColors(layer, baseColors.colors, baseColors.count);
     auto actualColors = ParseMultiColorString(colorStr);
@@ -845,31 +1020,27 @@ void DesktopIndicator::Render() {
 
 void DesktopIndicator::Rebuild() {
     Log(L"[INFO] Rebuild: " + std::to_wstring(m_layers.size()) + L" layers before");
-    bool wasVisible = false;
+    PositionPreset savedPreset = (m_pCfg != nullptr) ? m_pCfg->positionPreset : PositionPreset::Custom;
+    POINT          savedWndPos = (m_pCfg != nullptr) ? m_pCfg->windowPos : POINT{0, 0};
+    bool           wasVisible  = false;
     for (auto &l : m_layers) {
         if (IsWindowVisible(l.hwnd) != 0) { wasVisible = true; }
         DestroyWindow(l.hwnd);
     }
-    int   savedPreset = (m_pCfg != nullptr) ? m_pCfg->positionPreset : -1;
-    POINT savedWndPos = (m_pCfg != nullptr) ? m_pCfg->windowPos : POINT{0, 0};
     m_layers.clear();
-    m_editMode = false;
-    m_dragging = false;
+    UninstallTrayHook();
+    m_isTaskbarEmbedded = false;
+    m_editMode          = false;
+    m_dragging          = false;
     ReleaseCapture();
 
     EnumerateMonitors(GetModuleHandle(nullptr));
+    if (m_layers.empty()) { return; }
 
-    if (wasVisible) {
-        for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
-        if (m_pCfg != nullptr && m_pCfg->showMode >= ShowMode::Show1s) {
-            ShowTemporarily();
-        }
-    }
-    Render();
-    Log(L"[INFO] Rebuild done: " + std::to_wstring(m_layers.size()) + L" layers");
-    if (savedPreset >= 0) {
-        SetPositionPreset(savedPreset);
-    } else if (m_pCfg->posInitialized && !m_layers.empty()) {
+    if (savedPreset < PositionPreset::Count) {
+        if (m_pCfg != nullptr) { m_pCfg->positionPreset = savedPreset; }
+        ApplyPresetPosition();
+    } else if (m_pCfg != nullptr && m_pCfg->posInitialized) {
         m_pCfg->windowPos = savedWndPos;
         for (auto &l : m_layers) {
             POINT pos = {savedWndPos.x + (l.monitor.left - m_layers[0].monitor.left),
@@ -877,10 +1048,19 @@ void DesktopIndicator::Rebuild() {
             SetWindowPos(l.hwnd, nullptr, pos.x, pos.y, 0, 0,
                          SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
+        if (wasVisible) {
+            for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
+            if (m_pCfg->showMode >= ShowMode::Show1s) { ShowTemporarily(); }
+        }
+        Render();
     }
-    UpdateRenderTimer();
-    StartBgSampleTimer();
+
     RegisterMouseWheelInput();
+    UpdateRenderTimer();
+    if (m_pCfg != nullptr && m_pCfg->autoContrast && m_pCfg->showMode != ShowMode::AlwaysHide) {
+        StartBgSampleTimer();
+    }
+    Log(L"[INFO] Rebuild done: " + std::to_wstring(m_layers.size()) + L" layers");
 }
 
 bool DesktopIndicator::HandleRawInput(HWND /*hwnd*/, LPARAM lp) {
@@ -996,11 +1176,12 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         if (m_dragging) {
             m_dragging = false;
             ReleaseCapture();
-            if (m_pCfg != nullptr) { m_pCfg->positionPreset = -1; }
+            if (m_pCfg != nullptr) { m_pCfg->positionPreset = PositionPreset::Custom; }
         }
         return 0;
 
     case WM_LBUTTONDBLCLK:
+        UnembedTaskbarIndicator();
         ToggleEditMode();
         return 0;
 

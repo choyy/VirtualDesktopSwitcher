@@ -39,6 +39,8 @@ constexpr std::array kPositionKeys = {
     L"Menu.BottomLeft",
     L"Menu.BottomCenter",
     L"Menu.BottomRight",
+    L"Menu.EmbedTaskbarRight",
+    L"Menu.EmbedTaskbarLeft",
 };
 
 void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
@@ -96,11 +98,11 @@ void TrayIcon::BuildMenu() {
 
     HMENU hPosMenu = CreatePopupMenu();
     for (int i = 0; i < static_cast<int>(PositionPreset::Count); ++i) {
-        AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == i ? MF_CHECKED : 0),
+        AppendMenuW(hPosMenu, MF_STRING | (static_cast<int>(m_activePositionPreset) == i ? MF_CHECKED : 0),
                     CMD_POSITION_BASE + i, Lang::Get(kPositionKeys.at(i)));
     }
     AppendMenuW(hPosMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == -1 ? MF_CHECKED : 0), CMD_POSITION_CUSTOM, Lang::Get(L"Menu.Custom"));
+    AppendMenuW(hPosMenu, MF_STRING | (m_activePositionPreset == PositionPreset::Custom ? MF_CHECKED : 0), CMD_POSITION_CUSTOM, Lang::Get(L"Menu.Custom"));
     AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hPosMenu), Lang::Get(L"Menu.PositionSize")); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     HMENU hColorMenu = CreatePopupMenu();
@@ -281,8 +283,8 @@ void TrayIcon::HandleShowModeCommand(int mode) {
 }
 
 void TrayIcon::HandlePositionCommand(int preset) {
-    m_activePositionPreset = preset;
-    if (m_positionFn) { m_positionFn(m_activePositionPreset); }
+    m_activePositionPreset = static_cast<PositionPreset>(preset);
+    if (m_positionFn) { m_positionFn(preset); }
 }
 
 void TrayIcon::HandleColorCommand(int index) {
@@ -310,7 +312,7 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
     case WM_TRAY_TOGGLE_AUTOSTART: HandleToggleAutoStart(); break;
     case WM_TRAY_RUNAS_ADMIN: HandleRunAsAdmin(); break;
     case CMD_POSITION_CUSTOM:
-        m_activePositionPreset = -1;
+        m_activePositionPreset = PositionPreset::Custom;
         if (m_editModeFn) { m_editModeFn(); }
         break;
     case WM_TRAY_SETTINGS:

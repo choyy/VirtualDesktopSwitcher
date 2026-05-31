@@ -15,6 +15,9 @@
 
 class FontRenderer;
 
+enum class TaskbarSide : std::uint8_t { Right,
+                                        Left };
+
 struct SymbolMetrics {
     std::array<int, 9> widths{};
     int                fontSize = 0;
@@ -29,13 +32,16 @@ struct MonitorLayer {
     int                  dpi{};     // LOGPIXELSY
     bool                 isPrimary     = false;
     bool                 bgSampleValid = false;
-    double               bgLch_L       = -1.0; // CIE L* (-1 = uninitialized)
-    double               bgLch_C       = 0.0;  // CIE C* (chroma)
-    std::array<float, 5> smoothV{};            // per-color smoothed V
-    std::array<float, 5> smoothS{};            // per-color smoothed S
-    std::array<float, 9> symbolScales{};       // per-symbol dock scale (lerped)
-    std::array<float, 9> symbolCenters{};      // client X center after render
-    std::array<float, 9> symbolHalfWidths{};   // half-width after render
+    double               bgLch_L       = -1.0;             // CIE L* (-1 = uninitialized)
+    double               bgLch_C       = 0.0;              // CIE C* (chroma)
+    std::array<float, 5> smoothV{};                        // per-color smoothed V
+    std::array<float, 5> smoothS{};                        // per-color smoothed S
+    std::array<float, 9> symbolScales{};                   // per-symbol dock scale (lerped)
+    std::array<float, 9> symbolCenters{};                  // client X center after render
+    std::array<float, 9> symbolHalfWidths{};               // half-width after render
+    bool                 hasTaskbar  = false;              // embed mode: has taskbar on this monitor
+    HWND                 taskbarHwnd = nullptr;            // embed mode: Shell_TrayWnd handle
+    TaskbarSide          taskbarSide = TaskbarSide::Right; // embed mode: left or right side
 };
 
 class DesktopIndicator {
@@ -61,7 +67,7 @@ public:
     void SetCharSpacing(int spacing);
     void ToggleEditMode();
     void SetEditMode(bool edit);
-    void SetPositionPreset(int preset);
+    void SetPositionPreset(PositionPreset preset);
     void Rebuild();
     void SetShowMode(ShowMode mode);
     void ShowTemporarily();
@@ -69,6 +75,7 @@ public:
     void SetAutoContrast(bool on);
     void SetScrollSwitchCallback(std::function<void(int)> cb) { m_scrollSwitchFn = std::move(cb); }
     void SetMoveWindowCallback(std::function<void(int, HWND)> cb) { m_moveWindowFn = std::move(cb); }
+    void UnembedTaskbarIndicator();
     HWND CreateMonitorWindow(HINSTANCE hInst);
 
     [[nodiscard]] bool IsEditMode() const { return m_editMode; }
@@ -88,42 +95,52 @@ private:
     POINT                          m_dragOffset = {.x = 0, .y = 0};
     std::function<void(int)>       m_scrollSwitchFn;
     std::function<void(int, HWND)> m_moveWindowFn;
-    HWND                           m_dragHwnd        = nullptr;
-    bool                           m_draggingWindow  = false;
-    bool                           m_pendingDrag     = false;
-    int                            m_lastHoverSymbol = -1;
+    HWND                           m_dragHwnd          = nullptr;
+    bool                           m_draggingWindow    = false;
+    bool                           m_pendingDrag       = false;
+    int                            m_lastHoverSymbol   = -1;
+    bool                           m_isTaskbarEmbedded = false;
 
-    void         ApplyShowMode(ShowMode mode);
-    void         SampleBackground();
-    void         UpdateRenderTimer();
-    void         ResetDragState();
-    bool         NeedsSettleRender() const;
-    void         StartBgSampleTimer();
-    void         StopBgSampleTimer();
-    void         RebuildText();
-    std::wstring BuildLayerColors(MonitorLayer &layer, const std::array<COLORREF, 5> &baseColors, size_t colorCount) const;
-    void         RenderLayer(MonitorLayer &layer, HDC hdcScreen, HDC hdcMem);
-    void         PresentLayer(MonitorLayer &layer, const SymbolMetrics &metrics,
-                              int centerW, const ColorArray &colors,
-                              HDC hdcScreen, HDC hdcMem);
-    void         Render();
-    void         ApplyPresetPosition();
-    void         MoveByDelta(int dx, int dy);
-    void         EnumerateMonitors(HINSTANCE hInstance);
-    void         RegisterMouseWheelInput();
-    bool         HandleRawInput(HWND hwnd, LPARAM lp);
-    bool         HandleDragStart(HWND hwnd, LPARAM lp);
-    static void  InstallDragHook();
-    static void  UninstallDragHook();
-    bool         GetSymbolIndexAt(POINT screenPt, int &outIndex) const;
+    void               ApplyShowMode(ShowMode mode);
+    void               SampleBackground();
+    void               UpdateRenderTimer();
+    void               ResetDragState();
+    [[nodiscard]] bool NeedsSettleRender() const;
+    void               StartBgSampleTimer();
+    void               StopBgSampleTimer();
+    void               RebuildText();
+    std::wstring       BuildLayerColors(MonitorLayer &layer, const std::array<COLORREF, 5> &baseColors, size_t colorCount) const;
+    void               RenderLayer(MonitorLayer &layer, HDC hdcScreen, HDC hdcMem);
+    void               PresentLayer(MonitorLayer &layer, const SymbolMetrics &metrics,
+                                    int centerW, const ColorArray &colors,
+                                    HDC hdcScreen, HDC hdcMem);
+    void               Render();
+    void               ApplyPresetPosition();
+    void               RebuildToPreset(PositionPreset preset);
+    void               MoveByDelta(int dx, int dy);
+    void               EnumerateMonitors(HINSTANCE hInstance);
+    void               RegisterMouseWheelInput();
+    bool               HandleRawInput(HWND hwnd, LPARAM lp);
+    bool               HandleDragStart(HWND hwnd, LPARAM lp);
+    static void        InstallDragHook();
+    static void        UninstallDragHook();
+    bool               GetSymbolIndexAt(POINT screenPt, int &outIndex) const;
+
+    // Taskbar embed helpers
+    static void InstallTrayHook();
+    static void UninstallTrayHook();
 
     static HHOOK             s_dragHook;
     static DesktopIndicator *s_instance;
+    static HWINEVENTHOOK     s_eventHook;
     static LRESULT CALLBACK  DragHookProc(int nCode, WPARAM wParam, LPARAM lParam);
 
     static void CALLBACK    AutoHideTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
     static void CALLBACK    RenderTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
     static void CALLBACK    BgSampleTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
+    static void CALLBACK    WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event,
+                                         HWND hwnd, LONG idObject, LONG idChild,
+                                         DWORD dwEventThread, DWORD dwmsEventTime);
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
     LRESULT                 HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 };
