@@ -3,55 +3,74 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "DrawingTextSTB.h"
 
+#include <array>
 #include <cstddef>
 
 #include "util/Utils.h"
 
-bool FontRenderer::LoadFontData(const std::wstring &fontName) {
-    HDC hdc = CreateCompatibleDC(nullptr);
-    if (hdc == nullptr) { return false; }
-
-    HFONT hFont = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                              DEFAULT_CHARSET, OUT_TT_PRECIS,
-                              CLIP_DEFAULT_PRECIS, NONANTIALIASED_QUALITY,
-                              DEFAULT_PITCH | FF_DONTCARE, fontName.c_str());
-    if (hFont == nullptr) {
-        DeleteDC(hdc);
-        return false;
-    }
-
-    auto *oldFont = SelectObject(hdc, hFont);
-    DWORD size    = GetFontData(hdc, 0, 0, nullptr, 0);
-    if (size == GDI_ERROR || size == 0) {
-        SelectObject(hdc, oldFont);
-        DeleteObject(hFont);
-        DeleteDC(hdc);
-        return false;
-    }
-
-    m_fontData.resize(size);
-
-    DWORD result = GetFontData(hdc, 0, 0, m_fontData.data(), size);
-    SelectObject(hdc, oldFont);
-    DeleteObject(hFont);
-    DeleteDC(hdc);
-
-    if (result == GDI_ERROR || result != size) {
-        m_fontData.clear();
-        return false;
-    }
-
-    return true;
-}
-
 bool FontRenderer::Init(const std::wstring &fontName) {
     Cleanup();
 
-    if (!LoadFontData(fontName)) {
+    std::wstring path;
+    HKEY         hKey = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts",
+                      0, KEY_READ, &hKey)
+        == ERROR_SUCCESS) {
+        for (DWORD idx = 0;; ++idx) {
+            std::array<wchar_t, 256>      vn{};
+            std::array<wchar_t, MAX_PATH> data{};
+            auto                          vns  = static_cast<DWORD>(vn.size());
+            auto                          ds   = static_cast<DWORD>(sizeof(data));
+            DWORD                         type = 0;
+            if (RegEnumValueW(hKey, idx, vn.data(), &vns, nullptr, &type,
+                              reinterpret_cast<BYTE *>(data.data()), &ds) // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                != ERROR_SUCCESS) {
+                break;
+            }
+            if (type == REG_SZ && wcsstr(vn.data(), fontName.c_str()) != nullptr) {
+                if (wcschr(data.data(), L'\\') != nullptr) {
+                    path = data.data();
+                } else {
+                    std::array<wchar_t, MAX_PATH> wd{};
+                    GetWindowsDirectoryW(wd.data(), MAX_PATH);
+                    path = std::wstring(wd.data()) + L"\\Fonts\\" + data.data();
+                }
+                break;
+            }
+        }
+        RegCloseKey(hKey);
+    }
+    if (path.empty()) {
         return false;
     }
 
-    if (stbtt_InitFont(&m_fontInfo, m_fontData.data(), stbtt_GetFontOffsetForIndex(m_fontData.data(), 0)) == 0) {
+    m_fontFile = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (m_fontFile == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    m_fontMapping = CreateFileMappingW(m_fontFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
+    if (m_fontMapping == nullptr) {
+        CloseHandle(m_fontFile);
+        m_fontFile = INVALID_HANDLE_VALUE;
+        return false;
+    }
+
+    m_fontBuffer = static_cast<unsigned char *>(
+        MapViewOfFile(m_fontMapping, FILE_MAP_READ, 0, 0, 0));
+    if (m_fontBuffer == nullptr) {
+        CloseHandle(m_fontMapping);
+        m_fontMapping = nullptr;
+        CloseHandle(m_fontFile);
+        m_fontFile = INVALID_HANDLE_VALUE;
+        return false;
+    }
+
+    if (stbtt_InitFont(&m_fontInfo, m_fontBuffer,
+                       stbtt_GetFontOffsetForIndex(m_fontBuffer, 0))
+        == 0) {
+        Cleanup();
         return false;
     }
 
@@ -61,7 +80,18 @@ bool FontRenderer::Init(const std::wstring &fontName) {
 
 void FontRenderer::Cleanup() {
     m_loaded = false;
-    m_fontData.clear();
+    if (m_fontBuffer != nullptr) {
+        UnmapViewOfFile(m_fontBuffer);
+        m_fontBuffer = nullptr;
+    }
+    if (m_fontMapping != nullptr) {
+        CloseHandle(m_fontMapping);
+        m_fontMapping = nullptr;
+    }
+    if (m_fontFile != INVALID_HANDLE_VALUE) {
+        CloseHandle(m_fontFile);
+        m_fontFile = INVALID_HANDLE_VALUE;
+    }
 }
 
 float FontRenderer::GetCodepointAdvance(wchar_t codepoint, wchar_t nextCodepoint, float scale) const {
