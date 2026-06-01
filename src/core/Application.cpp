@@ -250,9 +250,8 @@ void Application::SetupTrayCallbacks() {
             m_pOverlay->ToggleEditMode();
         }
     });
-    m_pTrayIcon->SetPositionCallback([this](int preset) {
+    m_pTrayIcon->SetPositionCallback([this](PositionPreset p) {
         if (m_pOverlay) {
-            auto p = static_cast<PositionPreset>(preset);
             m_pOverlay->SetPositionPreset(p);
             if ((p == PositionPreset::EmbedTaskbarRight || p == PositionPreset::EmbedTaskbarLeft)
                 && !m_pOverlay->IsEditMode()) {

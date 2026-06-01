@@ -282,8 +282,8 @@ void TrayIcon::HandleShowModeCommand(int mode) {
     if (m_showModeFn) { m_showModeFn(mode); }
 }
 
-void TrayIcon::HandlePositionCommand(int preset) {
-    m_activePositionPreset = static_cast<PositionPreset>(preset);
+void TrayIcon::HandlePositionCommand(PositionPreset preset) {
+    m_activePositionPreset = preset;
     if (m_positionFn) { m_positionFn(preset); }
 }
 
@@ -299,7 +299,7 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
         return;
     }
     if (cmd >= CMD_POSITION_BASE && cmd < CMD_POSITION_CUSTOM) {
-        HandlePositionCommand(static_cast<int>(cmd - CMD_POSITION_BASE));
+        HandlePositionCommand(static_cast<PositionPreset>(cmd - CMD_POSITION_BASE));
         return;
     }
     if (cmd >= CMD_COLOR_OPTIONS_BASE && cmd < CMD_COLOR_OPTIONS_BASE + static_cast<UINT>(kPredefinedColors.size())) {

@@ -31,7 +31,7 @@ public:
 
     void SetActivePositionPreset(PositionPreset preset) { m_activePositionPreset = preset; }
     void SetEditModeCallback(std::function<void()> cb) { m_editModeFn = std::move(cb); }
-    void SetPositionCallback(std::function<void(int)> cb) { m_positionFn = std::move(cb); }
+    void SetPositionCallback(std::function<void(PositionPreset)> cb) { m_positionFn = std::move(cb); }
     void SetColorCallback(std::function<void(const std::wstring &)> cb) { m_colorFn = std::move(cb); }
     void SetSettingsCallback(std::function<void()> cb) { m_settingsFn = std::move(cb); }
     void SetAboutCallback(std::function<void()> cb) { m_aboutFn = std::move(cb); }
@@ -49,7 +49,7 @@ private:
 
     std::function<void(const std::wstring &)> m_colorFn;
     std::function<void()>                     m_editModeFn;
-    std::function<void(int)>                  m_positionFn;
+    std::function<void(PositionPreset)>       m_positionFn;
     std::function<void()>                     m_settingsFn;
     std::function<void()>                     m_aboutFn;
     std::function<void(int)>                  m_showModeFn;
@@ -68,6 +68,6 @@ private:
     void        HandleToggleShow();
     void        HandleToggleAutoStart();
     void        HandleShowModeCommand(int mode);
-    void        HandlePositionCommand(int preset);
+    void        HandlePositionCommand(PositionPreset preset);
     void        HandleColorCommand(int index);
 };
