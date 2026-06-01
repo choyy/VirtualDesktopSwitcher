@@ -512,17 +512,6 @@ void DesktopIndicator::SetDesktopState(int count, int currentIndex,
     m_currentDesktop = currentIndex;
     m_emptyDesktops  = emptyDesktops;
     RebuildText();
-    if (m_isTaskbarEmbedded) {
-        auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
-        for (auto &l : m_layers) {
-            if (!l.hasTaskbar || l.taskbarHwnd == nullptr) { continue; }
-            int  fs   = MulDiv(m_pCfg->fontSize, l.dpi, 96);
-            auto size = m_renderer->Measure(spacedtext.c_str(), fs);
-            int  w    = std::max(static_cast<int>(size.cx) + kPadding * 2, kMinWidth);
-            int  h    = std::max(static_cast<int>(size.cy) + kPadding * 2, kMinHeight);
-            PositionInTaskbar(l, l.taskbarHwnd, w, h, l.taskbarSide);
-        }
-    }
 }
 
 void DesktopIndicator::ShowTemporarily() {
@@ -610,6 +599,19 @@ void DesktopIndicator::RebuildText() {
                                         : m_pCfg->otherSymbol;
     }
     m_text = text;
+
+    if (m_isTaskbarEmbedded && m_renderer != nullptr) {
+        auto spacedtext = BuildSpacedText(m_text, m_pCfg->charSpacing);
+        for (auto &l : m_layers) {
+            if (!l.hasTaskbar || l.taskbarHwnd == nullptr) { continue; }
+            int  fs   = MulDiv(m_pCfg->fontSize, l.dpi, 96);
+            auto size = m_renderer->Measure(spacedtext.c_str(), fs);
+            int  w    = std::max(static_cast<int>(size.cx) + kPadding * 2, kMinWidth);
+            int  h    = std::max(static_cast<int>(size.cy) + kPadding * 2, kMinHeight);
+            PositionInTaskbar(l, l.taskbarHwnd, w, h, l.taskbarSide);
+        }
+    }
+
     Render();
 }
 
@@ -672,7 +674,7 @@ void DesktopIndicator::ToggleEditMode() {
 
 void DesktopIndicator::SetEditMode(bool edit) {
     m_editMode = edit;
-    if (m_pCfg != nullptr && m_editMode) { m_pCfg->positionPreset = PositionPreset::Custom; }
+    if (m_pCfg != nullptr && m_editMode && !m_isTaskbarEmbedded) { m_pCfg->positionPreset = PositionPreset::Custom; }
     for (auto &l : m_layers) {
         auto ex = static_cast<DWORD>(GetWindowLong(l.hwnd, GWL_EXSTYLE));
         if (m_editMode) {
@@ -683,11 +685,11 @@ void DesktopIndicator::SetEditMode(bool edit) {
         SetWindowPos(l.hwnd, nullptr, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
     }
-    if (m_editMode && !m_layers.empty()) {
+    if (m_editMode && !m_isTaskbarEmbedded && !m_layers.empty()) {
         SetCapture(m_layers[0].hwnd);
     } else {
         ReleaseCapture();
-        m_pCfg->SaveToIni();
+        if (m_pCfg != nullptr) { m_pCfg->SaveToIni(); }
     }
     Render();
 }
@@ -1109,10 +1111,23 @@ bool DesktopIndicator::HandleRawInput(HWND /*hwnd*/, LPARAM lp) {
         }
     }
 
-    if (!overIndicator || !m_scrollSwitchFn || m_desktopCount <= 0 || m_editMode) { return false; }
+    if (!overIndicator) { return false; }
 
-    auto delta  = static_cast<int16_t>(raw->data.mouse.usButtonData); // NOLINT(cppcoreguidelines-pro-type-union-access)
-    int  target = m_currentDesktop + ((delta > 0) ? -1 : 1);
+    auto delta = static_cast<int16_t>(raw->data.mouse.usButtonData); // NOLINT(cppcoreguidelines-pro-type-union-access)
+
+    if (m_editMode && m_pCfg != nullptr) {
+        int oldSize = m_pCfg->fontSize;
+        m_pCfg->fontSize += (delta > 0) ? 1 : -1;
+        m_pCfg->fontSize = (std::clamp)(m_pCfg->fontSize, 12, 300);
+        if (m_pCfg->fontSize != oldSize) {
+            m_pCfg->SaveToIni();
+            RebuildText();
+        }
+        return true;
+    }
+
+    if (!m_scrollSwitchFn || m_desktopCount <= 0) { return false; }
+    int target = m_currentDesktop + ((delta > 0) ? -1 : 1);
     if (target >= 0 && target < m_desktopCount) {
         m_scrollSwitchFn(target);
         return true;
@@ -1122,6 +1137,7 @@ bool DesktopIndicator::HandleRawInput(HWND /*hwnd*/, LPARAM lp) {
 
 bool DesktopIndicator::HandleDragStart(HWND hwnd, LPARAM lp) {
     if (!m_editMode) { return false; }
+    if (m_isTaskbarEmbedded) { return true; }
     POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
     ClientToScreen(hwnd, &pt);
     auto it = std::ranges::find_if(m_layers,
@@ -1199,8 +1215,12 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         return 0;
 
     case WM_LBUTTONDBLCLK:
-        UnembedTaskbarIndicator();
-        ToggleEditMode();
+        if (m_isTaskbarEmbedded) {
+            ToggleEditMode();
+        } else {
+            UnembedTaskbarIndicator();
+            ToggleEditMode();
+        }
         return 0;
 
     case WM_RBUTTONDOWN:
@@ -1212,7 +1232,7 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         if (m_editMode && m_pCfg != nullptr) {
             int delta   = GET_WHEEL_DELTA_WPARAM(wp);
             int oldSize = m_pCfg->fontSize;
-            m_pCfg->fontSize += (delta > 0) ? 4 : -4;
+            m_pCfg->fontSize += (delta > 0) ? 1 : -1;
             m_pCfg->fontSize = (std::clamp)(m_pCfg->fontSize, 12, 300);
             if (m_pCfg->fontSize != oldSize) {
                 m_pCfg->SaveToIni();

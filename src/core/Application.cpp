@@ -252,7 +252,12 @@ void Application::SetupTrayCallbacks() {
     });
     m_pTrayIcon->SetPositionCallback([this](int preset) {
         if (m_pOverlay) {
-            m_pOverlay->SetPositionPreset(static_cast<PositionPreset>(preset));
+            auto p = static_cast<PositionPreset>(preset);
+            m_pOverlay->SetPositionPreset(p);
+            if ((p == PositionPreset::EmbedTaskbarRight || p == PositionPreset::EmbedTaskbarLeft)
+                && !m_pOverlay->IsEditMode()) {
+                m_pOverlay->SetEditMode(true);
+            }
             m_indicatorCfg.SaveToIni();
         }
     });
