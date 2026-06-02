@@ -25,7 +25,12 @@
 
 ## 📦 Installation
 
-Download the latest [VirtualDesktopSwitcher.exe](https://api.github.com/repos/choyy/VirtualDesktopSwitcher/releases/latest) from the [Releases](https://github.com/choyy/VirtualDesktopSwitcher/releases) page, place it anywhere, and double-click to run.
+- **GitHub Release**
+  Download the latest [VirtualDesktopSwitcher.exe](https://api.github.com/repos/choyy/VirtualDesktopSwitcher/releases/latest) from the [Releases](https://github.com/choyy/VirtualDesktopSwitcher/releases) page, place it anywhere, and double-click to run.
+- **Using `winget`**
+  ```bash
+  winget install Chooyy.VirtualDesktopSwitcher
+  ```
 
 To build from source, see [Building from Source](#building-from-source) below.
 
