@@ -787,7 +787,7 @@ void DesktopIndicator::ShowDragOverlay() {
 void DesktopIndicator::HideDragOverlay() {
     if (!m_dragOverlayActive) { return; }
     m_dragOverlayActive = false;
-    ApplyPresetPosition(m_pCfg->positionPreset);
+    RebuildToPreset(m_pCfg->positionPreset);
     ApplyShowMode(m_pCfg->showMode);
 }
 
