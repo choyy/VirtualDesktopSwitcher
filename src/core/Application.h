@@ -7,8 +7,10 @@
 #include "core/IndicatorConfig.h"
 
 class DesktopIndicator;
+class MouseFocus;
 class TrayIcon;
 class VirtualDesktopSwitcher;
+class WindowDragHandler;
 
 namespace SettingsDialog {
 struct Result;
@@ -57,9 +59,11 @@ private:
 
     // --- Member Variables ---
     HWND                                    m_hwnd = nullptr;
-    std::unique_ptr<VirtualDesktopSwitcher> m_switcher;
-    std::unique_ptr<TrayIcon>               m_pTrayIcon;
     std::unique_ptr<DesktopIndicator>       m_pOverlay;
+    std::unique_ptr<MouseFocus>             m_mouseFocus;
+    std::unique_ptr<TrayIcon>               m_pTrayIcon;
+    std::unique_ptr<VirtualDesktopSwitcher> m_switcher;
+    std::unique_ptr<WindowDragHandler>      m_dragHandler;
     IndicatorConfig                         m_indicatorCfg;
     int                                     m_lastDesktopIndex = -1;
     int                                     m_lastDesktopCount = 0;

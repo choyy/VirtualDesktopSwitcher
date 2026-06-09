@@ -74,11 +74,15 @@ public:
     void SetAnimMode(bool on);
     void SetAutoContrast(bool on);
     void SetScrollSwitchCallback(std::function<void(int)> cb) { m_scrollSwitchFn = std::move(cb); }
-    void SetMoveWindowCallback(std::function<void(int, HWND)> cb) { m_moveWindowFn = std::move(cb); }
     void UnembedTaskbarIndicator();
     HWND CreateMonitorWindow(HINSTANCE hInst);
 
     [[nodiscard]] bool IsEditMode() const { return m_editMode; }
+    [[nodiscard]] bool IsPtOnOverlay(POINT pt) const;
+    bool               GetSymbolIndexAt(POINT screenPt, int &outIndex) const;
+    void               ShowDragOverlay();
+    void               HideDragOverlay();
+    void               SetDraggingWindow(bool dragging);
 
 private:
     std::vector<MonitorLayer>      m_layers;
@@ -94,20 +98,13 @@ private:
     bool                           m_dragging   = false;
     POINT                          m_dragOffset = {.x = 0, .y = 0};
     std::function<void(int)>       m_scrollSwitchFn;
-    std::function<void(int, HWND)> m_moveWindowFn;
-    HWND                           m_dragHwnd          = nullptr;
     bool                           m_draggingWindow    = false;
-    bool                           m_pendingDrag       = false;
-    int                            m_lastHoverSymbol   = -1;
     bool                           m_isTaskbarEmbedded = false;
     bool                           m_dragOverlayActive = false;
 
-    void               ShowDragOverlay();
-    void               HideDragOverlay();
     void               ApplyShowMode(ShowMode mode);
     void               SampleBackground();
     void               UpdateRenderTimer();
-    void               ResetDragState();
     [[nodiscard]] bool NeedsSettleRender() const;
     void               StartBgSampleTimer();
     void               StopBgSampleTimer();
@@ -125,18 +122,13 @@ private:
     void               RegisterMouseWheelInput();
     bool               HandleRawInput(HWND hwnd, LPARAM lp);
     bool               HandleDragStart(HWND hwnd, LPARAM lp);
-    static void        InstallDragHook();
-    static void        UninstallDragHook();
-    bool               GetSymbolIndexAt(POINT screenPt, int &outIndex) const;
 
     // Taskbar embed helpers
     static void InstallTrayHook();
     static void UninstallTrayHook();
 
-    static HHOOK             s_dragHook;
     static DesktopIndicator *s_instance;
     static HWINEVENTHOOK     s_eventHook;
-    static LRESULT CALLBACK  DragHookProc(int nCode, WPARAM wParam, LPARAM lParam);
 
     static void CALLBACK    AutoHideTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
     static void CALLBACK    RenderTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);

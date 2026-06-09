@@ -1,4 +1,4 @@
-set_version("1.3.4")
+set_version("1.3.5")
 set_encodings("utf-8")
 set_languages("c++20")
 

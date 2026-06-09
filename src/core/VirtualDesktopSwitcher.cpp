@@ -10,33 +10,38 @@
 
 namespace {
 
-struct FindContext {
-    const VirtualDesktopHelper *pHelper;
+struct FindWindowCtx {
+    const VirtualDesktopHelper *pHelper;  // nullptr = 跳过
+    HMONITOR                    hMonitor; // nullptr = 跳过
     HWND                        foundWindow;
 };
 
+bool IsValidTopWindow(HWND hwnd) {
+    if (IsWindowVisible(hwnd) == 0) { return false; }
+    if ((GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0) { return false; }
+
+    std::array<wchar_t, 256> title{};
+    if (GetWindowTextW(hwnd, title.data(), static_cast<int>(title.size())) == 0) { return false; }
+
+    BOOL       cloaked   = FALSE;
+    const bool isCloaked = SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) != FALSE
+                           && cloaked != FALSE;
+    return !isCloaked;
+}
+
 BOOL CALLBACK FindTopWndProc(HWND hwnd, LPARAM lParam) {
-    auto *ctx = LParamToPtr<FindContext>(lParam);
-    if (IsWindowVisible(hwnd) == 0) { return TRUE; }
-    if (GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) { return TRUE; }
-    std::wstring title(256, L'\0');
-    if (GetWindowTextW(hwnd, title.data(), 256) == 0) { return TRUE; }
-
-    BOOL cloaked = FALSE;
-    if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && (cloaked != 0)) {
-        return TRUE;
+    auto *ctx = LParamToPtr<FindWindowCtx>(lParam);
+    if (!IsValidTopWindow(hwnd)) { return TRUE; }
+    if (IsIconic(hwnd) != 0) { return TRUE; }
+    if (ctx->hMonitor != nullptr) {
+        RECT wr;
+        GetWindowRect(hwnd, &wr);
+        if (MonitorFromRect(&wr, MONITOR_DEFAULTTONULL) != ctx->hMonitor) { return TRUE; }
     }
-
-    if (ctx->foundWindow == nullptr && ctx->pHelper->IsWindowOnCurrentDesktop(hwnd)) {
+    if (ctx->foundWindow == nullptr) {
         ctx->foundWindow = hwnd;
     }
     return TRUE;
-}
-
-HWND FindTopOnDesktop(const VirtualDesktopHelper *pHelper) {
-    FindContext ctx = {.pHelper = pHelper, .foundWindow = nullptr};
-    EnumWindows(FindTopWndProc, PtrToLParam(&ctx));
-    return ctx.foundWindow;
 }
 
 } // namespace
@@ -145,12 +150,15 @@ void VirtualDesktopSwitcher::SwitchToDesktop(int index) {
         Sleep(10);
     }
 
-    HWND hwnd = FindTopOnDesktop(m_pVDeskHelper.get());
+    HWND hwnd = [&]() -> HWND {
+        FindWindowCtx ctx = {.pHelper = m_pVDeskHelper.get(), .hMonitor = nullptr, .foundWindow = nullptr};
+        EnumWindows(FindTopWndProc, PtrToLParam(&ctx));
+        return ctx.foundWindow;
+    }();
     if (hwnd == nullptr) {
         hwnd = GetForegroundWindow();
     }
     if (hwnd != nullptr) {
-        if (IsIconic(hwnd) != 0) { ShowWindow(hwnd, SW_RESTORE); }
         ActivateWindow(hwnd);
         if (hwnd != GetShellWindow()) {
             Log(L"[DEBUG] SwitchToDesktop: index=" + std::to_wstring(index)
@@ -185,4 +193,20 @@ bool VirtualDesktopSwitcher::IsWindowPinned(HWND hwnd) const {
 
 void VirtualDesktopSwitcher::SetPinByApp(bool use) {
     if (m_pVDeskHelper) { m_pVDeskHelper->SetPinByApp(use); }
+}
+
+bool VirtualDesktopSwitcher::ActivateTopWindowOnMonitor(HMONITOR hMon) {
+    HWND hwnd = FindTopWindowOnMonitor(hMon);
+    if (hwnd != nullptr && hwnd != GetShellWindow()) {
+        ActivateWindow(hwnd);
+        return true;
+    }
+    return false;
+}
+
+HWND VirtualDesktopSwitcher::FindTopWindowOnMonitor(HMONITOR hMon) const {
+    if (hMon == nullptr) { return nullptr; }
+    FindWindowCtx ctx = {.pHelper = m_pVDeskHelper.get(), .hMonitor = hMon, .foundWindow = nullptr};
+    EnumWindows(FindTopWndProc, PtrToLParam(&ctx));
+    return ctx.foundWindow;
 }

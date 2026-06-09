@@ -25,10 +25,6 @@ constexpr int      kAutoHideShow3sMs = 3000;
 const float kSmoothKeep  = std::pow(0.01f, kRenderIntervalMs / 1000.0f);
 const float kSmoothBlend = 1.0f - kSmoothKeep;
 
-constexpr UINT WM_INDICATOR_MOVE_WINDOW = WM_USER + 50;
-
-const HCURSOR s_hArrow = LoadCursor(nullptr, IDC_ARROW);
-
 constexpr int kPadding   = 8;
 constexpr int kMinWidth  = 50;
 constexpr int kMinHeight = 20;
@@ -291,7 +287,6 @@ void ApplyEmbedLayer(MonitorLayer &layer, int w, int h, TaskbarSide side) {
 
 } // namespace
 
-HHOOK             DesktopIndicator::s_dragHook  = nullptr;
 DesktopIndicator *DesktopIndicator::s_instance  = nullptr;
 HWINEVENTHOOK     DesktopIndicator::s_eventHook = nullptr;
 
@@ -310,7 +305,6 @@ DesktopIndicator::DesktopIndicator() {
 }
 
 DesktopIndicator::~DesktopIndicator() {
-    UninstallDragHook();
     UninstallTrayHook();
     if (s_instance == this) { s_instance = nullptr; }
     for (auto &l : m_layers) {
@@ -327,26 +321,6 @@ void DesktopIndicator::RegisterMouseWheelInput() {
     rid.hwndTarget     = m_layers[0].hwnd;
     if (RegisterRawInputDevices(&rid, 1, sizeof(rid)) == 0) {
         Log(L"[ERROR] RegisterRawInputDevices failed");
-    }
-}
-
-void DesktopIndicator::InstallDragHook() {
-    if (s_dragHook == nullptr) {
-        s_dragHook = SetWindowsHookExW(WH_MOUSE_LL, DragHookProc,
-                                       GetModuleHandleW(nullptr), 0);
-        if (s_dragHook != nullptr) {
-            Log(L"[INFO] Drag hook installed");
-        } else {
-            Log(L"[ERROR] Drag hook install failed");
-        }
-    }
-}
-
-void DesktopIndicator::UninstallDragHook() {
-    if (s_dragHook != nullptr) {
-        UnhookWindowsHookEx(s_dragHook);
-        s_dragHook = nullptr;
-        Log(L"[INFO] Drag hook uninstalled");
     }
 }
 
@@ -368,68 +342,13 @@ bool DesktopIndicator::GetSymbolIndexAt(POINT screenPt, int &outIndex) const {
     return false;
 }
 
-LRESULT CALLBACK DesktopIndicator::DragHookProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    if (nCode < 0 || s_instance == nullptr) {
-        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+bool DesktopIndicator::IsPtOnOverlay(POINT pt) const {
+    for (const auto &l : m_layers) {
+        RECT wr;
+        GetWindowRect(l.hwnd, &wr);
+        if (PtInRect(&wr, pt) != 0) { return true; }
     }
-
-    auto *hs = reinterpret_cast<MSLLHOOKSTRUCT *>(lParam); // NOLINT
-
-    if (wParam == WM_LBUTTONDOWN) {
-        bool onSelf = false;
-        for (const auto &l : s_instance->m_layers) {
-            RECT wr;
-            GetWindowRect(l.hwnd, &wr);
-            if (PtInRect(&wr, hs->pt) != 0) {
-                onSelf = true;
-                break;
-            }
-        }
-        if (!onSelf) {
-            s_instance->m_pendingDrag     = true;
-            s_instance->m_lastHoverSymbol = -1;
-        }
-    }
-
-    if (wParam == WM_MOUSEMOVE && (s_instance->m_pendingDrag || s_instance->m_draggingWindow)) {
-        GUITHREADINFO info       = {.cbSize = sizeof(info)};
-        bool          inMoveSize = GetGUIThreadInfo(0, &info) != 0 && (info.flags & GUI_INMOVESIZE) != 0;
-
-        if (!s_instance->m_draggingWindow) {
-            if (inMoveSize) {
-                CURSORINFO ci = {.cbSize = sizeof(ci)};
-                if (GetCursorInfo(&ci) != 0 && ci.hCursor == s_hArrow) {
-                    s_instance->m_pendingDrag    = false;
-                    s_instance->m_dragHwnd       = info.hwndMoveSize;
-                    s_instance->m_draggingWindow = true;
-                    s_instance->UpdateRenderTimer();
-                    s_instance->ShowDragOverlay();
-                }
-            }
-        } else {
-            if (!inMoveSize) {
-                s_instance->ResetDragState();
-            } else {
-                int symIdx = -1;
-                if (s_instance->GetSymbolIndexAt(hs->pt, symIdx)) {
-                    if (symIdx != s_instance->m_lastHoverSymbol) {
-                        s_instance->m_lastHoverSymbol = symIdx;
-                        PostMessageW(s_instance->m_layers[0].hwnd, WM_INDICATOR_MOVE_WINDOW,
-                                     static_cast<WPARAM>(symIdx),
-                                     reinterpret_cast<LPARAM>(s_instance->m_dragHwnd)); // NOLINT
-                    }
-                } else {
-                    s_instance->m_lastHoverSymbol = -1;
-                }
-            }
-        }
-    }
-
-    if (wParam == WM_LBUTTONUP) {
-        s_instance->ResetDragState();
-    }
-
-    return CallNextHookEx(nullptr, nCode, wParam, lParam);
+    return false;
 }
 
 HWND DesktopIndicator::CreateMonitorWindow(HINSTANCE hInst) {
@@ -501,7 +420,6 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
 
     // 6. Register Raw Input for mouse wheel
     RegisterMouseWheelInput();
-    InstallDragHook();
 
     return !m_layers.empty();
 }
@@ -776,6 +694,11 @@ void DesktopIndicator::RebuildToPreset(PositionPreset preset) {
     }
 }
 
+void DesktopIndicator::SetDraggingWindow(bool dragging) {
+    m_draggingWindow = dragging;
+    UpdateRenderTimer();
+}
+
 void DesktopIndicator::ShowDragOverlay() {
     if (m_dragOverlayActive || m_layers.empty()) { return; }
     if (!m_isTaskbarEmbedded && IsWindowVisible(m_layers[0].hwnd) != 0) { return; }
@@ -857,15 +780,6 @@ void DesktopIndicator::UpdateRenderTimer() {
     } else {
         KillTimer(m_layers[0].hwnd, kRenderTimerId);
     }
-}
-
-void DesktopIndicator::ResetDragState() {
-    if (m_dragOverlayActive) { HideDragOverlay(); }
-    m_pendingDrag     = false;
-    m_dragHwnd        = nullptr;
-    m_draggingWindow  = false;
-    m_lastHoverSymbol = -1;
-    UpdateRenderTimer();
 }
 
 bool DesktopIndicator::NeedsSettleRender() const {
@@ -1172,15 +1086,6 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         EndPaint(hwnd, &ps);
         return 0;
     }
-
-    case WM_INDICATOR_MOVE_WINDOW:
-        if (m_moveWindowFn && m_desktopCount > 0 && !m_editMode) {
-            auto targetIdx = static_cast<int>(wp);
-            auto hwndDrag  = reinterpret_cast<HWND>(lp); // NOLINT
-            Log(L"[INFO] MoveWindow: desktop " + std::to_wstring(targetIdx));
-            m_moveWindowFn(targetIdx, hwndDrag);
-        }
-        return 0;
 
     case WM_INPUT:
         if (HandleRawInput(hwnd, lp)) { return 0; }

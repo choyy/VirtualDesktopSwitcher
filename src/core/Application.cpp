@@ -2,7 +2,9 @@
 
 #include <string>
 
+#include "core/MouseFocus.h"
 #include "core/VirtualDesktopSwitcher.h"
+#include "core/WindowDragHandler.h"
 #include "ui/AboutDialog.h"
 #include "ui/DesktopIndicator.h"
 #include "ui/SettingsDialog.h"
@@ -74,6 +76,15 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
             pApp->OnSystemResume();
         }
         return TRUE;
+
+    case WM_WINDOW_DRAG_DROP: {
+        int  idx  = static_cast<int>(wParam);
+        HWND hwnd = reinterpret_cast<HWND>(lParam); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+        pApp->m_switcher->MoveWindowToDesktop(hwnd, idx);
+        pApp->m_switcher->SwitchToDesktop(idx);
+        pApp->SyncDesktopState();
+        return 0;
+    }
 
     case WM_DESTROY:
         pApp->OnDestroy(hwnd);
@@ -313,7 +324,8 @@ void Application::SetupTrayCallbacks() {
 }
 
 bool Application::Initialize() {
-    m_switcher = std::make_unique<VirtualDesktopSwitcher>();
+    m_mouseFocus = std::make_unique<MouseFocus>();
+    m_switcher   = std::make_unique<VirtualDesktopSwitcher>();
     Lang::Init();
 
     if (!CreateHiddenWindow()) { return false; }
@@ -338,13 +350,8 @@ bool Application::Initialize() {
         m_pOverlay->SetScrollSwitchCallback([this](int target) {
             OnDesktopSwitch(target);
         });
-        m_pOverlay->SetMoveWindowCallback([this](int targetIdx, HWND hwnd) {
-            if (m_switcher) {
-                m_switcher->MoveWindowToDesktop(hwnd, targetIdx);
-                m_switcher->SwitchToDesktop(targetIdx);
-                SyncDesktopState();
-            }
-        });
+        m_dragHandler = std::make_unique<WindowDragHandler>(m_pOverlay.get());
+        m_dragHandler->InstallHook(m_hwnd);
     }
 
     SetupTrayCallbacks();
@@ -357,6 +364,11 @@ bool Application::Initialize() {
         Log(L"[ERROR] Failed to install keyboard hook");
         return false;
     }
+
+    m_mouseFocus->SetActivateFn([this](HMONITOR hMon) {
+        m_switcher->ActivateTopWindowOnMonitor(hMon);
+    });
+    m_mouseFocus->UpdateHook();
 
     SetTimer(m_hwnd, 1, 1000, nullptr);
     return true;
@@ -382,6 +394,7 @@ void Application::SyncDesktopState() {
 
 void Application::OnDisplayChange() {
     if (m_pOverlay) { m_pOverlay->Rebuild(); }
+    if (m_mouseFocus) { m_mouseFocus->UpdateHook(); }
 }
 
 void Application::OnSystemResume() {
@@ -389,6 +402,7 @@ void Application::OnSystemResume() {
     m_switcher->RefreshCOM();
     m_pTrayIcon->Reinitialize();
     SyncDesktopState();
+    if (m_mouseFocus) { m_mouseFocus->UpdateHook(); }
     if (m_pOverlay) {
         m_pOverlay->SetPositionPreset(m_indicatorCfg.positionPreset);
     }

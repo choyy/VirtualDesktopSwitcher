@@ -37,6 +37,7 @@ public:
     bool IsWindowPinned(HWND hwnd) const;
     void SetPinByApp(bool use);
     void RefreshCOM();
+    bool ActivateTopWindowOnMonitor(HMONITOR hMon);
 
     static void SetModMask(uint8_t mask) { s_modMask = static_cast<ModMask>(mask); }
     static void SetPrevDesktopKey(uint8_t vk) { s_prevDesktopKey = vk; }
@@ -62,4 +63,6 @@ private:
     static std::array<uint8_t, kMaxDesktops> s_desktopKeys;
 
     static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
+
+    [[nodiscard]] HWND FindTopWindowOnMonitor(HMONITOR hMon) const;
 };
