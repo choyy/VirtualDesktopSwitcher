@@ -6,6 +6,10 @@
 
 #include "core/IndicatorConfig.h"
 
+constexpr UINT_PTR kTimerDesktopSync = 1;
+constexpr UINT_PTR kTimerUpdatePoll  = 2;
+constexpr UINT_PTR kTimerFocusDelay  = 3;
+
 class DesktopIndicator;
 class MouseFocus;
 class TrayIcon;
@@ -46,6 +50,7 @@ private:
 
     // --- Internal Operations ---
     void SyncDesktopState();
+    void PostWindowActivation(HMONITOR hMon = nullptr);
     void ApplySettingsPreview(const SettingsDialog::Result &r);
     void PollUpdateProcess();
     void SpawnUpdateCheckProcess();
@@ -65,10 +70,11 @@ private:
     std::unique_ptr<VirtualDesktopSwitcher> m_switcher;
     std::unique_ptr<WindowDragHandler>      m_dragHandler;
     IndicatorConfig                         m_indicatorCfg;
-    int                                     m_lastDesktopIndex = -1;
-    int                                     m_lastDesktopCount = 0;
-    uint8_t                                 m_modMask          = 1;
-    bool                                    m_pinByApp         = false;
-    bool                                    m_autoCheckUpdates = true;
-    HANDLE                                  m_hUpdateProcess   = nullptr;
+    int                                     m_lastDesktopIndex    = -1;
+    int                                     m_lastDesktopCount    = 0;
+    uint8_t                                 m_modMask             = 1;
+    bool                                    m_pinByApp            = false;
+    bool                                    m_autoCheckUpdates    = true;
+    HANDLE                                  m_hUpdateProcess      = nullptr;
+    HMONITOR                                m_pendingFocusMonitor = nullptr;
 };

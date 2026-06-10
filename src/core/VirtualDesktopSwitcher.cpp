@@ -11,9 +11,8 @@
 namespace {
 
 struct FindWindowCtx {
-    const VirtualDesktopHelper *pHelper;  // nullptr = 跳过
-    HMONITOR                    hMonitor; // nullptr = 跳过
-    HWND                        foundWindow;
+    HMONITOR hMonitor; // nullptr = 跳过
+    HWND     foundWindow;
 };
 
 bool IsValidTopWindow(HWND hwnd) {
@@ -42,6 +41,13 @@ BOOL CALLBACK FindTopWndProc(HWND hwnd, LPARAM lParam) {
         ctx->foundWindow = hwnd;
     }
     return TRUE;
+}
+
+HWND FindTopWindowOnMonitor(HMONITOR hMon) {
+    if (hMon == nullptr) { return nullptr; }
+    FindWindowCtx ctx = {.hMonitor = hMon, .foundWindow = nullptr};
+    EnumWindows(FindTopWndProc, PtrToLParam(&ctx));
+    return ctx.foundWindow;
 }
 
 } // namespace
@@ -149,26 +155,6 @@ void VirtualDesktopSwitcher::SwitchToDesktop(int index) {
         if (GetCurrentDesktopIndex() == index) { break; }
         Sleep(10);
     }
-
-    HWND hwnd = [&]() -> HWND {
-        FindWindowCtx ctx = {.pHelper = m_pVDeskHelper.get(), .hMonitor = nullptr, .foundWindow = nullptr};
-        EnumWindows(FindTopWndProc, PtrToLParam(&ctx));
-        return ctx.foundWindow;
-    }();
-    if (hwnd == nullptr) {
-        hwnd = GetForegroundWindow();
-    }
-    if (hwnd != nullptr) {
-        ActivateWindow(hwnd);
-        if (hwnd != GetShellWindow()) {
-            Log(L"[DEBUG] SwitchToDesktop: index=" + std::to_wstring(index)
-                + L" activated=" + GetWindowTitle(hwnd));
-        } else {
-            Log(L"[DEBUG] SwitchToDesktop: index=" + std::to_wstring(index) + L" empty desktop");
-        }
-    } else {
-        Log(L"[DEBUG] SwitchToDesktop: index=" + std::to_wstring(index) + L" no window");
-    }
 }
 
 void VirtualDesktopSwitcher::MoveWindowToDesktop(HWND hwnd, int targetIndex) {
@@ -197,16 +183,18 @@ void VirtualDesktopSwitcher::SetPinByApp(bool use) {
 
 bool VirtualDesktopSwitcher::ActivateTopWindowOnMonitor(HMONITOR hMon) {
     HWND hwnd = FindTopWindowOnMonitor(hMon);
-    if (hwnd != nullptr && hwnd != GetShellWindow()) {
-        ActivateWindow(hwnd);
-        return true;
+    if (hwnd == nullptr || hwnd == GetShellWindow()) {
+        Log(L"[DEBUG] ActivateTopWindowOnMonitor: no window");
+        return false;
     }
+    for (int retry = 0; retry < 3; ++retry) {
+        ActivateWindow(hwnd);
+        if (GetForegroundWindow() == hwnd) {
+            Log(L"[DEBUG] ActivateTopWindowOnMonitor: " + GetWindowTitle(hwnd));
+            return true;
+        }
+        Sleep(30);
+    }
+    Log(L"[DEBUG] ActivateTopWindowOnMonitor: failed for " + GetWindowTitle(hwnd));
     return false;
-}
-
-HWND VirtualDesktopSwitcher::FindTopWindowOnMonitor(HMONITOR hMon) const {
-    if (hMon == nullptr) { return nullptr; }
-    FindWindowCtx ctx = {.pHelper = m_pVDeskHelper.get(), .hMonitor = hMon, .foundWindow = nullptr};
-    EnumWindows(FindTopWndProc, PtrToLParam(&ctx));
-    return ctx.foundWindow;
 }

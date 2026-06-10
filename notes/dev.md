@@ -12,24 +12,39 @@
 
 ## 方案
 
-每次 `SwitchToDesktop` 时实时查找目标桌面 Z 序最顶层窗口，不再记录/恢复历史窗口。
+跨屏聚焦和切桌面复用同一套机制：`PostWindowActivation` → `WM_FOCUS_ACTIVATE` → `SetTimer(150ms)` → `ActivateTopWindowOnMonitor`。
+
+```
+跨屏：MouseFocus 检测跨屏 → PostWindowActivation(hMon)
+切桌面：OnDesktopSwitch → SwitchToDesktop → SyncDesktopState → PostWindowActivation()
+                                                   ↓
+                            WindowProc → WM_FOCUS_ACTIVATE
+                              → m_pendingFocusMonitor = hMon
+                              → SetTimer(kTimerFocusDelay, 150ms)
+                                                   ↓
+                            WindowProc → WM_TIMER
+                              → ActivateTopWindowOnMonitor(m_pendingFocusMonitor)
+                                → FindTopWindowOnMonitor(hMon)
+                                → ActivateWindow × 3 重试 (90ms)
+```
 
 ## 窗口过滤（FindTopWndProc，Z 序从高到低枚举）
 
 ```
-可见性        → IsWindowVisible          → 不可见跳过
-工具窗口      → WS_EX_TOOLWINDOW        → 跳过
-无标题        → GetWindowTextW           → 跳过
-隐藏覆盖层    → DwmGetAttribute(CLOAKED) → 跳过（需 dwmapi.h + dwmapi.lib）
-跨桌面固定    → IsWindowOnCurrentDesktop → 不在当前桌面跳过
+可见性        → IsWindowVisible        → 不可见跳过
+无标题        → GetWindowTextW         → 跳过
+工具窗口      → WS_EX_TOOLWINDOW      → 跳过
+隐藏覆盖层    → DwmGetAttribute(CLOAK) → 跳过
+最小化        → IsIconic               → 跳过
+基于显示器    → MonitorFromRect        → 不匹配目标显示器跳过
 ```
 
-过滤顺序按开销从小到大排列。CLOAKED 用于排除 Alt+Tab 中隐藏的系统覆盖层（如 `Windows 输入体验`），这些窗口 Z 序高于用户窗口且 `IsWindowOnCurrentDesktop` 返回 true。
+过滤顺序按开销从小到大排列。
+`FindTopWndProc` 不再检查 `IsWindowOnCurrentDesktop`——该 COM API 在多显示器场景下不可靠，且 `ActivateWindow` 不会自动切换虚拟桌面，无副作用。
 
-## 注意
+## 激活延迟
 
-- `EnumWindows` 返回天然 Z 序，第一个匹配就是最顶层，无需排序
-- 空桌面激活 `Program Manager` 是空操作，无害
+`ActivateWindow` 受前台锁限制，在用户无新输入时可能被拒绝，从而造成程序图标闪烁（无论激活成功或失败都有可能闪烁）。150ms 延迟让前台锁自然释放，配合 3 次 × 30ms 重试，覆盖绝大多数场景。
 
 # 快捷键
 

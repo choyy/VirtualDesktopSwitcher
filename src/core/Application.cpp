@@ -17,6 +17,8 @@
 
 namespace {
 
+constexpr UINT WM_FOCUS_ACTIVATE = WM_USER + 70;
+
 std::wstring BuildTooltipText(int desktopCount, int currentDesktop) {
     return std::wstring(Lang::Get(L"Tray.DefaultTip")) + L"\n" + Lang::Get(L"Tooltip.Desktops") + std::to_wstring(desktopCount) + L" | " + Lang::Get(L"Tooltip.Current") + std::to_wstring(currentDesktop + 1);
 }
@@ -64,7 +66,18 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
         return 0;
 
     case WM_TIMER:
+        if (wParam == kTimerFocusDelay) {
+            VirtualDesktopSwitcher::ActivateTopWindowOnMonitor(pApp->m_pendingFocusMonitor);
+            pApp->m_pendingFocusMonitor = nullptr;
+            KillTimer(hwnd, kTimerFocusDelay);
+            return 0;
+        }
         pApp->OnTimerTick();
+        return 0;
+
+    case WM_FOCUS_ACTIVATE:
+        pApp->m_pendingFocusMonitor = reinterpret_cast<HMONITOR>(lParam); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+        SetTimer(hwnd, kTimerFocusDelay, 150, nullptr);
         return 0;
 
     case WM_DISPLAYCHANGE:
@@ -122,6 +135,7 @@ void Application::OnMenuSelect(WPARAM wParam, LPARAM /*lParam*/) {
 void Application::OnDesktopSwitch(WPARAM wParam) {
     m_switcher->SwitchToDesktop(static_cast<int>(wParam));
     SyncDesktopState();
+    PostWindowActivation();
 }
 
 void Application::OnTimerTick() {
@@ -133,7 +147,7 @@ void Application::PollUpdateProcess() {
         return;
     }
 
-    KillTimer(m_hwnd, 2);
+    KillTimer(m_hwnd, kTimerUpdatePoll);
 
     DWORD exitCode = 0;
     GetExitCodeProcess(m_hUpdateProcess, &exitCode);
@@ -160,7 +174,7 @@ void Application::SpawnUpdateCheckProcess() {
         != 0) {
         CloseHandle(pi.hThread);
         m_hUpdateProcess = pi.hProcess;
-        SetTimer(m_hwnd, 2, 3000, TimerPollUpdateProc);
+        SetTimer(m_hwnd, kTimerUpdatePoll, 3000, TimerPollUpdateProc);
     }
 }
 
@@ -176,8 +190,9 @@ void Application::OnDestroy(HWND hwnd) {
         WaitForSingleObject(m_hUpdateProcess, 500);
         CloseHandle(m_hUpdateProcess);
     }
-    KillTimer(hwnd, 1);
-    KillTimer(hwnd, 2);
+    KillTimer(hwnd, kTimerDesktopSync);
+    KillTimer(hwnd, kTimerUpdatePoll);
+    KillTimer(hwnd, kTimerFocusDelay);
     PostQuitMessage(0);
 }
 
@@ -366,11 +381,11 @@ bool Application::Initialize() {
     }
 
     m_mouseFocus->SetActivateFn([this](HMONITOR hMon) {
-        m_switcher->ActivateTopWindowOnMonitor(hMon);
+        PostWindowActivation(hMon);
     });
     m_mouseFocus->UpdateHook();
 
-    SetTimer(m_hwnd, 1, 1000, nullptr);
+    SetTimer(m_hwnd, kTimerDesktopSync, 1000, nullptr);
     return true;
 }
 
@@ -390,6 +405,16 @@ void Application::SyncDesktopState() {
         auto emptyMask = m_switcher->GetDesktopEmptyMask();
         m_pOverlay->SetDesktopState(desktopCount, currentDesktop, emptyMask);
     }
+}
+
+void Application::PostWindowActivation(HMONITOR hMon) {
+    if (hMon == nullptr) {
+        POINT pt;
+        GetCursorPos(&pt);
+        hMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONULL);
+        if (hMon == nullptr) { return; }
+    }
+    PostMessageW(m_hwnd, WM_FOCUS_ACTIVATE, 0, reinterpret_cast<LPARAM>(hMon)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
 }
 
 void Application::OnDisplayChange() {
