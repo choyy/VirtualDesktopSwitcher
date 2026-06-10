@@ -21,6 +21,7 @@
 - **Desktop indicator**: Uses distinct symbols for different desktop states — **◉ current** desktop, **○ non-empty** desktops, and **◌ empty** desktops. Fully customizable position, size, and style.
 - **Scroll to switch**: Scroll the mouse wheel while hovering over the indicator to quickly switch to the previous/next virtual desktop.
 - **Drag to move**: Drag any window onto an indicator symbol to move it to that virtual desktop and automatically switch to it.
+- **Cursor focus**: On multi-monitor setups, moving the mouse cursor between monitors automatically focuses the top window on the target monitor.
 - **Extremely lightweight**: Executable ~140KB, memory footprint ~2MB, zero dependencies, runs silently in the background.
 
 ## 📦 Installation
