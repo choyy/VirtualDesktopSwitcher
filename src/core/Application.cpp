@@ -72,6 +72,23 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
             KillTimer(hwnd, kTimerFocusDelay);
             return 0;
         }
+        if (wParam == kDragDropDelay) {
+            DesktopIndicator *indicator = pApp->m_pOverlay.get();
+            if (indicator != nullptr) {
+                POINT pt;
+                GetCursorPos(&pt);
+                int symIdx = -1;
+                if (indicator->GetSymbolIndexAt(pt, symIdx) && symIdx == pApp->m_dragPendingSym) {
+                    pApp->m_switcher->MoveWindowToDesktop(pApp->m_dragPendingHwnd, symIdx);
+                    pApp->m_switcher->SwitchToDesktop(symIdx);
+                    pApp->SyncDesktopState();
+                }
+            }
+            pApp->m_dragPendingSym  = -1;
+            pApp->m_dragPendingHwnd = nullptr;
+            KillTimer(hwnd, kDragDropDelay);
+            return 0;
+        }
         pApp->OnTimerTick();
         return 0;
 
@@ -91,11 +108,9 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
         return TRUE;
 
     case WM_WINDOW_DRAG_DROP: {
-        int  idx  = static_cast<int>(wParam);
-        HWND hwnd = reinterpret_cast<HWND>(lParam); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
-        pApp->m_switcher->MoveWindowToDesktop(hwnd, idx);
-        pApp->m_switcher->SwitchToDesktop(idx);
-        pApp->SyncDesktopState();
+        pApp->m_dragPendingSym  = static_cast<int>(wParam);
+        pApp->m_dragPendingHwnd = reinterpret_cast<HWND>(lParam); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
+        SetTimer(hwnd, kDragDropDelay, 300, nullptr);
         return 0;
     }
 
@@ -193,6 +208,7 @@ void Application::OnDestroy(HWND hwnd) {
     KillTimer(hwnd, kTimerDesktopSync);
     KillTimer(hwnd, kTimerUpdatePoll);
     KillTimer(hwnd, kTimerFocusDelay);
+    KillTimer(hwnd, kDragDropDelay);
     PostQuitMessage(0);
 }
 
