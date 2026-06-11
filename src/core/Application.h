@@ -8,7 +8,6 @@
 
 constexpr UINT_PTR kTimerDesktopSync = 1;
 constexpr UINT_PTR kTimerUpdatePoll  = 2;
-constexpr UINT_PTR kTimerFocusDelay  = 3;
 constexpr UINT_PTR kDragDropDelay    = 4;
 
 class DesktopIndicator;
@@ -51,7 +50,6 @@ private:
 
     // --- Internal Operations ---
     void SyncDesktopState();
-    void PostWindowActivation(HMONITOR hMon = nullptr);
     void ApplySettingsPreview(const SettingsDialog::Result &r);
     void PollUpdateProcess();
     void SpawnUpdateCheckProcess();
@@ -77,7 +75,6 @@ private:
     bool                                    m_pinByApp            = false;
     bool                                    m_autoCheckUpdates    = true;
     HANDLE                                  m_hUpdateProcess      = nullptr;
-    HMONITOR                                m_pendingFocusMonitor = nullptr;
     int                                     m_dragPendingSym      = -1;
     HWND                                    m_dragPendingHwnd     = nullptr;
 };

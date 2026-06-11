@@ -182,12 +182,22 @@ void VirtualDesktopSwitcher::SetPinByApp(bool use) {
 }
 
 bool VirtualDesktopSwitcher::ActivateTopWindowOnMonitor(HMONITOR hMon) {
+    if (hMon == nullptr) {
+        POINT pt;
+        GetCursorPos(&pt);
+        hMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONULL);
+        if (hMon == nullptr) {
+            Log(L"[DEBUG] ActivateTopWindowOnMonitor: no monitor");
+            return false;
+        }
+    }
     HWND hwnd = FindTopWindowOnMonitor(hMon);
     if (hwnd == nullptr || hwnd == GetShellWindow()) {
         Log(L"[DEBUG] ActivateTopWindowOnMonitor: no window");
         return false;
     }
     for (int retry = 0; retry < 3; ++retry) {
+        AllowSetForegroundWindow(ASFW_ANY);
         ActivateWindow(hwnd);
         if (GetForegroundWindow() == hwnd) {
             Log(L"[DEBUG] ActivateTopWindowOnMonitor: " + GetWindowTitle(hwnd));

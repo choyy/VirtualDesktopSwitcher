@@ -10,23 +10,17 @@
 
 # 激活顶层窗口
 
-## 方案
 
-跨屏聚焦和切桌面复用同一套机制：`PostWindowActivation` → `WM_FOCUS_ACTIVATE` → `SetTimer(150ms)` → `ActivateTopWindowOnMonitor`。
+## 解决任务栏图标闪烁问题
 
+前台锁是 Windows 阻止后台进程调用 `SetForegroundWindow` 的机制，违禁调用会导致任务栏图标闪烁但不激活。
+
+```cpp
+AllowSetForegroundWindow(ASFW_ANY);  // 授予当前线程前台权限
+ActivateWindow(hwnd);                // 不闪烁
 ```
-跨屏：MouseFocus 检测跨屏 → PostWindowActivation(hMon)
-切桌面：OnDesktopSwitch → SwitchToDesktop → SyncDesktopState → PostWindowActivation()
-                                                   ↓
-                            WindowProc → WM_FOCUS_ACTIVATE
-                              → m_pendingFocusMonitor = hMon
-                              → SetTimer(kTimerFocusDelay, 150ms)
-                                                   ↓
-                            WindowProc → WM_TIMER
-                              → ActivateTopWindowOnMonitor(m_pendingFocusMonitor)
-                                → FindTopWindowOnMonitor(hMon)
-                                → ActivateWindow × 3 重试 (90ms)
-```
+
+此 API 无输入干扰，不涉及按键模拟，跨屏和切桌面统一行为。
 
 ## 窗口过滤（FindTopWndProc，Z 序从高到低枚举）
 
@@ -39,12 +33,9 @@
 基于显示器    → MonitorFromRect        → 不匹配目标显示器跳过
 ```
 
-过滤顺序按开销从小到大排列。
-`FindTopWndProc` 不再检查 `IsWindowOnCurrentDesktop`——该 COM API 在多显示器场景下不可靠，且 `ActivateWindow` 不会自动切换虚拟桌面，无副作用。
+过滤顺序按开销从小到大排列。不检查 `IsWindowOnCurrentDesktop`——该 COM API 不可靠，且 `ActivateWindow` 不会自动切换虚拟桌面，无副作用。
 
-## 激活延迟
-
-`ActivateWindow` 受前台锁限制，在用户无新输入时可能被拒绝，从而造成程序图标闪烁（无论激活成功或失败都有可能闪烁）。150ms 延迟让前台锁自然释放，配合 3 次 × 30ms 重试，覆盖绝大多数场景。
+`IsWindowOnCurrentDesktop`——该 COM API 实现似乎有问题，待确认(#todo)。
 
 # 快捷键
 
