@@ -10,19 +10,22 @@
 
 # 激活顶层窗口
 
-
 ## 解决任务栏图标闪烁问题
 
-前台锁是 Windows 阻止后台进程调用 `SetForegroundWindow` 的机制，违禁调用会导致任务栏图标闪烁但不激活。
+`VirtualDesktopSwitcher::ActivateTopWindowOnMonitor(HMONITOR hMon)`
 
-```cpp
-AllowSetForegroundWindow(ASFW_ANY);  // 授予当前线程前台权限
-ActivateWindow(hwnd);                // 不闪烁
-```
+- **跨屏**：`MouseFocus` 钩子检测到显示器切换 → `SendInput(MOUSEEVENTF_MOVE)` + `ActivateTopWindowOnMonitor(hMon)`
+- **切桌面**：`OnDesktopSwitch` → `SwitchToDesktop` → `ActivateTopWindowOnMonitor(nullptr)`（内部自动获取光标位置）
 
-此 API 无输入干扰，不涉及按键模拟，跨屏和切桌面统一行为。
+`AllowSetForegroundWindow(ASFW_ANY)` 内置在 `ActivateWindow` 中（`src/util/Utils.cpp`），调用方无需关心前台锁。
 
-## 窗口过滤（FindTopWndProc，Z 序从高到低枚举）
+
+| 问题 | 方案 |
+|---|---|
+| **任务栏图标闪烁** | `AllowSetForegroundWindow(ASFW_ANY)` 授予前台权限，`ActivateWindow` 不闪烁 |
+| 即使有AllowSetForegroundWindow，但是如果**按过一次 Alt 后，再跨屏仍会偶发闪烁** | `SendInput(MOUSEEVENTF_MOVE)` 重置输入来源为鼠标，绕过 Alt 后的前台锁限制 |
+
+## 窗口过滤（FindTopWndProc，Z 序枚举）
 
 ```
 可见性        → IsWindowVisible        → 不可见跳过

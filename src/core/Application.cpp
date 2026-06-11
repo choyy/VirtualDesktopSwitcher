@@ -386,6 +386,9 @@ bool Application::Initialize() {
     }
 
     m_mouseFocus->SetActivateFn([this](HMONITOR hMon) {
+        INPUT input{.type = INPUT_MOUSE,
+                    .mi   = {.dwFlags = MOUSEEVENTF_MOVE}};
+        SendInput(1, &input, sizeof(input));
         VirtualDesktopSwitcher::ActivateTopWindowOnMonitor(hMon);
     });
     m_mouseFocus->SetEnabled(m_indicatorCfg.autoFocus);

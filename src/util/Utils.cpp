@@ -17,6 +17,7 @@ void ActivateWindow(HWND hwnd) {
         }
     }
 
+    AllowSetForegroundWindow(ASFW_ANY);
     SetForegroundWindow(hwnd);
 
     if (attached != FALSE) {

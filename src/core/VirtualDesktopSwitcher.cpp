@@ -197,7 +197,6 @@ bool VirtualDesktopSwitcher::ActivateTopWindowOnMonitor(HMONITOR hMon) {
         return false;
     }
     for (int retry = 0; retry < 3; ++retry) {
-        AllowSetForegroundWindow(ASFW_ANY);
         ActivateWindow(hwnd);
         if (GetForegroundWindow() == hwnd) {
             Log(L"[DEBUG] ActivateTopWindowOnMonitor: " + GetWindowTitle(hwnd));
