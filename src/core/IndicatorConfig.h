@@ -36,6 +36,7 @@ struct IndicatorConfig {
     ShowMode       showMode       = ShowMode::AlwaysShow;
     int            animMode       = 1;
     bool           autoContrast   = true;
+    bool           autoFocus      = true;
 
     void LoadFromIni();
     void SaveToIni() const;

@@ -33,6 +33,7 @@ void IndicatorConfig::LoadFromIni() {
     showMode       = static_cast<ShowMode>(ReadIniInt(L"Display", L"ShowMode", 0));
     animMode       = ReadIniInt(L"Display", L"AnimMode", 1);
     autoContrast   = ReadIniInt(L"Display", L"AutoContrast", 1) != 0;
+    autoFocus      = ReadIniInt(L"Display", L"AutoFocus", 1) != 0;
 }
 
 void IndicatorConfig::SaveToIni() const {
@@ -49,4 +50,5 @@ void IndicatorConfig::SaveToIni() const {
     WriteIniInt(L"Display", L"ShowMode", static_cast<int>(showMode));
     WriteIniInt(L"Display", L"AnimMode", animMode);
     WriteIniInt(L"Display", L"AutoContrast", autoContrast ? 1 : 0);
+    WriteIniInt(L"Display", L"AutoFocus", autoFocus ? 1 : 0);
 }

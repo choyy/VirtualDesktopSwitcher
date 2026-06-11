@@ -338,6 +338,9 @@ void Application::SetupTrayCallbacks() {
     m_pTrayIcon->SetAutoContrastCallback([this](bool on) {
         if (m_pOverlay) { m_pOverlay->SetAutoContrast(on); }
     });
+    m_pTrayIcon->SetAutoFocusCallback([this](bool on) {
+        m_mouseFocus->SetEnabled(on);
+    });
 }
 
 bool Application::Initialize() {
@@ -385,7 +388,7 @@ bool Application::Initialize() {
     m_mouseFocus->SetActivateFn([this](HMONITOR hMon) {
         VirtualDesktopSwitcher::ActivateTopWindowOnMonitor(hMon);
     });
-    m_mouseFocus->UpdateHook();
+    m_mouseFocus->SetEnabled(m_indicatorCfg.autoFocus);
 
     SetTimer(m_hwnd, kTimerDesktopSync, 1000, nullptr);
     return true;

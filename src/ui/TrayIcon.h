@@ -38,6 +38,7 @@ public:
     void SetShowModeCallback(std::function<void(int)> cb) { m_showModeFn = std::move(cb); }
     void SetAnimModeCallback(std::function<void(bool)> cb) { m_animModeFn = std::move(cb); }
     void SetAutoContrastCallback(std::function<void(bool)> cb) { m_autoContrastFn = std::move(cb); }
+    void SetAutoFocusCallback(std::function<void(bool)> cb) { m_autoFocusFn = std::move(cb); }
 
 private:
     NOTIFYICONDATAW m_nid{};
@@ -55,6 +56,7 @@ private:
     std::function<void(int)>                  m_showModeFn;
     std::function<void(bool)>                 m_animModeFn;
     std::function<void(bool)>                 m_autoContrastFn;
+    std::function<void(bool)>                 m_autoFocusFn;
 
     void BuildMenu();
     void HandleCommand(WPARAM wParam);
@@ -65,6 +67,7 @@ private:
     static void HandleExit();
     void        HandleAnimMode();
     void        HandleAutoContrast();
+    void        HandleAutoFocus();
     void        HandleToggleShow();
     void        HandleToggleAutoStart();
     void        HandleShowModeCommand(int mode);

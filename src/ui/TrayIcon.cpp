@@ -19,6 +19,7 @@ constexpr UINT WM_TRAY_ANIM_MODE        = WM_USER + 9;
 constexpr UINT WM_TRAY_TOGGLE_SHOW      = WM_USER + 10;
 constexpr UINT WM_TRAY_RESET            = WM_USER + 11;
 constexpr UINT WM_TRAY_AUTO_CONTRAST    = WM_USER + 12;
+constexpr UINT WM_TRAY_AUTO_FOCUS       = WM_USER + 13;
 constexpr UINT CMD_SHOW_MODE_BASE       = WM_USER + 300;
 constexpr UINT CMD_SHOW_MODE_CUSTOM     = CMD_SHOW_MODE_BASE + static_cast<UINT>(ShowMode::Count);
 constexpr UINT CMD_POSITION_BASE        = WM_USER + 200;
@@ -128,6 +129,10 @@ void TrayIcon::BuildMenu() {
     AppendMenuW(hLangMenu, MF_STRING | (Lang::Current() == LangType::Chinese ? MF_CHECKED : 0), WM_TRAY_LANG_CHINESE, Lang::Get(L"Menu.LangChinese"));
     AppendMenuW(hLangMenu, MF_STRING | (Lang::Current() == LangType::English ? MF_CHECKED : 0), WM_TRAY_LANG_ENGLISH, Lang::Get(L"Menu.LangEnglish"));
     AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hLangMenu), Lang::Get(L"Menu.Language")); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+
+    bool autoFocusOn = ReadIniInt(L"Display", L"AutoFocus", 1) != 0;
+    AppendMenuW(m_hMenu, MF_STRING | (autoFocusOn ? MF_CHECKED : 0),
+                WM_TRAY_AUTO_FOCUS, Lang::Get(L"Menu.AutoFocus"));
 
     bool runAsAdmin = ReadIniInt(L"General", L"RunAsAdmin", 0) != 0;
     AppendMenuW(m_hMenu, MF_STRING | (runAsAdmin ? MF_CHECKED : MF_UNCHECKED),
@@ -268,6 +273,12 @@ void TrayIcon::HandleAutoContrast() {
     if (m_autoContrastFn) { m_autoContrastFn(nowOn); }
 }
 
+void TrayIcon::HandleAutoFocus() {
+    bool nowOn = ReadIniInt(L"Display", L"AutoFocus", 1) == 0;
+    WriteIniInt(L"Display", L"AutoFocus", nowOn ? 1 : 0);
+    if (m_autoFocusFn) { m_autoFocusFn(nowOn); }
+}
+
 void TrayIcon::HandleToggleShow() {
     int mode    = ReadIniInt(L"Display", L"ShowMode", 0);
     int newMode = (mode == static_cast<int>(ShowMode::AlwaysHide))
@@ -334,6 +345,7 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
         break;
     case WM_TRAY_ANIM_MODE: HandleAnimMode(); break;
     case WM_TRAY_AUTO_CONTRAST: HandleAutoContrast(); break;
+    case WM_TRAY_AUTO_FOCUS: HandleAutoFocus(); break;
     case WM_TRAY_TOGGLE_SHOW: HandleToggleShow(); break;
     default: break;
     }

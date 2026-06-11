@@ -16,7 +16,7 @@ MouseFocus::~MouseFocus() {
 }
 
 void MouseFocus::UpdateHook() {
-    const bool multi = GetSystemMetrics(SM_CMONITORS) > 1;
+    const bool multi = m_enabled && GetSystemMetrics(SM_CMONITORS) > 1;
 
     if (multi && m_hHook == nullptr) {
         m_hHook = SetWindowsHookExW(WH_MOUSE_LL, LowLevelMouseFocusProc,
@@ -31,6 +31,19 @@ void MouseFocus::UpdateHook() {
         m_hHook       = nullptr;
         m_lastMonitor = nullptr;
         Log(L"[INFO] MouseFocus hook uninstalled (single monitor)");
+    }
+}
+
+void MouseFocus::SetEnabled(bool on) {
+    m_enabled = on;
+    if (!m_enabled && m_hHook != nullptr) {
+        UnhookWindowsHookEx(m_hHook);
+        m_hHook       = nullptr;
+        m_lastMonitor = nullptr;
+        Log(L"[INFO] MouseFocus hook uninstalled (disabled)");
+    }
+    if (m_enabled) {
+        UpdateHook();
     }
 }
 
