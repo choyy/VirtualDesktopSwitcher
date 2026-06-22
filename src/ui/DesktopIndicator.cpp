@@ -426,10 +426,14 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
 
 void DesktopIndicator::SetDesktopState(int count, int currentIndex,
                                        const std::array<bool, kMaxDesktops> &emptyDesktops) {
-    m_desktopCount   = count;
-    m_currentDesktop = currentIndex;
-    m_emptyDesktops  = emptyDesktops;
+    bool desktopChanged = (count != m_desktopCount);
+    m_desktopCount      = count;
+    m_currentDesktop    = currentIndex;
+    m_emptyDesktops     = emptyDesktops;
     RebuildText();
+    if (desktopChanged && m_pCfg != nullptr && m_pCfg->positionPreset < PositionPreset::Count) {
+        ApplyPresetPosition(m_pCfg->positionPreset);
+    }
 }
 
 void DesktopIndicator::ShowTemporarily() {
