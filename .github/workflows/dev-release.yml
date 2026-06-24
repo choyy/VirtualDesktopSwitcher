@@ -24,10 +24,9 @@ jobs:
       - name: Rename executable
         shell: pwsh
         run: |
-          $version = (Select-String -Path xmake.lua -Pattern 'set_version\("(.+)"\)').Matches.Groups[1].Value
           $shortSha = $env:GITHUB_SHA.Substring(0, 7)
           $date = Get-Date -Format "yyyyMMdd"
-          Move-Item build\windows\x86\release\VirtualDesktopSwitcher.exe "VirtualDesktopSwitcher-${version}-dev+${date}-${shortSha}.exe"
+          Move-Item build\windows\x86\release\VirtualDesktopSwitcher.exe "VirtualDesktopSwitcher-dev+${date}-${shortSha}.exe"
 
       - name: Upload to Latest Release
         shell: pwsh
@@ -35,4 +34,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = gh release list --limit 1 --json tagName --jq '.[0].tagName'
+          gh release view "$tag" --json assets --jq '.assets[].name' | Select-String "VirtualDesktopSwitcher-dev" | ForEach-Object {
+            gh release delete-asset "$tag" $_ --yes
+          }
           gh release upload "$tag" VirtualDesktopSwitcher-*.exe --clobber
