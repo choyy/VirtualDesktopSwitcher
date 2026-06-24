@@ -34,6 +34,10 @@ void IndicatorConfig::LoadFromIni() {
     animMode       = ReadIniInt(L"Display", L"AnimMode", 1);
     autoContrast   = ReadIniInt(L"Display", L"AutoContrast", 1) != 0;
     autoFocus      = ReadIniInt(L"Display", L"AutoFocus", 1) != 0;
+    int dragVal    = ReadIniInt(L"Display", L"DragSwitchMode", 0);
+    dragSwitchMode = (dragVal >= 0 && dragVal < static_cast<int>(DragSwitchMode::Count))
+                         ? static_cast<DragSwitchMode>(dragVal)
+                         : DragSwitchMode::Always;
 }
 
 void IndicatorConfig::SaveToIni() const {
@@ -51,4 +55,5 @@ void IndicatorConfig::SaveToIni() const {
     WriteIniInt(L"Display", L"AnimMode", animMode);
     WriteIniInt(L"Display", L"AutoContrast", autoContrast ? 1 : 0);
     WriteIniInt(L"Display", L"AutoFocus", autoFocus ? 1 : 0);
+    WriteIniInt(L"Display", L"DragSwitchMode", static_cast<int>(dragSwitchMode));
 }

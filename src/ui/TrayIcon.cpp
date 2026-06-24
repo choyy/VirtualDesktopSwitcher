@@ -24,6 +24,8 @@ constexpr UINT CMD_SHOW_MODE_BASE       = WM_USER + 300;
 constexpr UINT CMD_SHOW_MODE_CUSTOM     = CMD_SHOW_MODE_BASE + static_cast<UINT>(ShowMode::Count);
 constexpr UINT CMD_POSITION_BASE        = WM_USER + 200;
 constexpr UINT CMD_POSITION_CUSTOM      = CMD_POSITION_BASE + static_cast<int>(PositionPreset::Count) + 1;
+constexpr UINT CMD_DRAG_MODE_BASE       = WM_USER + 400;
+constexpr UINT CMD_DRAG_MODE_CUSTOM     = CMD_DRAG_MODE_BASE + static_cast<UINT>(DragSwitchMode::Count);
 
 constexpr std::array kShowModeKeys = {
     L"Menu.AlwaysShow",
@@ -42,6 +44,13 @@ constexpr std::array kPositionKeys = {
     L"Menu.BottomRight",
     L"Menu.EmbedTaskbarRight",
     L"Menu.EmbedTaskbarLeft",
+};
+
+constexpr std::array kDragModeKeys = {
+    L"Menu.DragAlways",
+    L"Menu.DragAlt",
+    L"Menu.DragCtrl",
+    L"Menu.DragNever",
 };
 
 void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
@@ -88,6 +97,14 @@ void TrayIcon::BuildMenu() {
         DestroyMenu(m_hMenu);
     }
     m_hMenu = CreatePopupMenu();
+
+    HMENU hDragMenu = CreatePopupMenu();
+    int   curDrag   = ReadIniInt(L"Display", L"DragSwitchMode", 0);
+    for (int i = 0; i < std::size(kDragModeKeys); ++i) {
+        AppendMenuW(hDragMenu, MF_STRING | (curDrag == i ? MF_CHECKED : 0),
+                    CMD_DRAG_MODE_BASE + i, Lang::Get(kDragModeKeys.at(i)));
+    }
+    AppendMenuW(m_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hDragMenu), Lang::Get(L"Menu.DragSwitchMode")); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     HMENU hShowMenu = CreatePopupMenu();
     int   curShow   = ReadIniInt(L"Display", L"ShowMode", 0);
@@ -273,6 +290,11 @@ void TrayIcon::HandleAutoContrast() {
     if (m_autoContrastFn) { m_autoContrastFn(nowOn); }
 }
 
+void TrayIcon::HandleDragSwitchModeCommand(int mode) {
+    WriteIniInt(L"Display", L"DragSwitchMode", mode);
+    if (m_dragModeFn) { m_dragModeFn(mode); }
+}
+
 void TrayIcon::HandleAutoFocus() {
     bool nowOn = ReadIniInt(L"Display", L"AutoFocus", 1) == 0;
     WriteIniInt(L"Display", L"AutoFocus", nowOn ? 1 : 0);
@@ -311,6 +333,10 @@ void TrayIcon::HandleCommand(WPARAM wParam) {
     }
     if (cmd >= CMD_POSITION_BASE && cmd < CMD_POSITION_CUSTOM) {
         HandlePositionCommand(static_cast<PositionPreset>(cmd - CMD_POSITION_BASE));
+        return;
+    }
+    if (cmd >= CMD_DRAG_MODE_BASE && cmd < CMD_DRAG_MODE_CUSTOM) {
+        HandleDragSwitchModeCommand(static_cast<int>(cmd - CMD_DRAG_MODE_BASE));
         return;
     }
     if (cmd >= CMD_COLOR_OPTIONS_BASE && cmd < CMD_COLOR_OPTIONS_BASE + static_cast<UINT>(kPredefinedColors.size())) {

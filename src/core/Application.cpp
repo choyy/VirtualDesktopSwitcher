@@ -332,6 +332,9 @@ void Application::SetupTrayCallbacks() {
     m_pTrayIcon->SetShowModeCallback([this](int mode) {
         if (m_pOverlay) { m_pOverlay->SetShowMode(static_cast<ShowMode>(mode)); }
     });
+    m_pTrayIcon->SetDragSwitchModeCallback([this](int mode) {
+        m_dragHandler->SetDragSwitchMode(static_cast<DragSwitchMode>(mode));
+    });
     m_pTrayIcon->SetAnimModeCallback([this](bool on) {
         if (m_pOverlay) { m_pOverlay->SetAnimMode(on); }
     });
@@ -372,6 +375,7 @@ bool Application::Initialize() {
         });
         m_dragHandler = std::make_unique<WindowDragHandler>(m_pOverlay.get());
         m_dragHandler->InstallHook(m_hwnd);
+        m_dragHandler->SetDragSwitchMode(m_indicatorCfg.dragSwitchMode);
     }
 
     SetupTrayCallbacks();

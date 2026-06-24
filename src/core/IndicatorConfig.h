@@ -22,6 +22,14 @@ enum class PositionPreset : std::uint8_t { TopLeft           = 0,
                                            Count             = 9,
                                            Custom            = 0xFF };
 
+enum class DragSwitchMode : std::uint8_t {
+    Always = 0,
+    Alt    = 1,
+    Ctrl   = 2,
+    Never  = 3,
+    Count  = 4
+};
+
 struct IndicatorConfig {
     std::wstring   textColor      = L"#FFA745_#FE869F_#EF7AC8_#A083ED_#43AEFF";
     std::wstring   fontName       = L"Segoe UI Symbol";
@@ -37,6 +45,7 @@ struct IndicatorConfig {
     int            animMode       = 1;
     bool           autoContrast   = true;
     bool           autoFocus      = true;
+    DragSwitchMode dragSwitchMode = DragSwitchMode::Always;
 
     void LoadFromIni();
     void SaveToIni() const;
