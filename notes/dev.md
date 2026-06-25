@@ -14,11 +14,10 @@
 
 `VirtualDesktopSwitcher::ActivateTopWindowOnMonitor(HMONITOR hMon)`
 
-- **跨屏**：`MouseFocus` 钩子检测到显示器切换 → `SendInput(MOUSEEVENTF_MOVE)` + `ActivateTopWindowOnMonitor(hMon)`
-- **切桌面**：`OnDesktopSwitch` → `SwitchToDesktop` → `ActivateTopWindowOnMonitor(nullptr)`（内部自动获取光标位置）
-
-`AllowSetForegroundWindow(ASFW_ANY)` 内置在 `ActivateWindow` 中（`src/util/Utils.cpp`），调用方无需关心前台锁。
-
+- `ActivateTopWindowOnMonitor` 内部无条件调用 `SendInput(MOUSEEVENTF_MOVE)` 重置输入来源，绕过 Alt 后前台锁限制
+- **跨屏**：`MouseFocus` 钩子检测显示器切换 → `ActivateTopWindowOnMonitor(hMon)`
+- **切桌面**：`OnDesktopSwitch` → `SwitchToDesktop` → `ActivateTopWindowOnMonitor(nullptr)`（自动获取光标位置）
+- `AllowSetForegroundWindow(ASFW_ANY)` 内置在 `ActivateWindow` 中（`src/util/Utils.cpp`），调用方无需关心前台锁
 
 | 问题 | 方案 |
 |---|---|

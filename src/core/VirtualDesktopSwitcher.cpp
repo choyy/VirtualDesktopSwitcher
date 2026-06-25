@@ -191,6 +191,11 @@ bool VirtualDesktopSwitcher::ActivateTopWindowOnMonitor(HMONITOR hMon) {
             return false;
         }
     }
+
+    INPUT input{.type = INPUT_MOUSE,
+                .mi   = {.dwFlags = MOUSEEVENTF_MOVE}};
+    SendInput(1, &input, sizeof(input));
+
     HWND hwnd = FindTopWindowOnMonitor(hMon);
     if (hwnd == nullptr || hwnd == GetShellWindow()) {
         Log(L"[DEBUG] ActivateTopWindowOnMonitor: no window");
