@@ -2,11 +2,15 @@
 
 #include <array>
 
+#include <gdiplus.h>
+
 #include "core/IndicatorConfig.h"
 #include "util/AutoStart.h"
 #include "util/ConfigIni.h"
 #include "util/Lang.h"
 #include "util/Utils.h"
+
+#pragma comment(lib, "gdiplus.lib")
 
 namespace {
 
@@ -81,6 +85,29 @@ void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
     DeleteObject(hp);
 }
 
+ULONG_PTR g_gdiplusToken = 0;
+
+// EnsureGdiplus 初始化 GDI+（幂等），成功返回 true
+bool EnsureGdiplus() {
+    if (g_gdiplusToken != 0) {
+        return true;
+    }
+    Gdiplus::GdiplusStartupInput input;
+    if (Gdiplus::GdiplusStartup(&g_gdiplusToken, &input, nullptr) != Gdiplus::Ok) {
+        g_gdiplusToken = 0;
+        return false;
+    }
+    return true;
+}
+
+// ShutdownGdiplus 释放 GDI+ 资源
+void ShutdownGdiplus() {
+    if (g_gdiplusToken != 0) {
+        Gdiplus::GdiplusShutdown(g_gdiplusToken);
+        g_gdiplusToken = 0;
+    }
+}
+
 } // namespace
 
 TrayIcon::~TrayIcon() {
@@ -90,6 +117,13 @@ TrayIcon::~TrayIcon() {
     if (m_hMenu != nullptr) {
         DestroyMenu(m_hMenu);
     }
+    for (int i = 0; i <= kTrayNumberMax; ++i) {
+        if (m_hNumberIcons[i] != nullptr) {
+            DestroyIcon(m_hNumberIcons[i]);
+            m_hNumberIcons[i] = nullptr;
+        }
+    }
+    ShutdownGdiplus();
 }
 
 void TrayIcon::BuildMenu() {
@@ -166,7 +200,9 @@ void TrayIcon::BuildMenu() {
 }
 
 bool TrayIcon::Initialize(HWND hwnd, HINSTANCE hInstance) {
-    HICON hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(101));
+    m_hInstance = hInstance;
+
+    HICON hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(kTrayDefaultIconResource));
     if (hIcon == nullptr) {
         hIcon = LoadIcon(nullptr, IDI_APPLICATION);
     }
@@ -177,6 +213,7 @@ bool TrayIcon::Initialize(HWND hwnd, HINSTANCE hInstance) {
     m_nid.uFlags           = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     m_nid.uCallbackMessage = WM_TRAYICON;
     m_nid.hIcon            = hIcon;
+    m_nTrayNumber          = -1;
 
     UpdateTooltip(Lang::Get(L"Tray.DefaultTip"));
 
@@ -426,10 +463,86 @@ bool TrayIcon::Reinitialize() {
     if (m_nid.hWnd != nullptr) {
         Shell_NotifyIconW(NIM_DELETE, &m_nid);
     }
-    return Shell_NotifyIconW(NIM_ADD, &m_nid) != 0;
+    const bool ok = Shell_NotifyIconW(NIM_ADD, &m_nid) != 0;
+    m_nTrayNumber = -1; // 强制下一次同步重新应用桌面编号图标
+    return ok;
 }
 
 void TrayIcon::UpdateTooltip(const std::wstring &tooltip) {
     wcsncpy_s(m_nid.szTip, tooltip.c_str(), _TRUNCATE);
     Shell_NotifyIconW(NIM_MODIFY, &m_nid);
+}
+
+void TrayIcon::UpdateTrayIcon(int displayNumber) {
+    if (displayNumber == m_nTrayNumber) {
+        return;
+    }
+
+    NOTIFYICONDATAW nid = {};
+    nid.cbSize          = sizeof(nid);
+    nid.hWnd            = m_nid.hWnd;
+    nid.uID             = m_nid.uID;
+    nid.uFlags          = NIF_ICON;
+    nid.hIcon           = GetTrayIconForNumber(displayNumber);
+    Shell_NotifyIconW(NIM_MODIFY, &nid);
+    m_nTrayNumber = displayNumber;
+}
+
+HICON TrayIcon::GetTrayIconForNumber(int nDisplay) {
+    if (nDisplay >= 1 && nDisplay <= kTrayNumberMax) {
+        HICON hIcon = GetNumberIcon(nDisplay);
+        if (hIcon != nullptr) {
+            return hIcon;
+        }
+    }
+    return LoadIcon(m_hInstance, MAKEINTRESOURCE(kTrayDefaultIconResource));
+}
+
+HICON TrayIcon::GetNumberIcon(int nNumber) {
+    if (nNumber < 1 || nNumber > kTrayNumberMax) {
+        return nullptr;
+    }
+    if (m_hNumberIcons[nNumber] == nullptr) {
+        m_hNumberIcons[nNumber] = CreateNumberIcon(nNumber);
+    }
+    return m_hNumberIcons[nNumber];
+}
+
+HICON TrayIcon::CreateNumberIcon(int nNumber) {
+    using namespace Gdiplus;
+
+    if (!EnsureGdiplus()) {
+        return nullptr;
+    }
+
+    int nSize = GetSystemMetrics(SM_CXSMICON);
+    if (nSize < 16) {
+        nSize = 16;
+    }
+    if (nSize > 64) {
+        nSize = 64;
+    }
+
+    Bitmap bmp(nSize, nSize, PixelFormat32bppARGB);
+    Graphics graphics(&bmp);
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    graphics.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
+
+    wchar_t szNum[8] = {};
+    swprintf_s(szNum, 8, L"%d", nNumber);
+
+    FontFamily fontFamily(L"Segoe UI");
+    Font        font(&fontFamily, static_cast<REAL>(nSize * 0.85f), FontStyleBold, UnitPixel);
+    SolidBrush  brushText(Color(255, 41, 151, 255));
+    StringFormat format;
+    format.SetAlignment(StringAlignmentCenter);
+    format.SetLineAlignment(StringAlignmentCenter);
+    RectF rectText(0.0f, 0.0f, static_cast<REAL>(nSize), static_cast<REAL>(nSize));
+    graphics.DrawString(szNum, -1, &font, rectText, &format, &brushText);
+
+    HICON hIcon = nullptr;
+    if (bmp.GetHICON(&hIcon) != Ok) {
+        hIcon = nullptr;
+    }
+    return hIcon;
 }

@@ -410,6 +410,8 @@ void Application::SyncDesktopState() {
         if (m_pOverlay) { m_pOverlay->ShowTemporarily(); }
     }
 
+    m_pTrayIcon->UpdateTrayIcon(currentDesktop + 1);
+
     if (m_pOverlay) {
         auto emptyMask = m_switcher->GetDesktopEmptyMask();
         m_pOverlay->SetDesktopState(desktopCount, currentDesktop, emptyMask);

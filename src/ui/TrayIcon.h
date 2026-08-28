@@ -14,6 +14,9 @@ constexpr UINT WM_TRAY_LANG_CHINESE   = WM_USER + 50;
 constexpr UINT WM_TRAY_LANG_ENGLISH   = WM_USER + 51;
 constexpr UINT CMD_COLOR_OPTIONS_BASE = WM_USER + 100;
 
+constexpr int kTrayDefaultIconResource = 101;
+constexpr int kTrayNumberMax           = 9;
+
 class TrayIcon {
 public:
     TrayIcon(const TrayIcon &)            = delete;
@@ -28,6 +31,7 @@ public:
     bool Reinitialize();
     void HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
     void UpdateTooltip(const std::wstring &tooltip);
+    void UpdateTrayIcon(int displayNumber);
 
     void SetActivePositionPreset(PositionPreset preset) { m_activePositionPreset = preset; }
     void SetEditModeCallback(std::function<void()> cb) { m_editModeFn = std::move(cb); }
@@ -43,11 +47,14 @@ public:
 
 private:
     NOTIFYICONDATAW m_nid{};
+    HINSTANCE       m_hInstance            = nullptr;
     HMENU           m_hMenu                = nullptr;
     bool            m_autoStartEnabled     = false;
     PositionPreset  m_activePositionPreset = PositionPreset::TopCenter;
     int             m_menuAveWidth         = 6;
     int             m_dpi                  = 96;
+    int             m_nTrayNumber          = -1;
+    HICON           m_hNumberIcons[kTrayNumberMax + 1] = {};
 
     std::function<void(const std::wstring &)> m_colorFn;
     std::function<void()>                     m_editModeFn;
@@ -63,6 +70,9 @@ private:
     void BuildMenu();
     void HandleCommand(WPARAM wParam);
     void DrawColorSwatch(LPDRAWITEMSTRUCT dis) const;
+    HICON GetNumberIcon(int nNumber);
+    HICON GetTrayIconForNumber(int nDisplay);
+    HICON CreateNumberIcon(int nNumber);
 
     static void HandleRunAsAdmin();
     static void HandleReset();

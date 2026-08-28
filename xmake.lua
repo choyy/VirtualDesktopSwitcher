@@ -20,6 +20,6 @@ target("VirtualDesktopSwitcher")
     add_defines("NOMINMAX")
     add_cxflags("/GR-")
     add_ldflags("/SUBSYSTEM:WINDOWS")
-    add_syslinks("shell32", "user32", "gdi32", "advapi32", "comctl32", "ole32", "dwmapi", "shcore")
+    add_syslinks("shell32", "user32", "gdi32", "advapi32", "comctl32", "ole32", "dwmapi", "shcore", "gdiplus")
 
     add_packages("stb")
