@@ -4,10 +4,12 @@
 
 #include <shellapi.h>
 
+#include <array>
 #include <functional>
 #include <string>
 
 #include "core/IndicatorConfig.h"
+#include "util/Utils.h"
 
 constexpr UINT WM_TRAYICON            = WM_USER + 2;
 constexpr UINT WM_TRAY_LANG_CHINESE   = WM_USER + 50;
@@ -15,7 +17,6 @@ constexpr UINT WM_TRAY_LANG_ENGLISH   = WM_USER + 51;
 constexpr UINT CMD_COLOR_OPTIONS_BASE = WM_USER + 100;
 
 constexpr int kTrayDefaultIconResource = 101;
-constexpr int kTrayNumberMax           = 9;
 
 class TrayIcon {
 public:
@@ -46,15 +47,15 @@ public:
     void SetDragSwitchModeCallback(std::function<void(int)> cb) { m_dragModeFn = std::move(cb); }
 
 private:
-    NOTIFYICONDATAW m_nid{};
-    HINSTANCE       m_hInstance            = nullptr;
-    HMENU           m_hMenu                = nullptr;
-    bool            m_autoStartEnabled     = false;
-    PositionPreset  m_activePositionPreset = PositionPreset::TopCenter;
-    int             m_menuAveWidth         = 6;
-    int             m_dpi                  = 96;
-    int             m_nTrayNumber          = -1;
-    HICON           m_hNumberIcons[kTrayNumberMax + 1] = {};
+    NOTIFYICONDATAW                     m_nid{};
+    HINSTANCE                           m_hInstance            = nullptr;
+    HMENU                               m_hMenu                = nullptr;
+    bool                                m_autoStartEnabled     = false;
+    PositionPreset                      m_activePositionPreset = PositionPreset::TopCenter;
+    int                                 m_menuAveWidth         = 6;
+    int                                 m_dpi                  = 96;
+    int                                 m_nTrayNumber          = -1;
+    std::array<HICON, kMaxDesktops + 1> m_hNumberIcons{};
 
     std::function<void(const std::wstring &)> m_colorFn;
     std::function<void()>                     m_editModeFn;
@@ -67,12 +68,12 @@ private:
     std::function<void(bool)>                 m_autoFocusFn;
     std::function<void(int)>                  m_dragModeFn;
 
-    void BuildMenu();
-    void HandleCommand(WPARAM wParam);
-    void DrawColorSwatch(LPDRAWITEMSTRUCT dis) const;
-    HICON GetNumberIcon(int nNumber);
-    HICON GetTrayIconForNumber(int nDisplay);
-    HICON CreateNumberIcon(int nNumber);
+    void         BuildMenu();
+    void         HandleCommand(WPARAM wParam);
+    void         DrawColorSwatch(LPDRAWITEMSTRUCT dis) const;
+    HICON        GetNumberIcon(int nNumber);
+    HICON        GetTrayIconForNumber(int nDisplay);
+    static HICON CreateNumberIcon(int nNumber);
 
     static void HandleRunAsAdmin();
     static void HandleReset();

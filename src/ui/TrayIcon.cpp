@@ -1,5 +1,6 @@
 #include "TrayIcon.h"
 
+#include <algorithm>
 #include <array>
 
 #include <gdiplus.h>
@@ -9,8 +10,6 @@
 #include "util/ConfigIni.h"
 #include "util/Lang.h"
 #include "util/Utils.h"
-
-#pragma comment(lib, "gdiplus.lib")
 
 namespace {
 
@@ -85,28 +84,30 @@ void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
     DeleteObject(hp);
 }
 
-ULONG_PTR g_gdiplusToken = 0;
+// GdiplusScope RAII：构造时初始化 GDI+，析构时释放
+class GdiplusScope {
+public:
+    GdiplusScope() {
+        Gdiplus::GdiplusStartupInput input;
+        if (Gdiplus::GdiplusStartup(&m_token, &input, nullptr) != Gdiplus::Ok) {
+            m_token = 0;
+        }
+    }
+    ~GdiplusScope() {
+        if (m_token != 0) {
+            Gdiplus::GdiplusShutdown(m_token);
+        }
+    }
+    GdiplusScope(const GdiplusScope &)            = delete;
+    GdiplusScope &operator=(const GdiplusScope &) = delete;
+    GdiplusScope(GdiplusScope &&)                 = delete;
+    GdiplusScope &operator=(GdiplusScope &&)      = delete;
 
-// EnsureGdiplus 初始化 GDI+（幂等），成功返回 true
-bool EnsureGdiplus() {
-    if (g_gdiplusToken != 0) {
-        return true;
-    }
-    Gdiplus::GdiplusStartupInput input;
-    if (Gdiplus::GdiplusStartup(&g_gdiplusToken, &input, nullptr) != Gdiplus::Ok) {
-        g_gdiplusToken = 0;
-        return false;
-    }
-    return true;
-}
+    [[nodiscard]] bool Ok() const { return m_token != 0; }
 
-// ShutdownGdiplus 释放 GDI+ 资源
-void ShutdownGdiplus() {
-    if (g_gdiplusToken != 0) {
-        Gdiplus::GdiplusShutdown(g_gdiplusToken);
-        g_gdiplusToken = 0;
-    }
-}
+private:
+    ULONG_PTR m_token = 0;
+};
 
 } // namespace
 
@@ -117,13 +118,12 @@ TrayIcon::~TrayIcon() {
     if (m_hMenu != nullptr) {
         DestroyMenu(m_hMenu);
     }
-    for (int i = 0; i <= kTrayNumberMax; ++i) {
+    for (int i = 0; i <= kMaxDesktops; ++i) {
         if (m_hNumberIcons[i] != nullptr) {
             DestroyIcon(m_hNumberIcons[i]);
             m_hNumberIcons[i] = nullptr;
         }
     }
-    ShutdownGdiplus();
 }
 
 void TrayIcon::BuildMenu() {
@@ -213,7 +213,6 @@ bool TrayIcon::Initialize(HWND hwnd, HINSTANCE hInstance) {
     m_nid.uFlags           = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     m_nid.uCallbackMessage = WM_TRAYICON;
     m_nid.hIcon            = hIcon;
-    m_nTrayNumber          = -1;
 
     UpdateTooltip(Lang::Get(L"Tray.DefaultTip"));
 
@@ -485,11 +484,12 @@ void TrayIcon::UpdateTrayIcon(int displayNumber) {
     nid.uFlags          = NIF_ICON;
     nid.hIcon           = GetTrayIconForNumber(displayNumber);
     Shell_NotifyIconW(NIM_MODIFY, &nid);
+    m_nid.hIcon   = nid.hIcon;
     m_nTrayNumber = displayNumber;
 }
 
 HICON TrayIcon::GetTrayIconForNumber(int nDisplay) {
-    if (nDisplay >= 1 && nDisplay <= kTrayNumberMax) {
+    if (nDisplay >= 1 && nDisplay <= kMaxDesktops) {
         HICON hIcon = GetNumberIcon(nDisplay);
         if (hIcon != nullptr) {
             return hIcon;
@@ -499,7 +499,7 @@ HICON TrayIcon::GetTrayIconForNumber(int nDisplay) {
 }
 
 HICON TrayIcon::GetNumberIcon(int nNumber) {
-    if (nNumber < 1 || nNumber > kTrayNumberMax) {
+    if (nNumber < 1 || nNumber > kMaxDesktops) {
         return nullptr;
     }
     if (m_hNumberIcons[nNumber] == nullptr) {
@@ -509,39 +509,33 @@ HICON TrayIcon::GetNumberIcon(int nNumber) {
 }
 
 HICON TrayIcon::CreateNumberIcon(int nNumber) {
-    using namespace Gdiplus;
-
-    if (!EnsureGdiplus()) {
+    GdiplusScope gdiplus;
+    if (!gdiplus.Ok()) {
         return nullptr;
     }
 
-    int nSize = GetSystemMetrics(SM_CXSMICON);
-    if (nSize < 16) {
-        nSize = 16;
-    }
-    if (nSize > 64) {
-        nSize = 64;
-    }
+    int nSize = std::clamp(GetSystemMetrics(SM_CXSMICON), 16, 64);
 
-    Bitmap bmp(nSize, nSize, PixelFormat32bppARGB);
-    Graphics graphics(&bmp);
-    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
-    graphics.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
+    Gdiplus::Bitmap   bmp(nSize, nSize, PixelFormat32bppARGB);
+    Gdiplus::Graphics graphics(&bmp);
+    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    graphics.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
 
-    wchar_t szNum[8] = {};
-    swprintf_s(szNum, 8, L"%d", nNumber);
+    std::wstring szNum = std::to_wstring(nNumber);
 
-    FontFamily fontFamily(L"Segoe UI");
-    Font        font(&fontFamily, static_cast<REAL>(nSize * 0.85f), FontStyleBold, UnitPixel);
-    SolidBrush  brushText(Color(255, 41, 151, 255));
-    StringFormat format;
-    format.SetAlignment(StringAlignmentCenter);
-    format.SetLineAlignment(StringAlignmentCenter);
-    RectF rectText(0.0f, 0.0f, static_cast<REAL>(nSize), static_cast<REAL>(nSize));
-    graphics.DrawString(szNum, -1, &font, rectText, &format, &brushText);
+    Gdiplus::FontFamily   fontFamily(L"Segoe UI");
+    constexpr BYTE        kA = 255, kR = 41, kG = 151, kB = 255;
+    Gdiplus::Font         font(&fontFamily, static_cast<Gdiplus::REAL>(nSize) * 0.85f,
+                               Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
+    Gdiplus::SolidBrush   brushText(Gdiplus::Color(kA, kR, kG, kB));
+    Gdiplus::StringFormat format;
+    format.SetAlignment(Gdiplus::StringAlignmentCenter);
+    format.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+    Gdiplus::RectF rectText(0.0f, 0.0f, static_cast<Gdiplus::REAL>(nSize), static_cast<Gdiplus::REAL>(nSize));
+    graphics.DrawString(szNum.c_str(), -1, &font, rectText, &format, &brushText);
 
     HICON hIcon = nullptr;
-    if (bmp.GetHICON(&hIcon) != Ok) {
+    if (bmp.GetHICON(&hIcon) != Gdiplus::Ok) {
         hIcon = nullptr;
     }
     return hIcon;

@@ -88,7 +88,7 @@ LRESULT CALLBACK VirtualDesktopSwitcher::LowLevelKeyboardProc(int nCode, WPARAM 
     bool    match = held != 0 && held == s_modMask;
 
     if (match) {
-        for (int i = 0; i < static_cast<int>(kMaxDesktops); ++i) {
+        for (int i = 0; i < kMaxDesktops; ++i) {
             if (pKeyboard->vkCode == s_desktopKeys.at(i)) {
                 PostMessage(s_active->m_hwnd, WM_SWITCH_DESKTOP, i, 0);
                 return 1;

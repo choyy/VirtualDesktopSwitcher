@@ -43,7 +43,7 @@ public:
     static void SetPrevDesktopKey(uint8_t vk) { s_prevDesktopKey = vk; }
     static void SetPinAllDesktopsKey(uint8_t vk) { s_pinAllDesktopsKey = vk; }
     static void SetDesktopKey(int index, uint8_t vk) {
-        if (index >= 0 && index < static_cast<int>(kMaxDesktops)) { s_desktopKeys.at(index) = vk; }
+        if (index >= 0 && index < kMaxDesktops) { s_desktopKeys.at(index) = vk; }
     }
 
     [[nodiscard]] int                            GetDesktopCount() const;

@@ -436,7 +436,7 @@ std::array<bool, kMaxDesktops> VirtualDesktopHelper::GetDesktopEmptyMask() const
         }
     }
 
-    for (UINT i = 0; i < desktopCount && i < kMaxDesktops; ++i) {
+    for (UINT i = 0; i < desktopCount && i < static_cast<UINT>(kMaxDesktops); ++i) {
         emptyMask.at(i) = (windowCounts.at(i) == 0);
     }
     return emptyMask;

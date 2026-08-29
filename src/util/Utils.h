@@ -7,7 +7,7 @@
 
 // --- Constants ---
 
-constexpr size_t kMaxDesktops = 9;
+constexpr int kMaxDesktops = 9;
 
 constexpr std::array kPredefinedColors = {
     L"#FFFFFF",

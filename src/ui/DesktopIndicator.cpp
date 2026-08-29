@@ -563,7 +563,7 @@ void DesktopIndicator::RebuildText() {
         return;
     }
     std::wstring text;
-    for (int i = 0; i < m_desktopCount && i < static_cast<int>(kMaxDesktops); ++i) {
+    for (int i = 0; i < m_desktopCount && i < kMaxDesktops; ++i) {
         text += (i == m_currentDesktop) ? m_pCfg->currentSymbol
                 : m_emptyDesktops.at(i) ? m_pCfg->emptySymbol
                                         : m_pCfg->otherSymbol;
