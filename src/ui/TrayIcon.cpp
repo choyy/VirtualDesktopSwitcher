@@ -56,19 +56,64 @@ constexpr std::array kDragModeKeys = {
     L"Menu.DragNever",
 };
 
-void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex) {
+} // namespace
+
+// GdiplusGuard RAII：GDI+ 生命周期由 TrayIcon 持有（构造启动、析构关闭）
+class GdiplusGuard {
+public:
+    GdiplusGuard() {
+        Gdiplus::GdiplusStartupInput input;
+        if (Gdiplus::GdiplusStartup(&m_token, &input, nullptr) != Gdiplus::Ok) {
+            m_token = 0;
+        }
+    }
+    ~GdiplusGuard() {
+        if (m_token != 0) {
+            Gdiplus::GdiplusShutdown(m_token);
+        }
+    }
+    GdiplusGuard(const GdiplusGuard &)            = delete;
+    GdiplusGuard &operator=(const GdiplusGuard &) = delete;
+    GdiplusGuard(GdiplusGuard &&)                 = delete;
+    GdiplusGuard &operator=(GdiplusGuard &&)      = delete;
+
+    [[nodiscard]] bool Ok() const { return m_token != 0; }
+
+private:
+    ULONG_PTR m_token = 0;
+};
+
+namespace {
+
+void DrawSwatchRect(HDC hdc, RECT rect, const std::wstring &hex, GdiplusGuard &gdiplus) {
     auto colors = ParseMultiColorString(hex);
 
-    if (colors.count >= 2) {
-        const int sw = rect.right - rect.left;
-        const int sh = rect.bottom - rect.top;
-        for (int sx = 0; sx < sw; ++sx) {
-            COLORREF col = InterpolateGradientColor(colors.colors.data(), colors.count, static_cast<float>(sx) / static_cast<float>(sw));
-            for (int sy = 0; sy < sh; ++sy) {
-                SetPixel(hdc, rect.left + sx, rect.top + sy, col);
-            }
+    if (colors.count >= 2 && gdiplus.Ok()) {
+        std::array<Gdiplus::Color, 5> gdColors{};
+        for (size_t i = 0; i < colors.count; ++i) {
+            gdColors[i] = Gdiplus::Color(255, GetRValue(colors.colors[i]),
+                                         GetGValue(colors.colors[i]), GetBValue(colors.colors[i]));
         }
-    } else if (colors.count == 1) {
+        Gdiplus::LinearGradientBrush brush(
+            Gdiplus::RectF(static_cast<Gdiplus::REAL>(rect.left), static_cast<Gdiplus::REAL>(rect.top),
+                           static_cast<Gdiplus::REAL>(rect.right - rect.left),
+                           static_cast<Gdiplus::REAL>(rect.bottom - rect.top)),
+            gdColors[0], gdColors[colors.count - 1], Gdiplus::LinearGradientModeHorizontal);
+        if (colors.count > 2) {
+            std::array<Gdiplus::REAL, 5> positions{};
+            for (size_t i = 0; i < colors.count; ++i) {
+                positions[i] = static_cast<Gdiplus::REAL>(i) / static_cast<Gdiplus::REAL>(colors.count - 1);
+            }
+            brush.SetInterpolationColors(gdColors.data(), positions.data(), static_cast<INT>(colors.count));
+        }
+        {
+            Gdiplus::Graphics g(hdc);
+            g.FillRectangle(&brush,
+                            static_cast<Gdiplus::REAL>(rect.left), static_cast<Gdiplus::REAL>(rect.top),
+                            static_cast<Gdiplus::REAL>(rect.right - rect.left),
+                            static_cast<Gdiplus::REAL>(rect.bottom - rect.top));
+        }
+    } else if (colors.count >= 1) {
         HBRUSH hb = CreateSolidBrush(colors.colors[0]);
         FillRect(hdc, &rect, hb);
         DeleteObject(hb);
@@ -110,6 +155,8 @@ private:
 };
 
 } // namespace
+
+TrayIcon::TrayIcon() : m_gdiplus(std::make_unique<GdiplusGuard>()) {}
 
 TrayIcon::~TrayIcon() {
     if (m_nid.hWnd != nullptr) {
@@ -446,7 +493,7 @@ void TrayIcon::DrawColorSwatch(LPDRAWITEMSTRUCT dis) const {
     cr.bottom -= MulDiv(1, m_dpi, 96);
     cr.right = dis->rcItem.right - pad;
 
-    DrawSwatchRect(dis->hDC, cr, kPredefinedColors.at(colorIndex));
+    DrawSwatchRect(dis->hDC, cr, kPredefinedColors.at(colorIndex), *m_gdiplus);
 
     // Number label
     const std::wstring numStr = std::to_wstring(colorIndex + 1);

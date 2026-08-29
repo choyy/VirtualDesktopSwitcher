@@ -6,6 +6,7 @@
 
 #include <array>
 #include <functional>
+#include <memory>
 #include <string>
 
 #include "core/IndicatorConfig.h"
@@ -17,6 +18,7 @@ constexpr UINT WM_TRAY_LANG_ENGLISH   = WM_USER + 51;
 constexpr UINT CMD_COLOR_OPTIONS_BASE = WM_USER + 100;
 
 constexpr int kTrayDefaultIconResource = 101;
+class GdiplusGuard;
 
 class TrayIcon {
 public:
@@ -25,7 +27,7 @@ public:
     TrayIcon(TrayIcon &&)                 = delete;
     TrayIcon &operator=(TrayIcon &&)      = delete;
 
-    TrayIcon() = default;
+    TrayIcon();
     ~TrayIcon();
 
     bool Initialize(HWND hwnd, HINSTANCE hInstance);
@@ -48,6 +50,7 @@ public:
 
 private:
     NOTIFYICONDATAW                     m_nid{};
+    std::unique_ptr<GdiplusGuard> m_gdiplus;
     HINSTANCE                           m_hInstance            = nullptr;
     HMENU                               m_hMenu                = nullptr;
     bool                                m_autoStartEnabled     = false;
