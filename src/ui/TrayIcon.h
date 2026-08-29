@@ -12,10 +12,13 @@
 #include "core/IndicatorConfig.h"
 #include "util/Utils.h"
 
-constexpr UINT WM_TRAYICON            = WM_USER + 2;
-constexpr UINT WM_TRAY_LANG_CHINESE   = WM_USER + 50;
-constexpr UINT WM_TRAY_LANG_ENGLISH   = WM_USER + 51;
-constexpr UINT CMD_COLOR_OPTIONS_BASE = WM_USER + 100;
+constexpr UINT WM_TRAYICON                = WM_USER + 2;
+constexpr UINT CMD_TRAY_LANG_CHINESE      = WM_USER + 50;
+constexpr UINT CMD_TRAY_LANG_ENGLISH      = WM_USER + 51;
+constexpr UINT CMD_TRAY_ICON_MODE_ICON    = WM_USER + 60;
+constexpr UINT CMD_TRAY_ICON_MODE_NUMBER  = WM_USER + 61;
+constexpr UINT CMD_COLOR_OPTIONS_BASE     = WM_USER + 100;
+constexpr UINT CMD_TRAY_NUMBER_COLOR_BASE = WM_USER + 500;
 
 constexpr int kTrayDefaultIconResource = 101;
 class GdiplusGuard;
@@ -35,6 +38,8 @@ public:
     void HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
     void UpdateTooltip(const std::wstring &tooltip);
     void UpdateTrayIcon(int displayNumber);
+    void SetTrayIconMode(TrayIconMode mode);
+    void SetNumberColor(const std::wstring &hexColor);
 
     void SetActivePositionPreset(PositionPreset preset) { m_activePositionPreset = preset; }
     void SetEditModeCallback(std::function<void()> cb) { m_editModeFn = std::move(cb); }
@@ -50,14 +55,15 @@ public:
 
 private:
     NOTIFYICONDATAW                     m_nid{};
-    std::unique_ptr<GdiplusGuard> m_gdiplus;
+    std::unique_ptr<GdiplusGuard>       m_gdiplus;
     HINSTANCE                           m_hInstance            = nullptr;
     HMENU                               m_hMenu                = nullptr;
     bool                                m_autoStartEnabled     = false;
     PositionPreset                      m_activePositionPreset = PositionPreset::TopCenter;
-    int                                 m_menuAveWidth         = 6;
     int                                 m_dpi                  = 96;
     int                                 m_nTrayNumber          = -1;
+    TrayIconMode                        m_iconMode             = TrayIconMode::Icon;
+    COLORREF                            m_numberColor          = RGB(41, 151, 255);
     std::array<HICON, kMaxDesktops + 1> m_hNumberIcons{};
 
     std::function<void(const std::wstring &)> m_colorFn;
@@ -73,10 +79,10 @@ private:
 
     void         BuildMenu();
     void         HandleCommand(WPARAM wParam);
-    void         DrawColorSwatch(LPDRAWITEMSTRUCT dis) const;
+    void         DrawColorSwatch(LPDRAWITEMSTRUCT dis, UINT base) const;
     HICON        GetNumberIcon(int nNumber);
     HICON        GetTrayIconForNumber(int nDisplay);
-    static HICON CreateNumberIcon(int nNumber);
+    static HICON CreateNumberIcon(int nNumber, COLORREF color, GdiplusGuard &gdiplus);
 
     static void HandleRunAsAdmin();
     static void HandleReset();
@@ -88,6 +94,7 @@ private:
     void        HandleToggleShow();
     void        HandleToggleAutoStart();
     void        HandleShowModeCommand(int mode);
+    void        HandleNumberColorCommand(int colorIndex);
     void        HandlePositionCommand(PositionPreset preset);
     void        HandleColorCommand(int index);
 };

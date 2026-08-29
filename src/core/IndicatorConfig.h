@@ -30,6 +30,12 @@ enum class DragSwitchMode : std::uint8_t {
     Count  = 4
 };
 
+enum class TrayIconMode : std::uint8_t {
+    Icon   = 0,
+    Number = 1,
+    Count  = 2
+};
+
 struct WindowRatio {
     float x = 0.5f;
     float y = 0.0f;
