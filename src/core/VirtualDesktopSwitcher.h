@@ -39,6 +39,7 @@ public:
     void RefreshCOM();
 
     static bool ActivateTopWindowOnMonitor(HMONITOR hMon);
+    static bool IsModMaskActive();
     static void SetModMask(uint8_t mask) { s_modMask = static_cast<ModMask>(mask); }
     static void SetPrevDesktopKey(uint8_t vk) { s_prevDesktopKey = vk; }
     static void SetPinAllDesktopsKey(uint8_t vk) { s_pinAllDesktopsKey = vk; }

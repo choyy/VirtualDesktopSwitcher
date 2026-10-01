@@ -46,21 +46,23 @@ To build from source, see [Building from Source](#building-from-source) below.
 - **Scroll** the mouse wheel while hovering over the indicator to switch desktops
 - **Drag a window** onto an indicator symbol to move it to that desktop and switch to it automatically
 - Right-click the tray icon to configure:
-   - Adjust indicator **position**, **size**, **style**, **hotkeys**, and **display content** (symbol indicator / desktop name / both)
-   - Set the **drag-to-switch** trigger (always / hold Alt / hold Ctrl / disabled)
-   - Configure **tray icon** mode (default icon / desktop number) and number **color**
-   - Toggle **cross-monitor focus**, auto-start, and run as administrator
+  - Adjust indicator **position**, **size**, **style**, **hotkeys**, and **display content** (symbol indicator / desktop name / both)
+  - Set the **drag-to-switch** trigger (always / hold Alt / hold Ctrl / disabled)
+  - Configure **tray icon** mode (default icon / desktop number) and number **color**
+  - Toggle **cross-monitor focus**, auto-start, and run as administrator
 - Double-click the tray icon to quickly **show/hide the indicator**
+- The tray menu's "Drag Switch Mode" setting controls window-drag switching only
+- hold down ctral and mouse wheel to adjust the indicator symbol size
 
 ## 📝 INI Configuration
 
 Configuration file is saved to `%LOCALAPPDATA%\VirtualDesktopSwitcher\settings.ini`. You can customize the keys for switching and pinning virtual desktops in this file.
 
-| Key | Description | Default Value |
-|---|---|---|
-| `DesktopKey1` ~ `DesktopKey9` | Virtual key codes for desktops 1~9 | `49`\~`57` (keys `1`\~`9`) |
-| `PrevDesktopKey` | Virtual key code for returning to previous desktop | `192` (key `` ` ``) |
-| `PinAllDesktopsKey` | Virtual key code for pinning/unpinning window to all desktops | `68` (key `D`) |
+| Key                               | Description                                                   | Default Value                      |
+| --------------------------------- | ------------------------------------------------------------- | ---------------------------------- |
+| `DesktopKey1` ~ `DesktopKey9` | Virtual key codes for desktops 1~9                            | `49`\~`57` (keys `1`\~`9`) |
+| `PrevDesktopKey`                | Virtual key code for returning to previous desktop            | `192` (key `` ` ``)              |
+| `PinAllDesktopsKey`             | Virtual key code for pinning/unpinning window to all desktops | `68` (key `D`)                 |
 
 For virtual key codes, refer to [Virtual-Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes). For example, numpad 1\~9 correspond to `97`\~`105`.
 

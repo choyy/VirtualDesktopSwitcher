@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/VirtualDesktopSwitcher.h"
 #include "util/DrawingTextSTB.h"
 #include "util/Log.h"
 #include "util/Utils.h"
@@ -409,12 +410,11 @@ bool DesktopIndicator::GetSymbolIndexAt(POINT screenPt, int &outIndex) const {
         GetWindowRect(l.hwnd, &wr);
         if (PtInRect(&wr, screenPt) == 0) { continue; }
 
-        if (static_cast<int>(screenPt.y - wr.top) < l.symbolRowTop) { continue; } // 名字行不参与命中
-
-        auto clientX = static_cast<float>(screenPt.x - wr.left);
+        POINT clientPt = {screenPt.x - wr.left, screenPt.y - wr.top};
         for (int i = 0; i < static_cast<int>(m_text.size()); ++i) {
-            if (l.symbolHalfWidths.at(i) <= 0.0f) { continue; }
-            if (std::fabs(clientX - l.symbolCenters.at(i)) <= l.symbolHalfWidths.at(i) + 3.0f) {
+            const RECT &rc = l.symbolRects.at(i);
+            if (rc.right <= rc.left || rc.bottom <= rc.top) { continue; }
+            if (PtInRect(&rc, clientPt) != 0) {
                 outIndex = i;
                 return true;
             }
@@ -434,7 +434,7 @@ bool DesktopIndicator::IsPtOnOverlay(POINT pt) const {
 
 HWND DesktopIndicator::CreateMonitorWindow(HINSTANCE hInst) {
     HWND hwnd = CreateWindowExW(
-        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
+        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
         L"DesktopIndicatorClass", L"DesktopIndicator",
         WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, hInst, this);
     if (hwnd != nullptr) {
@@ -707,11 +707,9 @@ void DesktopIndicator::SetEditMode(bool edit) {
     if (m_pCfg != nullptr && m_editMode && !m_isTaskbarEmbedded) { m_pCfg->positionPreset = PositionPreset::Custom; }
     for (auto &l : m_layers) {
         auto ex = static_cast<DWORD>(GetWindowLong(l.hwnd, GWL_EXSTYLE));
-        if (m_editMode) {
-            SetWindowLong(l.hwnd, GWL_EXSTYLE, static_cast<LONG>(ex & ~static_cast<DWORD>(WS_EX_TRANSPARENT)));
-        } else {
-            SetWindowLong(l.hwnd, GWL_EXSTYLE, static_cast<LONG>(ex | WS_EX_TRANSPARENT));
-        }
+        // Keep the overlay hit-testable for direct left-click desktop switching.
+        // The transparent style prevents WM_LBUTTONDOWN from reaching this window.
+        SetWindowLong(l.hwnd, GWL_EXSTYLE, static_cast<LONG>(ex & ~static_cast<DWORD>(WS_EX_TRANSPARENT)));
         SetWindowPos(l.hwnd, nullptr, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
     }
@@ -1019,11 +1017,50 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
                        GetRValue(symColor), GetGValue(symColor), GetBValue(symColor));
             std::wstring symColorStr(colorBuf.data());
             std::wstring sym(1, m_text[i]);
-            m_renderer->Render(bits, w, h, curX, symbolTop, metrics.widths.at(i), h - symbolTop - kPadding,
+            float left  = static_cast<float>(curX);
+            float right = left + static_cast<float>(metrics.widths.at(i));
+            int   drawTop = symbolTop;
+            int   drawH   = h - symbolTop - kPadding;
+            m_renderer->Render(bits, w, h, curX, drawTop, metrics.widths.at(i), drawH,
                                sym.c_str(), symColorStr, symFont);
-            layer.symbolCenters.at(i)    = static_cast<float>(curX) + static_cast<float>(metrics.widths.at(i)) * 0.5f;
-            layer.symbolHalfWidths.at(i) = static_cast<float>(metrics.widths.at(i)) * 0.5f;
+
+            // Use the same geometry as the actual rendered symbol, so the click area matches the
+            // visible icon exactly even when font size, spacing, or scaling changes dynamically.
+            layer.symbolLefts.at(i)      = left;
+            layer.symbolRights.at(i)     = right;
+            layer.symbolCenters.at(i)    = (left + right) * 0.5f;
+            layer.symbolHalfWidths.at(i) = (right - left) * 0.5f;
+            layer.symbolRects.at(i) = {
+                static_cast<LONG>(left),
+                static_cast<LONG>(drawTop),
+                static_cast<LONG>(right),
+                static_cast<LONG>(drawTop + drawH),
+            };
             curX += metrics.widths.at(i) + metrics.spacing;
+        }
+
+        // Make the whole symbol box hit-testable. A WS_EX_LAYERED window only
+        // receives mouse input over pixels with non-zero alpha, so hollow glyphs
+        // (e.g. ○/◌) whose interior has alpha=0 would only be clickable on their
+        // outline. Nudge transparent pixels inside each symbol rect to a barely
+        // visible alpha (1/255) so a left-click anywhere on the icon reaches the
+        // window and can switch desktops, without altering the drawn glyph.
+        constexpr DWORD kClickBlendAlpha = 0x01u << 24u; // ARGB: A=1, RGB=0 (premultiplied, imperceptible)
+        for (int i = 0; i < static_cast<int>(m_text.size()); ++i) {
+            const RECT &rc = layer.symbolRects.at(i);
+            LONG       x0  = std::max(rc.left, 0L);
+            LONG       x1  = std::min(rc.right, static_cast<LONG>(w));
+            LONG       y0  = std::max(rc.top, 0L);
+            LONG       y1  = std::min(rc.bottom, static_cast<LONG>(h));
+            for (LONG yy = y0; yy < y1; ++yy) {
+                auto *row = static_cast<DWORD *>(bits) + static_cast<size_t>(yy) * w;
+                for (LONG xx = x0; xx < x1; ++xx) {
+                    DWORD &pix = row[xx];
+                    if (((pix >> 24u) & 0xFFu) == 0u) {
+                        pix |= kClickBlendAlpha;
+                    }
+                }
+            }
         }
     }
 
@@ -1178,7 +1215,9 @@ bool DesktopIndicator::HandleRawInput(HWND /*hwnd*/, LPARAM lp) {
 
     auto delta = static_cast<int16_t>(raw->data.mouse.usButtonData); // NOLINT(cppcoreguidelines-pro-type-union-access)
 
-    if (m_editMode && m_pCfg != nullptr) {
+    // 编辑模式或按住 Ctrl 时，滚轮用于缩放字号（Ctrl+滚轮在普通模式也可缩放）。
+    bool ctrlHeld = (static_cast<UINT>(GetAsyncKeyState(VK_CONTROL)) & 0x8000u) != 0;
+    if ((m_editMode || ctrlHeld) && m_pCfg != nullptr) {
         int oldSize = m_pCfg->fontSize;
         m_pCfg->fontSize += (delta > 0) ? 1 : -1;
         m_pCfg->fontSize = (std::clamp)(m_pCfg->fontSize, 12, 300);
@@ -1218,6 +1257,16 @@ bool DesktopIndicator::HandleDragStart(HWND hwnd, LPARAM lp) {
     return true;
 }
 
+bool DesktopIndicator::IsClickSwitchActive() const {
+    return VirtualDesktopSwitcher::IsModMaskActive();
+}
+
+bool DesktopIndicator::HitTestClickSwitch(POINT screenPt, int &outIndex) const {
+    if (!IsClickSwitchActive() || !m_scrollSwitchFn || m_desktopCount <= 0) { return false; }
+    if (!GetSymbolIndexAt(screenPt, outIndex)) { return false; }
+    return outIndex >= 0 && outIndex < m_desktopCount;
+}
+
 LRESULT CALLBACK DesktopIndicator::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     auto *overlay = GetWndUserData<DesktopIndicator>(hwnd);
     if (overlay != nullptr) {
@@ -1236,13 +1285,38 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         return 0;
     }
 
+    case WM_NCHITTEST: {
+        LRESULT hit = DefWindowProcW(hwnd, msg, wp, lp);
+        // 编辑模式或默认命中结果不是客户区：不干预（编辑模式需可拖动定位）。
+        if (m_editMode || hit != HTCLIENT) { return hit; }
+        // WM_NCHITTEST 的 lParam 携带光标屏幕坐标。
+        POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+        int   idx = -1;
+        // 仅在这次点击会真实切换桌面时拦截；否则返回 HTTRANSPARENT，
+        // 让该点击穿透到下层窗口（例如需要组合键切换时，单纯点击直接穿透）。
+        if (!HitTestClickSwitch(pt, idx)) { return HTTRANSPARENT; }
+        return hit;
+    }
+
     case WM_INPUT:
         if (HandleRawInput(hwnd, lp)) { return 0; }
         break;
 
-    case WM_LBUTTONDOWN:
-        if (HandleDragStart(hwnd, lp)) { return 0; }
+    case WM_LBUTTONDOWN: {
+        if (m_editMode) {
+            if (HandleDragStart(hwnd, lp)) { return 0; }
+            return DefWindowProcW(hwnd, msg, wp, lp);
+        }
+
+        POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+        ClientToScreen(hwnd, &pt);
+        int idx = -1;
+        if (HitTestClickSwitch(pt, idx)) {
+            m_scrollSwitchFn(idx);
+            return 0;
+        }
         return DefWindowProcW(hwnd, msg, wp, lp);
+    }
 
     case WM_MOUSEMOVE:
         if (m_dragging && ((wp & MK_LBUTTON) != 0u)) {

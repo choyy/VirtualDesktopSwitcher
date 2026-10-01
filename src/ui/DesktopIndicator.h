@@ -51,6 +51,10 @@ struct MonitorLayer {
     std::array<float, 9> symbolScales{};                   // per-symbol dock scale (lerped)
     std::array<float, 9> symbolCenters{};                  // client X center after render
     std::array<float, 9> symbolHalfWidths{};               // half-width after render
+    std::array<float, 9> symbolLefts{};                    // client X left bound after render
+    std::array<float, 9> symbolRights{};                   // client X right bound after render
+    std::array<RECT, 9>  symbolRects{};                     // exact clickable client rect for each rendered symbol
+    std::array<std::vector<uint8_t>, 9> symbolMasks{};      // filled hit mask for each symbol, independent of the rendered glyph outline
     bool                 hasTaskbar  = false;              // embed mode: has taskbar on this monitor
     HWND                 taskbarHwnd = nullptr;            // embed mode: Shell_TrayWnd handle
     TaskbarSide          taskbarSide = TaskbarSide::Right; // embed mode: left or right side
@@ -140,6 +144,9 @@ private:
     void               RegisterMouseWheelInput();
     bool               HandleRawInput(HWND hwnd, LPARAM lp);
     bool               HandleDragStart(HWND hwnd, LPARAM lp);
+    [[nodiscard]] bool IsClickSwitchActive() const;
+    // 命中测试：若该屏幕点落在可切换的符号上且切换功能当前生效，则返回 true 并给出目标桌面索引。
+    [[nodiscard]] bool HitTestClickSwitch(POINT screenPt, int &outIndex) const;
     SIZE               MeasureContent(int dpi) const;
     SIZE               MeasureName(int dpi) const;
     FontRenderer      &NameRenderer() const;
