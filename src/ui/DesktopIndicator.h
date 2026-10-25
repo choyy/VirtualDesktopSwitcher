@@ -130,6 +130,8 @@ private:
     void               SampleBackground();
     void               UpdateRenderTimer();
     [[nodiscard]] bool NeedsSettleRender() const;
+    [[nodiscard]] bool WantTopmost() const;
+    void               UpdateTopmost();
     void               StartBgSampleTimer();
     void               StopBgSampleTimer();
     void               RebuildText();

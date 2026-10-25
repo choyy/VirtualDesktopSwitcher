@@ -31,6 +31,11 @@ constexpr int   kMinHeight     = 20;
 constexpr int   kRowGap        = 2;
 constexpr float kNameFontScale = 0.75f;
 
+// 仅“切换后显示 1s/3s”属于定时模式（不依赖枚举数值顺序判断）
+bool IsTimedMode(ShowMode mode) {
+    return mode == ShowMode::Show1s || mode == ShowMode::Show3s;
+}
+
 struct EnumCtx {
     std::vector<MonitorLayer> *vec;
     DesktopIndicator          *self;
@@ -452,16 +457,31 @@ bool DesktopIndicator::IsPtOnOverlay(POINT pt) const {
     return false;
 }
 
+bool DesktopIndicator::WantTopmost() const {
+    if (m_dragOverlayActive) { return true; } // 拖拽切换覆盖层需置顶以便看清放置目标
+    return m_pCfg == nullptr || m_pCfg->showMode != ShowMode::AlwaysShowNonTopmost;
+}
+
+void DesktopIndicator::UpdateTopmost() {
+    if (m_pCfg == nullptr) { return; }
+    HWND z = WantTopmost() ? HWND_TOPMOST : HWND_NOTOPMOST;
+    for (auto &l : m_layers) {
+        if (l.hasTaskbar) { continue; } // 嵌入任务栏的层不使用置顶
+        SetWindowPos(l.hwnd, z, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+}
+
 HWND DesktopIndicator::CreateMonitorWindow(HINSTANCE hInst) {
     DWORD exStyle = WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
     if (!m_editMode && !m_leftCtrlHeld && !m_rightCtrlHeld) { exStyle |= WS_EX_TRANSPARENT; }
     HWND hwnd = CreateWindowExW(
-        exStyle,
+        WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
         L"DesktopIndicatorClass", L"DesktopIndicator",
         WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, hInst, this);
     if (hwnd != nullptr) {
         SetWndUserData(hwnd, this);
-        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        SetWindowPos(hwnd, WantTopmost() ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
     return hwnd;
 }
@@ -536,7 +556,7 @@ void DesktopIndicator::SetDesktopState(int count, int currentIndex,
 }
 
 void DesktopIndicator::ShowTemporarily() {
-    if (m_pCfg == nullptr || m_pCfg->showMode < ShowMode::Show1s || m_layers.empty()) { return; }
+    if (m_pCfg == nullptr || !IsTimedMode(m_pCfg->showMode) || m_layers.empty()) { return; }
     for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
     KillTimer(m_layers[0].hwnd, kAutoHideTimerId);
     int ms = (m_pCfg->showMode == ShowMode::Show1s) ? kAutoHideShow1sMs : kAutoHideShow3sMs;
@@ -552,9 +572,10 @@ void DesktopIndicator::ApplyShowMode(ShowMode mode) {
         UpdateRenderTimer();
     } else {
         for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
-        if (mode >= ShowMode::Show1s) { ShowTemporarily(); }
+        if (IsTimedMode(mode)) { ShowTemporarily(); }
         StartBgSampleTimer();
     }
+    UpdateTopmost();
 }
 
 void DesktopIndicator::SetShowMode(ShowMode mode) {
@@ -597,7 +618,7 @@ void CALLBACK DesktopIndicator::RenderTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR /
     auto *overlay = GetWndUserData<DesktopIndicator>(hwnd);
     if (overlay == nullptr || overlay->m_pCfg == nullptr) { return; }
     if (overlay->m_pCfg->showMode == ShowMode::AlwaysHide && !overlay->m_dragOverlayActive) { return; }
-    if (overlay->m_pCfg->showMode >= ShowMode::Show1s && IsWindowVisible(hwnd) == 0) { return; }
+    if (IsTimedMode(overlay->m_pCfg->showMode) && IsWindowVisible(hwnd) == 0) { return; }
     overlay->Render();
 }
 
@@ -605,7 +626,7 @@ void CALLBACK DesktopIndicator::BgSampleTimer(HWND hwnd, UINT /*uMsg*/, UINT_PTR
     auto *overlay = GetWndUserData<DesktopIndicator>(hwnd);
     if (overlay == nullptr || overlay->m_pCfg == nullptr || !overlay->m_pCfg->autoContrast) { return; }
     if (overlay->m_pCfg->showMode == ShowMode::AlwaysHide) { return; }
-    if (overlay->m_pCfg->showMode >= ShowMode::Show1s && IsWindowVisible(hwnd) == 0) { return; }
+    if (IsTimedMode(overlay->m_pCfg->showMode) && IsWindowVisible(hwnd) == 0) { return; }
     overlay->SampleBackground();
 }
 
@@ -1188,7 +1209,7 @@ void DesktopIndicator::Rebuild() {
         }
         if (wasVisible) {
             for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
-            if (m_pCfg->showMode >= ShowMode::Show1s) { ShowTemporarily(); }
+            if (IsTimedMode(m_pCfg->showMode)) { ShowTemporarily(); }
         }
         Render();
     }

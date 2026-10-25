@@ -35,6 +35,7 @@ constexpr std::array kShowModeKeys = {
     L"Menu.AlwaysHide",
     L"Menu.Show1s",
     L"Menu.Show3s",
+    L"Menu.AlwaysShowNonTopmost",
 };
 
 constexpr std::array kPositionKeys = {
@@ -418,15 +419,31 @@ void TrayIcon::HandleDisplayModeCommand(int mode) {
 }
 
 void TrayIcon::HandleToggleShow() {
-    int mode    = ReadIniInt(L"Display", L"ShowMode", 0);
-    int newMode = (mode == static_cast<int>(ShowMode::AlwaysHide))
-                      ? static_cast<int>(ShowMode::AlwaysShow)
-                      : static_cast<int>(ShowMode::AlwaysHide);
+    int mode    = ReadIniInt(L"Display", L"ShowMode", static_cast<int>(ShowMode::AlwaysShow));
+    int newMode = 0;
+    if (mode == static_cast<int>(ShowMode::AlwaysHide)) {
+        // 恢复上次的“总是显示”置顶偏好
+        int last = ReadIniInt(L"Display", L"LastAlwaysShowMode", static_cast<int>(ShowMode::AlwaysShow));
+        newMode  = (last == static_cast<int>(ShowMode::AlwaysShowNonTopmost))
+                       ? static_cast<int>(ShowMode::AlwaysShowNonTopmost)
+                       : static_cast<int>(ShowMode::AlwaysShow);
+    } else {
+        // 隐藏前记住当前是否为“不置顶”
+        if (mode == static_cast<int>(ShowMode::AlwaysShowNonTopmost)) {
+            WriteIniInt(L"Display", L"LastAlwaysShowMode", static_cast<int>(ShowMode::AlwaysShowNonTopmost));
+        } else if (mode == static_cast<int>(ShowMode::AlwaysShow)) {
+            WriteIniInt(L"Display", L"LastAlwaysShowMode", static_cast<int>(ShowMode::AlwaysShow));
+        }
+        newMode = static_cast<int>(ShowMode::AlwaysHide);
+    }
     WriteIniInt(L"Display", L"ShowMode", newMode);
     if (m_showModeFn) { m_showModeFn(newMode); }
 }
 
 void TrayIcon::HandleShowModeCommand(int mode) {
+    if (mode == static_cast<int>(ShowMode::AlwaysShow) || mode == static_cast<int>(ShowMode::AlwaysShowNonTopmost)) {
+        WriteIniInt(L"Display", L"LastAlwaysShowMode", mode);
+    }
     WriteIniInt(L"Display", L"ShowMode", mode);
     if (m_showModeFn) { m_showModeFn(mode); }
 }
