@@ -312,32 +312,63 @@ HWND FindTaskbarForMonitor(const RECT &monitorRect) {
     return nullptr;
 }
 
+// 任务栏是否为左右放置（竖向）：高 > 宽
+bool IsVerticalTaskbar(HWND hTaskbar) {
+    if (hTaskbar == nullptr) { return false; }
+    RECT tr;
+    GetWindowRect(hTaskbar, &tr);
+    return (tr.bottom - tr.top) > (tr.right - tr.left);
+}
+
 void PositionInTaskbar(MonitorLayer &layer, HWND hTaskbar, int w, int h, TaskbarSide side) {
     if (hTaskbar == nullptr) { return; }
     RECT clientRect;
     GetClientRect(hTaskbar, &clientRect);
+    int cw   = clientRect.right - clientRect.left;
+    int ch   = clientRect.bottom - clientRect.top;
     int posX = 0, posY = 0;
-    if (side == TaskbarSide::Left) {
-        posX = kPadding;
-    } else {
-        HWND hTrayNotify = FindWindowExW(hTaskbar, nullptr, L"TrayNotifyWnd", nullptr);
-        if (hTrayNotify != nullptr) {
-            RECT trayRect;
-            GetWindowRect(hTrayNotify, &trayRect);
-            POINT pt = {trayRect.left, 0};
-            ScreenToClient(hTaskbar, &pt);
-            posX = std::max(static_cast<int>(pt.x - w), 0);
+    if (layer.taskbarVertical) {
+        // 垂直任务栏：水平居中；右→底部（近托盘），左→顶部
+        posX = std::max((cw - w) / 2, 0);
+        if (side == TaskbarSide::Right) {
+            HWND hTrayNotify = FindWindowExW(hTaskbar, nullptr, L"TrayNotifyWnd", nullptr);
+            if (hTrayNotify != nullptr) {
+                RECT trayRect;
+                GetWindowRect(hTrayNotify, &trayRect);
+                POINT pt = {0, trayRect.top};
+                ScreenToClient(hTaskbar, &pt);
+                posY = std::max(static_cast<int>(pt.y - h), 0);
+            } else {
+                posY = std::max(ch - h, 0);
+            }
         } else {
-            posX = std::max(static_cast<int>(clientRect.right - w), 0);
+            posY = kPadding;
         }
+    } else {
+        // 水平任务栏
+        if (side == TaskbarSide::Left) {
+            posX = kPadding;
+        } else {
+            HWND hTrayNotify = FindWindowExW(hTaskbar, nullptr, L"TrayNotifyWnd", nullptr);
+            if (hTrayNotify != nullptr) {
+                RECT trayRect;
+                GetWindowRect(hTrayNotify, &trayRect);
+                POINT pt = {trayRect.left, 0};
+                ScreenToClient(hTaskbar, &pt);
+                posX = std::max(static_cast<int>(pt.x - w), 0);
+            } else {
+                posX = std::max(cw - w, 0);
+            }
+        }
+        posY = std::max(0, (ch - h) / 2);
     }
-    posY = std::max(0, static_cast<int>((clientRect.bottom - h) / 2));
     SetWindowPos(layer.hwnd, HWND_TOP, posX, posY, w, h, SWP_NOACTIVATE);
 }
 
 void SyncSinglePosition(MonitorLayer &layer) {
     HWND hParent = layer.taskbarHwnd;
     if (hParent == nullptr) { return; }
+    layer.taskbarVertical = IsVerticalTaskbar(hParent);
     RECT wr;
     GetWindowRect(layer.hwnd, &wr);
     int w = wr.right - wr.left;
@@ -354,9 +385,10 @@ void ApplyEmbedLayer(MonitorLayer &layer, int w, int h, TaskbarSide side) {
         Log(L"[INFO] Embed layer skipped: no taskbar on this monitor");
         return;
     }
-    layer.hasTaskbar  = true;
-    layer.taskbarHwnd = hTaskbar;
-    layer.taskbarSide = side;
+    layer.hasTaskbar      = true;
+    layer.taskbarHwnd     = hTaskbar;
+    layer.taskbarSide     = side;
+    layer.taskbarVertical = IsVerticalTaskbar(hTaskbar);
 
     SetParent(layer.hwnd, hTaskbar);
     auto ex = static_cast<DWORD>(GetWindowLong(layer.hwnd, GWL_EXSTYLE));
@@ -414,7 +446,7 @@ bool DesktopIndicator::GetSymbolIndexAt(POINT screenPt, int &outIndex) const {
         GetWindowRect(l.hwnd, &wr);
         if (PtInRect(&wr, screenPt) == 0) { continue; }
 
-        if (static_cast<int>(screenPt.y - wr.top) < l.symbolRowTop) { continue; } // 名字行不参与命中
+        if (static_cast<int>(screenPt.y - wr.top) < l.symbolRowTop) { continue; } // 名字区不参与命中
 
         auto clientX = static_cast<float>(screenPt.x - wr.left);
         for (int i = 0; i < static_cast<int>(m_text.size()); ++i) {
@@ -499,7 +531,7 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
         SetPositionPreset(m_pCfg->positionPreset);
     } else {
         for (auto &l : m_layers) {
-            SIZE sz     = MeasureContent(l.dpi);
+            SIZE sz     = MeasureContent(l);
             int  w      = sz.cx;
             int  h      = sz.cy;
             l.anchorPos = {RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),
@@ -620,7 +652,8 @@ void DesktopIndicator::RebuildText() {
     if (m_isTaskbarEmbedded && m_renderer != nullptr) {
         for (auto &l : m_layers) {
             if (!l.hasTaskbar || l.taskbarHwnd == nullptr) { continue; }
-            SIZE sz = MeasureContent(l.dpi);
+            l.taskbarVertical = IsVerticalTaskbar(l.taskbarHwnd);
+            SIZE sz           = MeasureContent(l);
             PositionInTaskbar(l, l.taskbarHwnd, sz.cx, sz.cy, l.taskbarSide);
         }
     }
@@ -628,19 +661,33 @@ void DesktopIndicator::RebuildText() {
     Render();
 }
 
-SIZE DesktopIndicator::MeasureContent(int dpi) const {
-    SIZE sym{0, 0};
+SIZE DesktopIndicator::MeasureContent(const MonitorLayer &layer) const {
+    const int dpi = layer.dpi;
+
+    int symW = 0, symH = 0;
     if (m_pCfg->displayMode != IndicatorDisplayMode::Name) {
-        auto spacedText = BuildSpacedText(m_text, m_pCfg->charSpacing);
-        int  fs         = MulDiv(m_pCfg->fontSize, dpi, 96);
-        auto s          = m_renderer->Measure(spacedText.c_str(), fs);
-        sym             = {static_cast<int>(s.cx), static_cast<int>(s.cy)};
+        int fs      = MulDiv(m_pCfg->fontSize, dpi, 96);
+        int spacing = m_pCfg->charSpacing * m_renderer->Measure(L" ", fs).cx;
+        int totalW = 0, maxH = 0;
+        int n = static_cast<int>(m_text.size());
+        for (int i = 0; i < n; ++i) {
+            auto s = m_renderer->Measure(std::wstring(1, m_text[i]).c_str(), fs);
+            totalW += s.cx;
+            maxH = std::max(static_cast<int>(s.cy), maxH);
+        }
+        if (n > 1) { totalW += spacing * (n - 1); }
+        symW = totalW;
+        symH = maxH;
     }
+
     auto name = MeasureName(dpi);
-    int  w    = std::max(static_cast<int>(sym.cx), static_cast<int>(name.cx));
-    int  h    = static_cast<int>(sym.cy) + static_cast<int>(name.cy) + ((sym.cy > 0 && name.cy > 0) ? kRowGap : 0);
-    return {std::max(w + kPadding * 2, kMinWidth),
-            std::max(h + kPadding * 2, kMinHeight)};
+    int  w    = std::max(symW, static_cast<int>(name.cx));
+    int  h    = symH + static_cast<int>(name.cy) + ((symH > 0 && name.cy > 0) ? kRowGap : 0);
+    int  outW = std::max(w + kPadding * 2, kMinWidth);
+    int  outH = std::max(h + kPadding * 2, kMinHeight);
+
+    // 竖排：整体旋转 90°，宽高互换
+    return layer.taskbarVertical ? SIZE{outH, outW} : SIZE{outW, outH};
 }
 
 SIZE DesktopIndicator::MeasureName(int dpi) const {
@@ -776,20 +823,20 @@ void DesktopIndicator::ApplyPresetPosition(PositionPreset preset) {
     bool isEmbed = (preset == PositionPreset::EmbedTaskbarRight || preset == PositionPreset::EmbedTaskbarLeft);
 
     for (auto &l : m_layers) {
-        SIZE sz = MeasureContent(l.dpi);
-        int  w  = sz.cx;
-        int  h  = sz.cy;
-
         if (isEmbed) {
-            TaskbarSide side = (preset == PositionPreset::EmbedTaskbarRight) ? TaskbarSide::Right : TaskbarSide::Left;
-            ApplyEmbedLayer(l, w, h, side);
+            HWND        hTaskbar = FindTaskbarForMonitor(l.monitor);
+            TaskbarSide side     = (preset == PositionPreset::EmbedTaskbarRight) ? TaskbarSide::Right : TaskbarSide::Left;
+            l.taskbarVertical    = IsVerticalTaskbar(hTaskbar);
+            SIZE sz              = MeasureContent(l);
+            ApplyEmbedLayer(l, sz.cx, sz.cy, side);
         } else {
+            SIZE sz      = MeasureContent(l);
             l.hasTaskbar = false;
-            POINT pos    = CalcPresetPos(static_cast<int>(preset), l.monitor, l.work, w, h);
+            POINT pos    = CalcPresetPos(static_cast<int>(preset), l.monitor, l.work, sz.cx, sz.cy);
             l.anchorPos  = pos;
             if (&l == m_layers.data()) {
-                m_pCfg->windowRatio.x = XToRatio(l.monitor, pos.x, AnchorX::Left, w);
-                m_pCfg->windowRatio.y = YToRatio(l.work, pos.y, AnchorY::Top, h);
+                m_pCfg->windowRatio.x = XToRatio(l.monitor, pos.x, AnchorX::Left, sz.cx);
+                m_pCfg->windowRatio.y = YToRatio(l.work, pos.y, AnchorY::Top, sz.cy);
             }
             SetWindowPos(l.hwnd, nullptr, pos.x, pos.y, 0, 0,
                          SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
@@ -855,7 +902,7 @@ void DesktopIndicator::MoveByDelta(int dx, int dy) {
         GetWindowRect(l.hwnd, &r);
         l.anchorPos = {r.left + dx, r.top + dy};
         if (&l == m_layers.data()) {
-            SIZE sz               = MeasureContent(l.dpi);
+            SIZE sz               = MeasureContent(l);
             int  w                = sz.cx;
             int  h                = sz.cy;
             m_anchorX             = DetectAnchorX(l.monitor, l.anchorPos.x, w);
@@ -984,69 +1031,104 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
                                     const SymbolMetrics &metrics,
                                     int centerW, const ColorArray &colors,
                                     HDC hdcScreen, HDC hdcMem) {
-    int w = metrics.dibSize.cx;
-    int h = metrics.dibSize.cy;
+    const bool vertical = layer.taskbarVertical;
+    const int  w0       = metrics.dibSize.cx; // 横向内容尺寸
+    const int  h0       = metrics.dibSize.cy;
+    const int  w        = vertical ? h0 : w0; // 最终 DIB（竖排时把横向内容整体旋转 90°）
+    const int  h        = vertical ? w0 : h0;
 
-    BITMAPINFO bmi              = {};
-    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth       = w;
-    bmi.bmiHeader.biHeight      = -h;
-    bmi.bmiHeader.biPlanes      = 1;
-    bmi.bmiHeader.biBitCount    = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
+    auto makeDib = [](int dw, int dh, void **outBits) -> HBITMAP {
+        BITMAPINFO bmi{};
+        bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth       = dw;
+        bmi.bmiHeader.biHeight      = -dh;
+        bmi.bmiHeader.biPlanes      = 1;
+        bmi.bmiHeader.biBitCount    = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+        return CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, outBits, nullptr, 0);
+    };
 
-    void   *bits = nullptr;
-    HBITMAP hDib = CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
-    if (hDib == nullptr || bits == nullptr) {
-        if (hDib != nullptr) { DeleteObject(hDib); }
-        return;
-    }
+    // 横向布局绘制：名字在上、符号一行；同时记录符号中心（旋转后即为纵向坐标）
+    auto drawHorizontal = [&](void *bits, int bw, int bh) {
+        std::fill_n(static_cast<DWORD *>(bits), static_cast<size_t>(bw) * bh, m_editMode ? 0x55000000u : 0u);
 
-    auto *hOldBmp = SelectObject(hdcMem, hDib);
-    DWORD clear   = m_editMode ? 0x55000000 : 0x00000000;
-    std::fill_n(static_cast<DWORD *>(bits), w * h, clear);
-
-    int symbolTop = kPadding;
-    int symStartX = kPadding;
-    if (metrics.nameHeight > 0) {
-        symbolTop    = kPadding + metrics.nameHeight + kRowGap;
-        int contentW = w - kPadding * 2;
-        symStartX    = kPadding + std::max((contentW - metrics.symbolWidth) / 2, 0);
-
-        COLORREF               nameColor = (colors.count >= 2)
-                                               ? InterpolateGradientColor(colors.colors.data(), colors.count,
-                                                                          static_cast<float>(m_currentDesktop) / static_cast<float>(std::max(static_cast<int>(m_text.size()) - 1, 1)))
-                                               : colors.colors[0];
-        std::array<wchar_t, 8> colorBuf{};
-        swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X", // NOLINT
-                   GetRValue(nameColor), GetGValue(nameColor), GetBValue(nameColor));
-        std::wstring nameColorStr(colorBuf.data());
-        int          nameX    = (w - metrics.nameWidth) / 2;
-        int          nameFont = static_cast<int>(static_cast<float>(metrics.fontSize) * kNameFontScale);
-        NameRenderer().Render(bits, w, h, nameX, kPadding, metrics.nameWidth, metrics.nameHeight,
-                              m_currentName.c_str(), nameColorStr, nameFont);
-    }
-
-    if (m_pCfg->displayMode != IndicatorDisplayMode::Name) {
-        int curX = symStartX;
-        for (int i = 0; i < static_cast<int>(m_text.size()); ++i) {
-            int                    symFont  = static_cast<int>(static_cast<float>(metrics.fontSize) * layer.symbolScales.at(i));
-            COLORREF               symColor = (colors.count >= 2)
-                                                  ? InterpolateGradientColor(colors.colors.data(), colors.count,
-                                                                             static_cast<float>(i) / static_cast<float>(std::max(static_cast<int>(m_text.size()) - 1, 1)))
-                                                  : colors.colors[0];
+        int symbolTop = kPadding;
+        int symStartX = kPadding;
+        if (metrics.nameHeight > 0) {
+            COLORREF               nameColor = (colors.count >= 2)
+                                                   ? InterpolateGradientColor(colors.colors.data(), colors.count,
+                                                                              static_cast<float>(m_currentDesktop) / static_cast<float>(std::max(static_cast<int>(m_text.size()) - 1, 1)))
+                                                   : colors.colors[0];
             std::array<wchar_t, 8> colorBuf{};
             swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X", // NOLINT
-                       GetRValue(symColor), GetGValue(symColor), GetBValue(symColor));
-            std::wstring symColorStr(colorBuf.data());
-            std::wstring sym(1, m_text[i]);
-            m_renderer->Render(bits, w, h, curX, symbolTop, metrics.widths.at(i), h - symbolTop - kPadding,
-                               sym.c_str(), symColorStr, symFont);
-            layer.symbolCenters.at(i)    = static_cast<float>(curX) + static_cast<float>(metrics.widths.at(i)) * 0.5f;
-            layer.symbolHalfWidths.at(i) = static_cast<float>(metrics.widths.at(i)) * 0.5f;
-            curX += metrics.widths.at(i) + metrics.spacing;
+                       GetRValue(nameColor), GetGValue(nameColor), GetBValue(nameColor));
+            std::wstring nameColorStr(colorBuf.data());
+            int          nameFont = static_cast<int>(static_cast<float>(metrics.fontSize) * kNameFontScale);
+            int          nameX    = (bw - metrics.nameWidth) / 2;
+            NameRenderer().Render(bits, bw, bh, nameX, kPadding, metrics.nameWidth, metrics.nameHeight,
+                                  m_currentName.c_str(), nameColorStr, nameFont);
+            symbolTop    = kPadding + metrics.nameHeight + kRowGap;
+            int contentW = bw - kPadding * 2;
+            symStartX    = kPadding + std::max((contentW - metrics.symbolWidth) / 2, 0);
+        }
+
+        if (m_pCfg->displayMode != IndicatorDisplayMode::Name) {
+            int  symCount   = static_cast<int>(m_text.size());
+            auto symColorAt = [&](int i) -> COLORREF {
+                return (colors.count >= 2)
+                           ? InterpolateGradientColor(colors.colors.data(), colors.count,
+                                                      static_cast<float>(i) / static_cast<float>(std::max(symCount - 1, 1)))
+                           : colors.colors[0];
+            };
+            int curX = symStartX;
+            for (int i = 0; i < symCount; ++i) {
+                int                    symFont = static_cast<int>(static_cast<float>(metrics.fontSize) * layer.symbolScales.at(i));
+                std::array<wchar_t, 8> colorBuf{};
+                swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X", // NOLINT
+                           GetRValue(symColorAt(i)), GetGValue(symColorAt(i)), GetBValue(symColorAt(i)));
+                std::wstring symColorStr(colorBuf.data());
+                std::wstring sym(1, m_text[i]);
+                m_renderer->Render(bits, bw, bh, curX, symbolTop, metrics.widths.at(i), bh - symbolTop - kPadding,
+                                   sym.c_str(), symColorStr, symFont);
+                layer.symbolCenters.at(i)    = static_cast<float>(curX) + static_cast<float>(metrics.widths.at(i)) * 0.5f;
+                layer.symbolHalfWidths.at(i) = static_cast<float>(metrics.widths.at(i)) * 0.5f;
+                curX += metrics.widths.at(i) + metrics.spacing;
+            }
+        }
+    };
+
+    void   *finalBits = nullptr;
+    HBITMAP hFinal    = nullptr;
+    HBITMAP hTemp     = nullptr;
+
+    if (!vertical) {
+        hFinal = makeDib(w, h, &finalBits);
+        if (hFinal == nullptr || finalBits == nullptr) {
+            if (hFinal != nullptr) { DeleteObject(hFinal); }
+            return;
+        }
+        drawHorizontal(finalBits, w, h);
+    } else {
+        void *tempBits = nullptr;
+        hTemp          = makeDib(w0, h0, &tempBits);
+        hFinal         = makeDib(w, h, &finalBits);
+        if (hTemp == nullptr || tempBits == nullptr || hFinal == nullptr || finalBits == nullptr) {
+            if (hTemp != nullptr) { DeleteObject(hTemp); }
+            if (hFinal != nullptr) { DeleteObject(hFinal); }
+            return;
+        }
+        drawHorizontal(tempBits, w0, h0);
+        // 顺时针旋转 90°：(sx,sy) → (h0-1-sy, sx)
+        auto *s = static_cast<DWORD *>(tempBits);
+        auto *d = static_cast<DWORD *>(finalBits);
+        for (int dy = 0; dy < w0; ++dy) {
+            for (int dx = 0; dx < h0; ++dx) {
+                d[dy * h0 + dx] = s[(h0 - 1 - dx) * w0 + dy];
+            }
         }
     }
+
+    auto *hOldBmp = SelectObject(hdcMem, hFinal);
 
     SIZE          size  = {w, h};
     POINT         src   = {0, 0};
@@ -1064,7 +1146,8 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
     }
 
     SelectObject(hdcMem, hOldBmp);
-    DeleteObject(hDib);
+    if (hTemp != nullptr) { DeleteObject(hTemp); }
+    DeleteObject(hFinal);
 }
 
 void DesktopIndicator::RenderLayer(MonitorLayer &layer, HDC hdcScreen, HDC hdcMem) {
@@ -1144,7 +1227,7 @@ void DesktopIndicator::Rebuild() {
         ApplyPresetPosition(savedPreset);
     } else {
         for (auto &l : m_layers) {
-            SIZE sz     = MeasureContent(l.dpi);
+            SIZE sz     = MeasureContent(l);
             int  w      = sz.cx;
             int  h      = sz.cy;
             l.anchorPos = {RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),
@@ -1269,7 +1352,7 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         if (m_dragging && ((wp & MK_LBUTTON) != 0u)) {
             POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             ClientToScreen(hwnd, &pt);
-            SIZE sz0              = MeasureContent(m_layers[0].dpi);
+            SIZE sz0              = MeasureContent(m_layers[0]);
             int  w0               = sz0.cx;
             int  h0               = sz0.cy;
             m_anchorX             = DetectAnchorX(m_layers[0].monitor, pt.x - m_dragOffset.x, w0);
@@ -1277,7 +1360,7 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             m_pCfg->windowRatio.x = XToRatio(m_layers[0].monitor, pt.x - m_dragOffset.x, m_anchorX, w0);
             m_pCfg->windowRatio.y = YToRatio(m_layers[0].work, pt.y - m_dragOffset.y, m_anchorY, h0);
             for (auto &l : m_layers) {
-                SIZE sz     = MeasureContent(l.dpi);
+                SIZE sz     = MeasureContent(l);
                 int  w      = sz.cx;
                 int  h      = sz.cy;
                 l.anchorPos = {RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),

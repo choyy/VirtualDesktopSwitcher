@@ -29,9 +29,9 @@ struct SymbolMetrics {
     std::array<int, 9> widths{};
     int                fontSize    = 0;
     int                spacing     = 0;
-    int                symbolWidth = 0; // total symbol row width incl. spacing
-    int                nameWidth   = 0; // current desktop name width (0 = no name line)
-    int                nameHeight  = 0; // current desktop name height (0 = no name line)
+    int                symbolWidth = 0; // 水平：符号行总宽
+    int                nameWidth   = 0; // 当前桌面名字宽度（0 = 无名字行）
+    int                nameHeight  = 0; // 当前桌面名字高度（0 = 无名字行）
     SIZE               dibSize{};
 };
 
@@ -42,18 +42,19 @@ struct MonitorLayer {
     int                  dpi{};     // LOGPIXELSY
     bool                 isPrimary     = false;
     bool                 bgSampleValid = false;
-    POINT                anchorPos{};                      // current absolute screen position (resolved from ratio)
-    int                  symbolRowTop = 0;                 // client Y where the symbol row starts
-    double               bgLch_L      = -1.0;              // CIE L* (-1 = uninitialized)
-    double               bgLch_C      = 0.0;               // CIE C* (chroma)
-    std::array<float, 5> smoothV{};                        // per-color smoothed V
-    std::array<float, 5> smoothS{};                        // per-color smoothed S
-    std::array<float, 9> symbolScales{};                   // per-symbol dock scale (lerped)
-    std::array<float, 9> symbolCenters{};                  // client X center after render
-    std::array<float, 9> symbolHalfWidths{};               // half-width after render
-    bool                 hasTaskbar  = false;              // embed mode: has taskbar on this monitor
-    HWND                 taskbarHwnd = nullptr;            // embed mode: Shell_TrayWnd handle
-    TaskbarSide          taskbarSide = TaskbarSide::Right; // embed mode: left or right side
+    POINT                anchorPos{};                          // current absolute screen position (resolved from ratio)
+    int                  symbolRowTop = 0;                     // client Y where the symbol row starts
+    double               bgLch_L      = -1.0;                  // CIE L* (-1 = uninitialized)
+    double               bgLch_C      = 0.0;                   // CIE C* (chroma)
+    std::array<float, 5> smoothV{};                            // per-color smoothed V
+    std::array<float, 5> smoothS{};                            // per-color smoothed S
+    std::array<float, 9> symbolScales{};                       // per-symbol dock scale (lerped)
+    std::array<float, 9> symbolCenters{};                      // client X center after render
+    std::array<float, 9> symbolHalfWidths{};                   // half-width after render
+    bool                 hasTaskbar      = false;              // embed mode: has taskbar on this monitor
+    HWND                 taskbarHwnd     = nullptr;            // embed mode: Shell_TrayWnd handle
+    TaskbarSide          taskbarSide     = TaskbarSide::Right; // embed mode: left or right side
+    bool                 taskbarVertical = false;              // embed mode: taskbar is on left/right edge
 };
 
 class DesktopIndicator {
@@ -142,7 +143,7 @@ private:
     void               RegisterMouseWheelInput();
     bool               HandleRawInput(HWND hwnd, LPARAM lp);
     bool               HandleDragStart(HWND hwnd, LPARAM lp);
-    SIZE               MeasureContent(int dpi) const;
+    SIZE               MeasureContent(const MonitorLayer &layer) const;
     SIZE               MeasureName(int dpi) const;
     FontRenderer      &NameRenderer() const;
 
