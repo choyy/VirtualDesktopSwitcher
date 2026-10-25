@@ -2,3 +2,4 @@
 .xmake
 build
 vsxmake*
+.vscode/tasks.json

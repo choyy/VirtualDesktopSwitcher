@@ -51,6 +51,10 @@ struct MonitorLayer {
     std::array<float, 9> symbolScales{};                   // per-symbol dock scale (lerped)
     std::array<float, 9> symbolCenters{};                  // client X center after render
     std::array<float, 9> symbolHalfWidths{};               // half-width after render
+    std::array<float, 9> symbolLefts{};                    // client X left bound after render
+    std::array<float, 9> symbolRights{};                   // client X right bound after render
+    std::array<RECT, 9>  symbolRects{};                     // exact clickable client rect for each rendered symbol
+    std::array<std::vector<uint8_t>, 9> symbolMasks{};      // filled hit mask for each symbol, independent of the rendered glyph outline
     bool                 hasTaskbar  = false;              // embed mode: has taskbar on this monitor
     HWND                 taskbarHwnd = nullptr;            // embed mode: Shell_TrayWnd handle
     TaskbarSide          taskbarSide = TaskbarSide::Right; // embed mode: left or right side
@@ -110,8 +114,10 @@ private:
     int                            m_desktopCount   = 0;
     int                            m_currentDesktop = 0;
     std::array<bool, kMaxDesktops> m_emptyDesktops{};
-    bool                           m_editMode   = false;
-    bool                           m_dragging   = false;
+    bool                           m_editMode      = false;
+    bool                           m_dragging      = false;
+    bool                           m_leftCtrlHeld = false;
+    bool                           m_rightCtrlHeld = false;
     POINT                          m_dragOffset = {.x = 0, .y = 0};
     std::function<void(int)>       m_scrollSwitchFn;
     bool                           m_draggingWindow    = false;
@@ -139,9 +145,12 @@ private:
     void               RebuildToPreset(PositionPreset preset);
     void               MoveByDelta(int dx, int dy);
     void               EnumerateMonitors(HINSTANCE hInstance);
-    void               RegisterMouseWheelInput();
+    void               RegisterRawInput();
+    void               UpdateClickThroughStyle();
     bool               HandleRawInput(HWND hwnd, LPARAM lp);
     bool               HandleDragStart(HWND hwnd, LPARAM lp);
+    // 命中测试：仅当按住 Ctrl 且屏幕点落在有效桌面符号上时返回目标索引。
+    [[nodiscard]] bool HitTestClickSwitch(POINT screenPt, int &outIndex) const;
     SIZE               MeasureContent(int dpi) const;
     SIZE               MeasureName(int dpi) const;
     FontRenderer      &NameRenderer() const;

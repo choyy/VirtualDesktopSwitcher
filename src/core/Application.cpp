@@ -333,7 +333,10 @@ void Application::SetupTrayCallbacks() {
         if (m_pOverlay) { m_pOverlay->SetShowMode(static_cast<ShowMode>(mode)); }
     });
     m_pTrayIcon->SetDragSwitchModeCallback([this](int mode) {
-        m_dragHandler->SetDragSwitchMode(static_cast<DragSwitchMode>(mode));
+        auto m = static_cast<DragSwitchMode>(mode);
+        m_dragHandler->SetDragSwitchMode(m);
+        // 保持配置与运行时一致：点击切换桌面复用了该模式，需要读到最新值。
+        m_indicatorCfg.dragSwitchMode = m;
     });
     m_pTrayIcon->SetAnimModeCallback([this](bool on) {
         if (m_pOverlay) { m_pOverlay->SetAnimMode(on); }
