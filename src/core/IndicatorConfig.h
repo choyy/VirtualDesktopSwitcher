@@ -4,11 +4,13 @@
 
 #include <string>
 
-enum class ShowMode : std::uint8_t { AlwaysShow = 0,
-                                     AlwaysHide = 1,
-                                     Show1s     = 2,
-                                     Show3s     = 3,
-                                     Count      = 4 };
+enum class ShowMode : std::uint8_t { AlwaysShow           = 0, // 总是显示（置顶）
+                                     AlwaysHide           = 1,
+                                     Show1s               = 2,
+                                     Show3s               = 3,
+                                     AlwaysShowNonTopmost = 4, // 总是显示（不置顶）
+                                     Count                = 5,
+};
 
 enum class PositionPreset : std::uint8_t { TopLeft           = 0,
                                            TopCenter         = 1,
