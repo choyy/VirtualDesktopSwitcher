@@ -88,6 +88,14 @@ LRESULT CALLBACK Application::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
         pApp->OnDisplayChange();
         return 0;
 
+    case WM_SETTINGCHANGE:
+        // 切换任务栏位置/自动隐藏时工作区变化会以此广播，需要重新读取 rcWork
+        if (wParam == SPI_SETWORKAREA && pApp->m_pOverlay) {
+            pApp->m_pOverlay->RefreshWorkAreas();
+            return 0;
+        }
+        break;
+
     case WM_POWERBROADCAST:
         if (wParam == PBT_APMRESUMEAUTOMATIC || wParam == PBT_APMRESUMESUSPEND) {
             pApp->OnSystemResume();
@@ -441,6 +449,7 @@ void Application::OnSystemResume() {
     SyncDesktopState();
     if (m_mouseFocus) { m_mouseFocus->UpdateHook(); }
     if (m_pOverlay) {
+        m_pOverlay->RefreshWorkAreas();
         m_pOverlay->SetPositionPreset(m_indicatorCfg.positionPreset);
     }
 }
