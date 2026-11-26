@@ -445,7 +445,7 @@ void DesktopIndicator::RegisterRawInput() {
 }
 
 void DesktopIndicator::UpdateClickThroughStyle() {
-    const bool clickThrough = !m_editMode && !m_leftCtrlHeld && !m_rightCtrlHeld;
+    const bool clickThrough = !m_editMode && !m_leftCtrlHeld && !m_rightCtrlHeld && !m_dragging && !m_ctrlDragPending;
     for (auto &l : m_layers) {
         auto  ex        = static_cast<DWORD>(GetWindowLong(l.hwnd, GWL_EXSTYLE));
         DWORD updatedEx = ex;
@@ -786,7 +786,9 @@ void DesktopIndicator::ToggleEditMode() {
 }
 
 void DesktopIndicator::SetEditMode(bool edit) {
-    m_editMode = edit;
+    m_editMode        = edit;
+    m_ctrlDragPending = false;
+    m_ctrlArmed       = false;
     if (m_pCfg != nullptr && m_editMode && !m_isTaskbarEmbedded) { m_pCfg->positionPreset = PositionPreset::Custom; }
     UpdateClickThroughStyle();
     if (m_editMode && !m_isTaskbarEmbedded && !m_layers.empty()) {
@@ -1314,6 +1316,8 @@ void DesktopIndicator::Rebuild() {
     m_dragOverlayActive = false;
     m_editMode          = false;
     m_dragging          = false;
+    m_ctrlDragPending   = false;
+    m_ctrlArmed         = false;
     ReleaseCapture();
 
     EnumerateMonitors(GetModuleHandle(nullptr));
@@ -1446,19 +1450,38 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
     case WM_LBUTTONDOWN: {
         if (m_editMode) {
             if (HandleDragStart(hwnd, lp)) { return 0; }
-        } else {
-            POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
-            ClientToScreen(hwnd, &pt);
-            int idx = -1;
-            if (HitTestClickSwitch(pt, idx)) {
-                m_scrollSwitchFn(idx);
-                return 0;
-            }
+            return DefWindowProcW(hwnd, msg, wp, lp);
         }
-        return DefWindowProcW(hwnd, msg, wp, lp);
+
+        // 非编辑模式：按住 Ctrl 时窗口才可点击。按下先挂起，移动超过阈值判定为拖动，
+        // 否则松手按点击处理（命中符号则切换桌面）。
+        POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+        ClientToScreen(hwnd, &pt);
+        m_ctrlArmed = (m_leftCtrlHeld || m_rightCtrlHeld);
+        if (!m_ctrlArmed) { return DefWindowProcW(hwnd, msg, wp, lp); }
+        auto it = std::ranges::find_if(m_layers,
+                                       [hwnd](const MonitorLayer &l) { return l.hwnd == hwnd; });
+        if (it == m_layers.end()) { return DefWindowProcW(hwnd, msg, wp, lp); }
+        m_dragOffset    = {pt.x - it->anchorPos.x, pt.y - it->anchorPos.y};
+        m_ctrlDragStart = pt;
+        SetCapture(hwnd);
+        m_ctrlDragPending = true;
+        return 0;
     }
 
-    case WM_MOUSEMOVE:
+    case WM_MOUSEMOVE: {
+        if (m_ctrlDragPending && ((wp & MK_LBUTTON) != 0u)) {
+            POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            ClientToScreen(hwnd, &pt);
+            LONG moveX = pt.x - m_ctrlDragStart.x;
+            LONG moveY = pt.y - m_ctrlDragStart.y;
+            if (moveX < 0) { moveX = -moveX; }
+            if (moveY < 0) { moveY = -moveY; }
+            if (!m_isTaskbarEmbedded && (moveX >= GetSystemMetrics(SM_CXDRAG) || moveY >= GetSystemMetrics(SM_CYDRAG))) {
+                m_ctrlDragPending = false;
+                m_dragging        = true;
+            }
+        }
         if (m_dragging && ((wp & MK_LBUTTON) != 0u)) {
             POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             ClientToScreen(hwnd, &pt);
@@ -1472,13 +1495,53 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             RepositionCustom();
         }
         return 0;
+    }
 
-    case WM_LBUTTONUP:
-        if (!m_editMode) { return DefWindowProcW(hwnd, msg, wp, lp); }
+    case WM_LBUTTONUP: {
+        if (m_editMode) {
+            if (m_dragging) {
+                m_dragging = false;
+                ReleaseCapture();
+                if (m_pCfg != nullptr) { m_pCfg->positionPreset = PositionPreset::Custom; }
+            }
+            return 0;
+        }
         if (m_dragging) {
+            // Ctrl+拖动结束：落盘位置（普通模式没有「退出编辑时保存」的时机）。
             m_dragging = false;
             ReleaseCapture();
-            if (m_pCfg != nullptr) { m_pCfg->positionPreset = PositionPreset::Custom; }
+            if (m_pCfg != nullptr) {
+                m_pCfg->positionPreset = PositionPreset::Custom;
+                m_pCfg->SaveToIni();
+            }
+            UpdateClickThroughStyle();
+            return 0;
+        }
+        if (m_ctrlDragPending) {
+            // 未超过阈值＝点击：命中符号则切换桌面。
+            m_ctrlDragPending = false;
+            ReleaseCapture();
+            POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            ClientToScreen(hwnd, &pt);
+            int idx = -1;
+            if (m_ctrlArmed && HitTestClickSwitch(pt, idx)) {
+                m_scrollSwitchFn(idx);
+            }
+            m_ctrlArmed = false;
+            UpdateClickThroughStyle();
+            return 0;
+        }
+        return DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    case WM_CAPTURECHANGED:
+        // Ctrl+拖动/挂起过程中丢失捕获（如 Alt+Tab），复位避免卡在拖动状态。
+        // 编辑模式的捕获切换不在此处理，避免误取消编辑拖动。
+        if (!m_editMode && (m_ctrlDragPending || m_dragging)) {
+            m_ctrlDragPending = false;
+            m_ctrlArmed       = false;
+            m_dragging        = false;
+            UpdateClickThroughStyle();
         }
         return 0;
 
