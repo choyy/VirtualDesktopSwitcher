@@ -139,6 +139,7 @@ private:
     void               Render();
     void               ApplyPresetPosition(PositionPreset preset);
     void               RebuildToPreset(PositionPreset preset);
+    void               RepositionCustom();
     void               MoveByDelta(int dx, int dy);
     void               EnumerateMonitors(HINSTANCE hInstance);
     void               RegisterMouseWheelInput();

@@ -530,15 +530,7 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
     if (m_pCfg->positionPreset < PositionPreset::Count) {
         SetPositionPreset(m_pCfg->positionPreset);
     } else {
-        for (auto &l : m_layers) {
-            SIZE sz     = MeasureContent(l);
-            int  w      = sz.cx;
-            int  h      = sz.cy;
-            l.anchorPos = {RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),
-                           RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, h)};
-            SetWindowPos(l.hwnd, nullptr, l.anchorPos.x, l.anchorPos.y, 0, 0,
-                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        }
+        RepositionCustom();
     }
 
     // 5. Build initial text and apply display mode
@@ -858,22 +850,22 @@ void DesktopIndicator::ApplyPresetPosition(PositionPreset preset) {
     Render();
 }
 
-void DesktopIndicator::RefreshWorkAreas()
-{
+void DesktopIndicator::RefreshWorkAreas() {
     if (m_pCfg == nullptr || m_layers.empty()) {
         return;
     }
 
     bool changed = false;
-    for (auto& l : m_layers) {
-        HMONITOR hMon = MonitorFromRect(&l.monitor, MONITOR_DEFAULTTONEAREST);
+    for (auto &l : m_layers) {
+        // 此处仅处理工作区变化；显示器拓扑变化走 WM_DISPLAYCHANGE→Rebuild，
+        // 故沿用旧 rcMonitor 定位对应显示器是安全的
+        HMONITOR    hMon = MonitorFromRect(&l.monitor, MONITOR_DEFAULTTONEAREST);
         MONITORINFO mi{};
         mi.cbSize = sizeof(mi);
         if (GetMonitorInfoW(hMon, &mi) == 0) {
             continue;
         }
-        if (EqualRect(&l.monitor, &mi.rcMonitor) == 0 ||
-            EqualRect(&l.work, &mi.rcWork) == 0) {
+        if (EqualRect(&l.monitor, &mi.rcMonitor) == 0 || EqualRect(&l.work, &mi.rcWork) == 0) {
             l.monitor = mi.rcMonitor;
             l.work    = mi.rcWork;
             changed   = true;
@@ -886,15 +878,20 @@ void DesktopIndicator::RefreshWorkAreas()
         ApplyPresetPosition(m_pCfg->positionPreset);
         return;
     }
-    for (auto& l : m_layers) {
+    RepositionCustom();
+    Render();
+}
+
+void DesktopIndicator::RepositionCustom() {
+    for (auto &l : m_layers) {
         SIZE sz     = MeasureContent(l);
-        l.anchorPos = {
-            RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, sz.cx),
-            RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, sz.cy)};
+        int  w      = sz.cx;
+        int  h      = sz.cy;
+        l.anchorPos = {RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),
+                       RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, h)};
         SetWindowPos(l.hwnd, nullptr, l.anchorPos.x, l.anchorPos.y, 0, 0,
                      SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
-    Render();
 }
 
 void DesktopIndicator::RebuildToPreset(PositionPreset preset) {
@@ -1265,15 +1262,7 @@ void DesktopIndicator::Rebuild() {
         if (m_pCfg != nullptr) { m_pCfg->positionPreset = savedPreset; }
         ApplyPresetPosition(savedPreset);
     } else {
-        for (auto &l : m_layers) {
-            SIZE sz     = MeasureContent(l);
-            int  w      = sz.cx;
-            int  h      = sz.cy;
-            l.anchorPos = {RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),
-                           RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, h)};
-            SetWindowPos(l.hwnd, nullptr, l.anchorPos.x, l.anchorPos.y, 0, 0,
-                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        }
+        RepositionCustom();
         if (wasVisible) {
             for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
             if (IsTimedMode(m_pCfg->showMode)) { ShowTemporarily(); }
@@ -1398,15 +1387,7 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             m_anchorY             = DetectAnchorY(m_layers[0].work, pt.y - m_dragOffset.y, h0);
             m_pCfg->windowRatio.x = XToRatio(m_layers[0].monitor, pt.x - m_dragOffset.x, m_anchorX, w0);
             m_pCfg->windowRatio.y = YToRatio(m_layers[0].work, pt.y - m_dragOffset.y, m_anchorY, h0);
-            for (auto &l : m_layers) {
-                SIZE sz     = MeasureContent(l);
-                int  w      = sz.cx;
-                int  h      = sz.cy;
-                l.anchorPos = {RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),
-                               RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, h)};
-                SetWindowPos(l.hwnd, nullptr, l.anchorPos.x, l.anchorPos.y, 0, 0,
-                             SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-            }
+            RepositionCustom();
         }
         return 0;
 
