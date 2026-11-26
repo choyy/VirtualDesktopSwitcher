@@ -76,14 +76,14 @@ std::wstring BuildSpacedText(const std::wstring &text, int spacing) {
 POINT CalcPresetPos(int preset, RECT mon, RECT work, int w, int h) {
     int monW = mon.right - mon.left;
     switch (preset) {
-    case 0: return {mon.left, mon.top - 4};
-    case 1: return {mon.left + (monW - w) / 2, mon.top - 4};
-    case 2: return {mon.left + monW - w, mon.top - 4};
+    case 0: return {mon.left, work.top - 4};
+    case 1: return {mon.left + (monW - w) / 2, work.top - 4};
+    case 2: return {mon.left + monW - w, work.top - 4};
     case 3: return {mon.left + (monW - w) / 2, (work.top + work.bottom - h) / 2};
     case 4: return {mon.left, work.bottom - h + 4};
     case 5: return {mon.left + (monW - w) / 2, work.bottom - h + 4};
     case 6: return {mon.left + monW - w, work.bottom - h + 4};
-    default: return {mon.left + (monW - w) / 2, mon.top - 4};
+    default: return {mon.left + (monW - w) / 2, work.top - 4};
     }
 }
 
@@ -854,6 +854,45 @@ void DesktopIndicator::ApplyPresetPosition(PositionPreset preset) {
     }
     for (auto &l : m_layers) {
         ShowWindow(l.hwnd, SW_SHOW);
+    }
+    Render();
+}
+
+void DesktopIndicator::RefreshWorkAreas()
+{
+    if (m_pCfg == nullptr || m_layers.empty()) {
+        return;
+    }
+
+    bool changed = false;
+    for (auto& l : m_layers) {
+        HMONITOR hMon = MonitorFromRect(&l.monitor, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi{};
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfoW(hMon, &mi) == 0) {
+            continue;
+        }
+        if (EqualRect(&l.monitor, &mi.rcMonitor) == 0 ||
+            EqualRect(&l.work, &mi.rcWork) == 0) {
+            l.monitor = mi.rcMonitor;
+            l.work    = mi.rcWork;
+            changed   = true;
+        }
+    }
+    if (!changed) {
+        return;
+    }
+    if (m_pCfg->positionPreset < PositionPreset::Count) {
+        ApplyPresetPosition(m_pCfg->positionPreset);
+        return;
+    }
+    for (auto& l : m_layers) {
+        SIZE sz     = MeasureContent(l);
+        l.anchorPos = {
+            RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, sz.cx),
+            RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, sz.cy)};
+        SetWindowPos(l.hwnd, nullptr, l.anchorPos.x, l.anchorPos.y, 0, 0,
+                     SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
     Render();
 }

@@ -82,6 +82,7 @@ public:
     void SetEditMode(bool edit);
     void SetPositionPreset(PositionPreset preset);
     void Rebuild();
+    void RefreshWorkAreas();
     void SetShowMode(ShowMode mode);
     void ShowTemporarily();
     void SetAnimMode(bool on);
