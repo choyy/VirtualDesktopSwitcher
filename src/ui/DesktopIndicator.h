@@ -29,9 +29,9 @@ struct SymbolMetrics {
     std::array<int, 9> widths{};
     int                fontSize    = 0;
     int                spacing     = 0;
-    int                symbolWidth = 0; // total symbol row width incl. spacing
-    int                nameWidth   = 0; // current desktop name width (0 = no name line)
-    int                nameHeight  = 0; // current desktop name height (0 = no name line)
+    int                symbolWidth = 0; // 水平：符号行总宽
+    int                nameWidth   = 0; // 当前桌面名字宽度（0 = 无名字行）
+    int                nameHeight  = 0; // 当前桌面名字高度（0 = 无名字行）
     SIZE               dibSize{};
 };
 
@@ -55,9 +55,10 @@ struct MonitorLayer {
     std::array<float, 9> symbolRights{};                   // client X right bound after render
     std::array<RECT, 9>  symbolRects{};                     // exact clickable client rect for each rendered symbol
     std::array<std::vector<uint8_t>, 9> symbolMasks{};      // filled hit mask for each symbol, independent of the rendered glyph outline
-    bool                 hasTaskbar  = false;              // embed mode: has taskbar on this monitor
-    HWND                 taskbarHwnd = nullptr;            // embed mode: Shell_TrayWnd handle
-    TaskbarSide          taskbarSide = TaskbarSide::Right; // embed mode: left or right side
+    bool                 hasTaskbar      = false;          // embed mode: has taskbar on this monitor
+    HWND                 taskbarHwnd     = nullptr;        // embed mode: Shell_TrayWnd handle
+    TaskbarSide          taskbarSide     = TaskbarSide::Right; // embed mode: left or right side
+    bool                 taskbarVertical = false;          // embed mode: taskbar is on left/right edge
 };
 
 class DesktopIndicator {
@@ -85,6 +86,7 @@ public:
     void SetEditMode(bool edit);
     void SetPositionPreset(PositionPreset preset);
     void Rebuild();
+    void RefreshWorkAreas();
     void SetShowMode(ShowMode mode);
     void ShowTemporarily();
     void SetAnimMode(bool on);
@@ -143,6 +145,7 @@ private:
     void               Render();
     void               ApplyPresetPosition(PositionPreset preset);
     void               RebuildToPreset(PositionPreset preset);
+    void               RepositionCustom();
     void               MoveByDelta(int dx, int dy);
     void               EnumerateMonitors(HINSTANCE hInstance);
     void               RegisterRawInput();
@@ -151,7 +154,7 @@ private:
     bool               HandleDragStart(HWND hwnd, LPARAM lp);
     // 命中测试：仅当按住 Ctrl 且屏幕点落在有效桌面符号上时返回目标索引。
     [[nodiscard]] bool HitTestClickSwitch(POINT screenPt, int &outIndex) const;
-    SIZE               MeasureContent(int dpi) const;
+    SIZE               MeasureContent(const MonitorLayer &layer) const;
     SIZE               MeasureName(int dpi) const;
     FontRenderer      &NameRenderer() const;
 
