@@ -42,23 +42,22 @@ struct MonitorLayer {
     int                  dpi{};     // LOGPIXELSY
     bool                 isPrimary     = false;
     bool                 bgSampleValid = false;
-    POINT                anchorPos{};                      // current absolute screen position (resolved from ratio)
-    int                  symbolRowTop = 0;                 // client Y where the symbol row starts
-    double               bgLch_L      = -1.0;              // CIE L* (-1 = uninitialized)
-    double               bgLch_C      = 0.0;               // CIE C* (chroma)
-    std::array<float, 5> smoothV{};                        // per-color smoothed V
-    std::array<float, 5> smoothS{};                        // per-color smoothed S
-    std::array<float, 9> symbolScales{};                   // per-symbol dock scale (lerped)
-    std::array<float, 9> symbolCenters{};                  // client X center after render
-    std::array<float, 9> symbolHalfWidths{};               // half-width after render
-    std::array<float, 9> symbolLefts{};                    // client X left bound after render
-    std::array<float, 9> symbolRights{};                   // client X right bound after render
-    std::array<RECT, 9>  symbolRects{};                     // exact clickable client rect for each rendered symbol
-    std::array<std::vector<uint8_t>, 9> symbolMasks{};      // filled hit mask for each symbol, independent of the rendered glyph outline
-    bool                 hasTaskbar      = false;          // embed mode: has taskbar on this monitor
-    HWND                 taskbarHwnd     = nullptr;        // embed mode: Shell_TrayWnd handle
+    POINT                anchorPos{};                          // current absolute screen position (resolved from ratio)
+    int                  symbolRowTop = 0;                     // client Y where the symbol row starts
+    double               bgLch_L      = -1.0;                  // CIE L* (-1 = uninitialized)
+    double               bgLch_C      = 0.0;                   // CIE C* (chroma)
+    std::array<float, 5> smoothV{};                            // per-color smoothed V
+    std::array<float, 5> smoothS{};                            // per-color smoothed S
+    std::array<float, 9> symbolScales{};                       // per-symbol dock scale (lerped)
+    std::array<float, 9> symbolCenters{};                      // client X center after render
+    std::array<float, 9> symbolHalfWidths{};                   // half-width after render
+    std::array<float, 9> symbolLefts{};                        // client X left bound after render
+    std::array<float, 9> symbolRights{};                       // client X right bound after render
+    std::array<RECT, 9>  symbolRects{};                        // exact clickable client rect for each rendered symbol
+    bool                 hasTaskbar      = false;              // embed mode: has taskbar on this monitor
+    HWND                 taskbarHwnd     = nullptr;            // embed mode: Shell_TrayWnd handle
     TaskbarSide          taskbarSide     = TaskbarSide::Right; // embed mode: left or right side
-    bool                 taskbarVertical = false;          // embed mode: taskbar is on left/right edge
+    bool                 taskbarVertical = false;              // embed mode: taskbar is on left/right edge
 };
 
 class DesktopIndicator {
@@ -118,9 +117,9 @@ private:
     std::array<bool, kMaxDesktops> m_emptyDesktops{};
     bool                           m_editMode      = false;
     bool                           m_dragging      = false;
-    bool                           m_leftCtrlHeld = false;
+    bool                           m_leftCtrlHeld  = false;
     bool                           m_rightCtrlHeld = false;
-    POINT                          m_dragOffset = {.x = 0, .y = 0};
+    POINT                          m_dragOffset    = {.x = 0, .y = 0};
     std::function<void(int)>       m_scrollSwitchFn;
     bool                           m_draggingWindow    = false;
     bool                           m_isTaskbarEmbedded = false;

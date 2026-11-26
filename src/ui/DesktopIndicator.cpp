@@ -431,14 +431,14 @@ DesktopIndicator::~DesktopIndicator() {
 void DesktopIndicator::RegisterRawInput() {
     if (m_layers.empty()) { return; }
     RAWINPUTDEVICE devices[2] = {};
-    devices[0].usUsagePage = 0x01;
-    devices[0].usUsage     = 0x02;
-    devices[0].dwFlags     = RIDEV_INPUTSINK;
-    devices[0].hwndTarget  = m_layers[0].hwnd;
-    devices[1].usUsagePage = 0x01;
-    devices[1].usUsage     = 0x06;
-    devices[1].dwFlags     = RIDEV_INPUTSINK;
-    devices[1].hwndTarget  = m_layers[0].hwnd;
+    devices[0].usUsagePage    = 0x01;
+    devices[0].usUsage        = 0x02;
+    devices[0].dwFlags        = RIDEV_INPUTSINK;
+    devices[0].hwndTarget     = m_layers[0].hwnd;
+    devices[1].usUsagePage    = 0x01;
+    devices[1].usUsage        = 0x06;
+    devices[1].dwFlags        = RIDEV_INPUTSINK;
+    devices[1].hwndTarget     = m_layers[0].hwnd;
     if (RegisterRawInputDevices(devices, 2, sizeof(devices[0])) == 0) {
         Log(L"[ERROR] RegisterRawInputDevices failed");
     }
@@ -447,7 +447,7 @@ void DesktopIndicator::RegisterRawInput() {
 void DesktopIndicator::UpdateClickThroughStyle() {
     const bool clickThrough = !m_editMode && !m_leftCtrlHeld && !m_rightCtrlHeld;
     for (auto &l : m_layers) {
-        auto ex = static_cast<DWORD>(GetWindowLong(l.hwnd, GWL_EXSTYLE));
+        auto  ex        = static_cast<DWORD>(GetWindowLong(l.hwnd, GWL_EXSTYLE));
         DWORD updatedEx = ex;
         if (clickThrough) {
             updatedEx |= WS_EX_TRANSPARENT;
@@ -506,10 +506,8 @@ void DesktopIndicator::UpdateTopmost() {
 HWND DesktopIndicator::CreateMonitorWindow(HINSTANCE hInst) {
     DWORD exStyle = WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
     if (!m_editMode && !m_leftCtrlHeld && !m_rightCtrlHeld) { exStyle |= WS_EX_TRANSPARENT; }
-    HWND hwnd = CreateWindowExW(
-        WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
-        L"DesktopIndicatorClass", L"DesktopIndicator",
-        WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, hInst, this);
+    HWND hwnd = CreateWindowExW(exStyle, L"DesktopIndicatorClass", L"DesktopIndicator",
+                                WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, hInst, this);
     if (hwnd != nullptr) {
         SetWndUserData(hwnd, this);
         SetWindowPos(hwnd, WantTopmost() ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
@@ -521,7 +519,7 @@ HWND DesktopIndicator::CreateMonitorWindow(HINSTANCE hInst) {
 bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
     if (m_pCfg == nullptr) { return false; }
 
-    m_leftCtrlHeld = (GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0;
+    m_leftCtrlHeld  = (GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0;
     m_rightCtrlHeld = (GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0;
 
     // 1. Register window class
@@ -1140,10 +1138,10 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
                            GetRValue(symColorAt(i)), GetGValue(symColorAt(i)), GetBValue(symColorAt(i)));
                 std::wstring symColorStr(colorBuf.data());
                 std::wstring sym(1, m_text[i]);
-                float left    = static_cast<float>(curX);
-                float right   = left + static_cast<float>(metrics.widths.at(i));
-                int   drawTop = symbolTop;
-                int   drawH   = bh - symbolTop - kPadding;
+                float        left    = static_cast<float>(curX);
+                float        right   = left + static_cast<float>(metrics.widths.at(i));
+                int          drawTop = symbolTop;
+                int          drawH   = bh - symbolTop - kPadding;
                 m_renderer->Render(bits, bw, bh, curX, drawTop, metrics.widths.at(i), drawH,
                                    sym.c_str(), symColorStr, symFont);
 
@@ -1153,7 +1151,7 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
                 layer.symbolRights.at(i)     = right;
                 layer.symbolCenters.at(i)    = (left + right) * 0.5f;
                 layer.symbolHalfWidths.at(i) = (right - left) * 0.5f;
-                layer.symbolRects.at(i) = {
+                layer.symbolRects.at(i)      = {
                     static_cast<LONG>(left),
                     static_cast<LONG>(drawTop),
                     static_cast<LONG>(right),
@@ -1172,10 +1170,10 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
             constexpr DWORD kClickBlendAlpha = 0x01u << 24u; // ARGB: A=1, RGB=0 (premultiplied, imperceptible)
             for (int i = 0; i < symCount; ++i) {
                 const RECT &rc = layer.symbolRects.at(i);
-                LONG       x0  = std::max(rc.left, 0L);
-                LONG       x1  = std::min(rc.right, static_cast<LONG>(bw));
-                LONG       y0  = std::max(rc.top, 0L);
-                LONG       y1  = std::min(rc.bottom, static_cast<LONG>(bh));
+                LONG        x0 = std::max(rc.left, 0L);
+                LONG        x1 = std::min(rc.right, static_cast<LONG>(bw));
+                LONG        y0 = std::max(rc.top, 0L);
+                LONG        y1 = std::min(rc.bottom, static_cast<LONG>(bh));
                 for (LONG yy = y0; yy < y1; ++yy) {
                     auto *row = static_cast<DWORD *>(bits) + static_cast<size_t>(yy) * bw;
                     for (LONG xx = x0; xx < x1; ++xx) {
@@ -1221,7 +1219,7 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
         // 旋转后把符号命中矩形从横向内容坐标转换到最终客户区坐标，供 GetSymbolIndexAt 使用
         if (m_pCfg->displayMode != IndicatorDisplayMode::Name) {
             for (int i = 0; i < static_cast<int>(m_text.size()); ++i) {
-                RECT rc = layer.symbolRects.at(i);
+                RECT rc                 = layer.symbolRects.at(i);
                 layer.symbolRects.at(i) = {h0 - rc.bottom, rc.left, h0 - rc.top, rc.right};
             }
         }
@@ -1353,8 +1351,8 @@ bool DesktopIndicator::HandleRawInput(HWND /*hwnd*/, LPARAM lp) {
 
     auto *raw = reinterpret_cast<RAWINPUT *>(buf.data()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
     if (raw->header.dwType == RIM_TYPEKEYBOARD) {
-        const RAWKEYBOARD &key = raw->data.keyboard; // NOLINT(cppcoreguidelines-pro-type-union-access)
-        const bool        down = (key.Flags & RI_KEY_BREAK) == 0;
+        const RAWKEYBOARD &key  = raw->data.keyboard; // NOLINT(cppcoreguidelines-pro-type-union-access)
+        const bool         down = (key.Flags & RI_KEY_BREAK) == 0;
         if (key.VKey == VK_LCONTROL
             || (key.VKey == VK_CONTROL && (key.Flags & RI_KEY_E0) == 0)) {
             m_leftCtrlHeld = down;
@@ -1371,7 +1369,7 @@ bool DesktopIndicator::HandleRawInput(HWND /*hwnd*/, LPARAM lp) {
     const USHORT buttonFlags = raw->data.mouse.usButtonFlags; // NOLINT(cppcoreguidelines-pro-type-union-access)
     if ((buttonFlags & RI_MOUSE_WHEEL) == 0) { return false; }
 
-    auto delta = static_cast<int16_t>(raw->data.mouse.usButtonData); // NOLINT(cppcoreguidelines-pro-type-union-access)
+    auto  delta = static_cast<int16_t>(raw->data.mouse.usButtonData); // NOLINT(cppcoreguidelines-pro-type-union-access)
     POINT cursorPt;
     if (!GetCursorPos(&cursorPt) || !IsPtOnOverlay(cursorPt)) { return false; }
 
