@@ -15,15 +15,24 @@
 
 enum class AnchorX : std::uint8_t { Left   = 0,
                                     Center = 1,
-                                    Right  = 2 };
+                                    Right  = 2,
+};
 enum class AnchorY : std::uint8_t { Top    = 0,
                                     Center = 1,
-                                    Bottom = 2 };
+                                    Bottom = 2,
+};
 
 class FontRenderer;
 
 enum class TaskbarSide : std::uint8_t { Right,
-                                        Left };
+                                        Left,
+};
+
+// 指示器自身的拖动状态：Idle（空闲）→ Pressed（按下，未超阈值）→ Dragging（拖动中）。
+enum class IndicatorDragState : std::uint8_t { Idle,
+                                               Pressed,
+                                               Dragging,
+};
 
 struct SymbolMetrics {
     std::array<int, 9> widths{};
@@ -49,10 +58,6 @@ struct MonitorLayer {
     std::array<float, 5> smoothV{};                            // per-color smoothed V
     std::array<float, 5> smoothS{};                            // per-color smoothed S
     std::array<float, 9> symbolScales{};                       // per-symbol dock scale (lerped)
-    std::array<float, 9> symbolCenters{};                      // client X center after render
-    std::array<float, 9> symbolHalfWidths{};                   // half-width after render
-    std::array<float, 9> symbolLefts{};                        // client X left bound after render
-    std::array<float, 9> symbolRights{};                       // client X right bound after render
     std::array<RECT, 9>  symbolRects{};                        // exact clickable client rect for each rendered symbol
     bool                 hasTaskbar      = false;              // embed mode: has taskbar on this monitor
     HWND                 taskbarHwnd     = nullptr;            // embed mode: Shell_TrayWnd handle
@@ -92,7 +97,7 @@ public:
     void SetAutoContrast(bool on);
     void SetCurrentDesktopName(const std::wstring &name);
     void SetDisplayMode(IndicatorDisplayMode mode);
-    void SetScrollSwitchCallback(std::function<void(int)> cb) { m_scrollSwitchFn = std::move(cb); }
+    void SetSwitchDesktopCallback(std::function<void(int)> cb) { m_switchDesktopFn = std::move(cb); }
     void UnembedTaskbarIndicator();
     HWND CreateMonitorWindow(HINSTANCE hInst);
 
@@ -115,15 +120,12 @@ private:
     int                            m_desktopCount   = 0;
     int                            m_currentDesktop = 0;
     std::array<bool, kMaxDesktops> m_emptyDesktops{};
-    bool                           m_editMode        = false;
-    bool                           m_dragging        = false;
-    bool                           m_leftCtrlHeld    = false;
-    bool                           m_rightCtrlHeld   = false;
-    POINT                          m_dragOffset      = {.x = 0, .y = 0};
-    bool                           m_ctrlDragPending = false;
-    bool                           m_ctrlArmed       = false;
-    POINT                          m_ctrlDragStart   = {.x = 0, .y = 0};
-    std::function<void(int)>       m_scrollSwitchFn;
+    bool                           m_editMode  = false;
+    bool                           m_ctrlHeld  = false;
+    IndicatorDragState             m_dragState = IndicatorDragState::Idle;
+    POINT                          m_dragStartScreen{};
+    POINT                          m_dragGrabOffset{};
+    std::function<void(int)>       m_switchDesktopFn;
     bool                           m_draggingWindow    = false;
     bool                           m_isTaskbarEmbedded = false;
     bool                           m_dragOverlayActive = false;
@@ -144,6 +146,10 @@ private:
     void               PresentLayer(MonitorLayer &layer, const SymbolMetrics &metrics,
                                     int centerW, const ColorArray &colors,
                                     HDC hdcScreen, HDC hdcMem);
+    void               DrawNameRow(void *bits, int bw, int bh, const SymbolMetrics &metrics, const ColorArray &colors);
+    void               DrawSymbolRow(void *bits, int bw, int bh, const SymbolMetrics &metrics, const ColorArray &colors,
+                                     MonitorLayer &layer, int symbolTop, int symStartX);
+    void               FillSymbolClickAlpha(void *bits, int bw, int bh, const MonitorLayer &layer);
     void               Render();
     void               ApplyPresetPosition(PositionPreset preset);
     void               RebuildToPreset(PositionPreset preset);
@@ -151,14 +157,21 @@ private:
     void               MoveByDelta(int dx, int dy);
     void               EnumerateMonitors(HINSTANCE hInstance);
     void               RegisterRawInput();
+    [[nodiscard]] bool IsCtrlHeld() const { return m_ctrlHeld; }
+    [[nodiscard]] bool WantClickThrough() const;
     void               UpdateClickThroughStyle();
     bool               HandleRawInput(HWND hwnd, LPARAM lp);
-    bool               HandleDragStart(HWND hwnd, LPARAM lp);
-    // 命中测试：仅当按住 Ctrl 且屏幕点落在有效桌面符号上时返回目标索引。
-    [[nodiscard]] bool HitTestClickSwitch(POINT screenPt, int &outIndex) const;
-    SIZE               MeasureContent(const MonitorLayer &layer) const;
-    SIZE               MeasureName(int dpi) const;
-    FontRenderer      &NameRenderer() const;
+    bool               HandleKeyboardRawInput(const RAWKEYBOARD &key);
+    bool               HandleMouseRawInput(const RAWMOUSE &mouse);
+
+    // 指示器拖动（编辑模式拖动与 Ctrl+左键拖动共用）
+    [[nodiscard]] MonitorLayer *FindLayer(HWND hwnd);
+    void                        ApplyIndicatorTopLeft(MonitorLayer &layer, POINT topLeft);
+    void                        EndIndicatorDrag(bool commitPosition);
+
+    SIZE          MeasureContent(const MonitorLayer &layer) const;
+    SIZE          MeasureName(int dpi) const;
+    FontRenderer &NameRenderer() const;
 
     // Taskbar embed helpers
     static void InstallTrayHook();

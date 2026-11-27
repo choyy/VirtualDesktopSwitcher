@@ -99,7 +99,7 @@ void WindowDragHandler::UpdateDragHover(POINT pt) {
             Log(L"[INFO] MoveWindow: desktop " + std::to_wstring(symIdx));
             PostMessageW(m_hwndTarget, WM_WINDOW_DRAG_DROP,
                          static_cast<WPARAM>(symIdx),
-                         reinterpret_cast<LPARAM>(m_dragHwnd));
+                         reinterpret_cast<LPARAM>(m_dragHwnd)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
         }
     }
 }

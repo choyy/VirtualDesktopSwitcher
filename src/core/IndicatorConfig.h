@@ -22,27 +22,28 @@ enum class PositionPreset : std::uint8_t { TopLeft           = 0,
                                            EmbedTaskbarRight = 7,
                                            EmbedTaskbarLeft  = 8,
                                            Count             = 9,
-                                           Custom            = 0xFF };
+                                           Custom            = 0xFF,
+};
 
 enum class DragSwitchMode : std::uint8_t {
     Always = 0,
     Alt    = 1,
     Ctrl   = 2,
     Never  = 3,
-    Count  = 4
+    Count  = 4,
 };
 
 enum class TrayIconMode : std::uint8_t {
     Icon   = 0,
     Number = 1,
-    Count  = 2
+    Count  = 2,
 };
 
 enum class IndicatorDisplayMode : std::uint8_t {
     Symbols = 0,
     Name    = 1,
     Both    = 2,
-    Count   = 3
+    Count   = 3,
 };
 
 struct WindowRatio {

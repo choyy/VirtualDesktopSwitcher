@@ -101,14 +101,16 @@ bool VirtualDesktopHelper::InitDesktopManagerInternal(Microsoft::WRL::ComPtr<ISe
         const IID *iid;
         bool       win10;
     };
-    const std::array<VdiCombo, 6> vdiCombos = {{
-        {.service = &IID_IVirtualDesktopManagerInternal_Service, .iid = &IID_IVirtualDesktopManagerInternal_Win10, .win10 = true},
-        {.service = &IID_IVirtualDesktopManagerInternal_Service, .iid = &IID_IVirtualDesktopManagerInternal_Win11, .win10 = false},
-        {.service = &IID_IVirtualDesktopManagerInternal_Service, .iid = &IID_IVirtualDesktopManagerInternal_Service, .win10 = false},
-        {.service = &CLSID_VirtualDesktopManager, .iid = &IID_IVirtualDesktopManagerInternal_Win10, .win10 = true},
-        {.service = &IID_IVirtualDesktopManagerInternal_Win10, .iid = &IID_IVirtualDesktopManagerInternal_Win10, .win10 = true},
-        {.service = &CLSID_VirtualDesktopManager, .iid = &IID_IVirtualDesktopManagerInternal_Win11, .win10 = false},
-    }};
+    const std::array<VdiCombo, 6> vdiCombos = {
+        {
+            {.service = &IID_IVirtualDesktopManagerInternal_Service, .iid = &IID_IVirtualDesktopManagerInternal_Win10, .win10 = true},
+            {.service = &IID_IVirtualDesktopManagerInternal_Service, .iid = &IID_IVirtualDesktopManagerInternal_Win11, .win10 = false},
+            {.service = &IID_IVirtualDesktopManagerInternal_Service, .iid = &IID_IVirtualDesktopManagerInternal_Service, .win10 = false},
+            {.service = &CLSID_VirtualDesktopManager, .iid = &IID_IVirtualDesktopManagerInternal_Win10, .win10 = true},
+            {.service = &IID_IVirtualDesktopManagerInternal_Win10, .iid = &IID_IVirtualDesktopManagerInternal_Win10, .win10 = true},
+            {.service = &CLSID_VirtualDesktopManager, .iid = &IID_IVirtualDesktopManagerInternal_Win11, .win10 = false},
+        },
+    };
     for (const auto &c : vdiCombos) {
         hr = sp->QueryService(*c.service, *c.iid, ComPtrAsVoid(m_virtualDesktopManagerInternal));
         if (SUCCEEDED(hr) && m_virtualDesktopManagerInternal != nullptr) {

@@ -2,10 +2,12 @@
 // Original: https://github.com/vladelaina/Catime
 #include "DesktopIndicator.h"
 
+#include <hidusage.h>
 #include <shellscalingapi.h>
 #include <windowsx.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "util/DrawingTextSTB.h"
@@ -34,6 +36,19 @@ constexpr float kNameFontScale = 0.75f;
 // 仅“切换后显示 1s/3s”属于定时模式（不依赖枚举数值顺序判断）
 bool IsTimedMode(ShowMode mode) {
     return mode == ShowMode::Show1s || mode == ShowMode::Show3s;
+}
+
+bool ExceedsDragThreshold(POINT start, POINT now) {
+    int dx = static_cast<int>(now.x - start.x);
+    int dy = static_cast<int>(now.y - start.y);
+    if (dx < 0) { dx = -dx; }
+    if (dy < 0) { dy = -dy; }
+    return dx >= GetSystemMetrics(SM_CXDRAG) || dy >= GetSystemMetrics(SM_CYDRAG);
+}
+
+RECT RotateRect90CW(const RECT &rc, int srcHeight) {
+    // (sx,sy) → (srcHeight-1-sy, sx)：矩形随之变换到旋转后的坐标系。
+    return {srcHeight - rc.bottom, rc.left, srcHeight - rc.top, rc.right};
 }
 
 struct EnumCtx {
@@ -430,22 +445,27 @@ DesktopIndicator::~DesktopIndicator() {
 
 void DesktopIndicator::RegisterRawInput() {
     if (m_layers.empty()) { return; }
-    RAWINPUTDEVICE devices[2] = {};
-    devices[0].usUsagePage    = 0x01;
-    devices[0].usUsage        = 0x02;
-    devices[0].dwFlags        = RIDEV_INPUTSINK;
-    devices[0].hwndTarget     = m_layers[0].hwnd;
-    devices[1].usUsagePage    = 0x01;
-    devices[1].usUsage        = 0x06;
-    devices[1].dwFlags        = RIDEV_INPUTSINK;
-    devices[1].hwndTarget     = m_layers[0].hwnd;
-    if (RegisterRawInputDevices(devices, 2, sizeof(devices[0])) == 0) {
+    std::array<RAWINPUTDEVICE, 2> devices{};
+    devices[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
+    devices[0].usUsage     = HID_USAGE_GENERIC_MOUSE;
+    devices[0].dwFlags     = RIDEV_INPUTSINK;
+    devices[0].hwndTarget  = m_layers[0].hwnd;
+    devices[1].usUsagePage = HID_USAGE_PAGE_GENERIC;
+    devices[1].usUsage     = HID_USAGE_GENERIC_KEYBOARD;
+    devices[1].dwFlags     = RIDEV_INPUTSINK;
+    devices[1].hwndTarget  = m_layers[0].hwnd;
+    if (RegisterRawInputDevices(devices.data(), static_cast<UINT>(devices.size()), sizeof(RAWINPUTDEVICE)) == 0) {
         Log(L"[ERROR] RegisterRawInputDevices failed");
     }
 }
 
+bool DesktopIndicator::WantClickThrough() const {
+    // 编辑、按住 Ctrl、或正在拖动指示器时都可点击，其余情况穿透到下层窗口。
+    return !m_editMode && !IsCtrlHeld() && m_dragState == IndicatorDragState::Idle;
+}
+
 void DesktopIndicator::UpdateClickThroughStyle() {
-    const bool clickThrough = !m_editMode && !m_leftCtrlHeld && !m_rightCtrlHeld && !m_dragging && !m_ctrlDragPending;
+    const bool clickThrough = WantClickThrough();
     for (auto &l : m_layers) {
         auto  ex        = static_cast<DWORD>(GetWindowLong(l.hwnd, GWL_EXSTYLE));
         DWORD updatedEx = ex;
@@ -459,6 +479,31 @@ void DesktopIndicator::UpdateClickThroughStyle() {
         SetWindowPos(l.hwnd, nullptr, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
     }
+}
+
+MonitorLayer *DesktopIndicator::FindLayer(HWND hwnd) {
+    auto it = std::ranges::find_if(m_layers, [hwnd](const MonitorLayer &l) { return l.hwnd == hwnd; });
+    return (it != m_layers.end()) ? &(*it) : nullptr;
+}
+
+void DesktopIndicator::ApplyIndicatorTopLeft(MonitorLayer &layer, POINT topLeft) {
+    SIZE sz               = MeasureContent(layer);
+    m_anchorX             = DetectAnchorX(layer.monitor, topLeft.x, sz.cx);
+    m_anchorY             = DetectAnchorY(layer.work, topLeft.y, sz.cy);
+    m_pCfg->windowRatio.x = XToRatio(layer.monitor, topLeft.x, m_anchorX, sz.cx);
+    m_pCfg->windowRatio.y = YToRatio(layer.work, topLeft.y, m_anchorY, sz.cy);
+}
+
+void DesktopIndicator::EndIndicatorDrag(bool commitPosition) {
+    const bool wasDragging = (m_dragState == IndicatorDragState::Dragging);
+    m_dragState            = IndicatorDragState::Idle;
+    ReleaseCapture();
+    if (commitPosition && wasDragging && m_pCfg != nullptr) {
+        m_pCfg->positionPreset = PositionPreset::Custom;
+        // 编辑模式退出时会统一保存；普通模式（Ctrl 拖动）需在此落盘。
+        if (!m_editMode) { m_pCfg->SaveToIni(); }
+    }
+    UpdateClickThroughStyle();
 }
 
 bool DesktopIndicator::GetSymbolIndexAt(POINT screenPt, int &outIndex) const {
@@ -504,8 +549,8 @@ void DesktopIndicator::UpdateTopmost() {
 }
 
 HWND DesktopIndicator::CreateMonitorWindow(HINSTANCE hInst) {
-    DWORD exStyle = WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
-    if (!m_editMode && !m_leftCtrlHeld && !m_rightCtrlHeld) { exStyle |= WS_EX_TRANSPARENT; }
+    DWORD exStyle = WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+    if (WantClickThrough()) { exStyle |= WS_EX_TRANSPARENT; }
     HWND hwnd = CreateWindowExW(exStyle, L"DesktopIndicatorClass", L"DesktopIndicator",
                                 WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, hInst, this);
     if (hwnd != nullptr) {
@@ -519,8 +564,7 @@ HWND DesktopIndicator::CreateMonitorWindow(HINSTANCE hInst) {
 bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
     if (m_pCfg == nullptr) { return false; }
 
-    m_leftCtrlHeld  = (GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0;
-    m_rightCtrlHeld = (GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0;
+    m_ctrlHeld = ((static_cast<UINT>(GetAsyncKeyState(VK_LCONTROL)) | static_cast<UINT>(GetAsyncKeyState(VK_RCONTROL))) & 0x8000u) != 0;
 
     // 1. Register window class
     WNDCLASSW wc = {};
@@ -786,9 +830,8 @@ void DesktopIndicator::ToggleEditMode() {
 }
 
 void DesktopIndicator::SetEditMode(bool edit) {
-    m_editMode        = edit;
-    m_ctrlDragPending = false;
-    m_ctrlArmed       = false;
+    m_editMode  = edit;
+    m_dragState = IndicatorDragState::Idle;
     if (m_pCfg != nullptr && m_editMode && !m_isTaskbarEmbedded) { m_pCfg->positionPreset = PositionPreset::Custom; }
     UpdateClickThroughStyle();
     if (m_editMode && !m_isTaskbarEmbedded && !m_layers.empty()) {
@@ -903,8 +946,10 @@ void DesktopIndicator::RepositionCustom() {
         SIZE sz     = MeasureContent(l);
         int  w      = sz.cx;
         int  h      = sz.cy;
-        l.anchorPos = {RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),
-                       RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, h)};
+        l.anchorPos = {
+            RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),
+            RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, h),
+        };
         SetWindowPos(l.hwnd, nullptr, l.anchorPos.x, l.anchorPos.y, 0, 0,
                      SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
@@ -948,23 +993,12 @@ void DesktopIndicator::HideDragOverlay() {
 }
 
 void DesktopIndicator::MoveByDelta(int dx, int dy) {
-    if (m_pCfg == nullptr) { return; }
-    for (auto &l : m_layers) {
-        RECT r;
-        GetWindowRect(l.hwnd, &r);
-        l.anchorPos = {r.left + dx, r.top + dy};
-        if (&l == m_layers.data()) {
-            SIZE sz               = MeasureContent(l);
-            int  w                = sz.cx;
-            int  h                = sz.cy;
-            m_anchorX             = DetectAnchorX(l.monitor, l.anchorPos.x, w);
-            m_anchorY             = DetectAnchorY(l.work, l.anchorPos.y, h);
-            m_pCfg->windowRatio.x = XToRatio(l.monitor, l.anchorPos.x, m_anchorX, w);
-            m_pCfg->windowRatio.y = YToRatio(l.work, l.anchorPos.y, m_anchorY, h);
-        }
-        SetWindowPos(l.hwnd, nullptr, l.anchorPos.x, l.anchorPos.y, 0, 0,
-                     SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-    }
+    if (m_pCfg == nullptr || m_layers.empty()) { return; }
+    RECT r;
+    GetWindowRect(m_layers[0].hwnd, &r);
+    POINT topLeft = {r.left + dx, r.top + dy};
+    ApplyIndicatorTopLeft(m_layers[0], topLeft);
+    RepositionCustom();
     m_pCfg->positionPreset = PositionPreset::Custom;
 }
 
@@ -1100,92 +1134,22 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
         return CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, outBits, nullptr, 0);
     };
 
-    // 横向布局绘制：名字在上、符号一行；同时记录符号中心（旋转后即为纵向坐标）
+    // 横向布局绘制：名字在上、符号一行。
     auto drawHorizontal = [&](void *bits, int bw, int bh) {
         std::fill_n(static_cast<DWORD *>(bits), static_cast<size_t>(bw) * bh, m_editMode ? 0x55000000u : 0u);
 
         int symbolTop = kPadding;
         int symStartX = kPadding;
         if (metrics.nameHeight > 0) {
-            COLORREF               nameColor = (colors.count >= 2)
-                                                   ? InterpolateGradientColor(colors.colors.data(), colors.count,
-                                                                              static_cast<float>(m_currentDesktop) / static_cast<float>(std::max(static_cast<int>(m_text.size()) - 1, 1)))
-                                                   : colors.colors[0];
-            std::array<wchar_t, 8> colorBuf{};
-            swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X", // NOLINT
-                       GetRValue(nameColor), GetGValue(nameColor), GetBValue(nameColor));
-            std::wstring nameColorStr(colorBuf.data());
-            int          nameFont = static_cast<int>(static_cast<float>(metrics.fontSize) * kNameFontScale);
-            int          nameX    = (bw - metrics.nameWidth) / 2;
-            NameRenderer().Render(bits, bw, bh, nameX, kPadding, metrics.nameWidth, metrics.nameHeight,
-                                  m_currentName.c_str(), nameColorStr, nameFont);
+            DrawNameRow(bits, bw, bh, metrics, colors);
             symbolTop    = kPadding + metrics.nameHeight + kRowGap;
             int contentW = bw - kPadding * 2;
             symStartX    = kPadding + std::max((contentW - metrics.symbolWidth) / 2, 0);
         }
 
         if (m_pCfg->displayMode != IndicatorDisplayMode::Name) {
-            int  symCount   = static_cast<int>(m_text.size());
-            auto symColorAt = [&](int i) -> COLORREF {
-                return (colors.count >= 2)
-                           ? InterpolateGradientColor(colors.colors.data(), colors.count,
-                                                      static_cast<float>(i) / static_cast<float>(std::max(symCount - 1, 1)))
-                           : colors.colors[0];
-            };
-            int curX = symStartX;
-            for (int i = 0; i < symCount; ++i) {
-                int                    symFont = static_cast<int>(static_cast<float>(metrics.fontSize) * layer.symbolScales.at(i));
-                std::array<wchar_t, 8> colorBuf{};
-                swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X", // NOLINT
-                           GetRValue(symColorAt(i)), GetGValue(symColorAt(i)), GetBValue(symColorAt(i)));
-                std::wstring symColorStr(colorBuf.data());
-                std::wstring sym(1, m_text[i]);
-                float        left    = static_cast<float>(curX);
-                float        right   = left + static_cast<float>(metrics.widths.at(i));
-                int          drawTop = symbolTop;
-                int          drawH   = bh - symbolTop - kPadding;
-                m_renderer->Render(bits, bw, bh, curX, drawTop, metrics.widths.at(i), drawH,
-                                   sym.c_str(), symColorStr, symFont);
-
-                // Use the same geometry as the actual rendered symbol, so the click area matches the
-                // visible icon exactly even when font size, spacing, or scaling changes dynamically.
-                layer.symbolLefts.at(i)      = left;
-                layer.symbolRights.at(i)     = right;
-                layer.symbolCenters.at(i)    = (left + right) * 0.5f;
-                layer.symbolHalfWidths.at(i) = (right - left) * 0.5f;
-                layer.symbolRects.at(i)      = {
-                    static_cast<LONG>(left),
-                    static_cast<LONG>(drawTop),
-                    static_cast<LONG>(right),
-                    static_cast<LONG>(drawTop + drawH),
-                };
-                curX += metrics.widths.at(i) + metrics.spacing;
-            }
-
-            // Make the whole symbol box hit-testable. A WS_EX_LAYERED window only
-            // receives mouse input over pixels with non-zero alpha, so hollow glyphs
-            // (e.g. ○/◌) whose interior has alpha=0 would only be clickable on their
-            // outline. Nudge transparent pixels inside each symbol rect to a barely
-            // visible alpha (1/255) so a left-click anywhere on the icon reaches the
-            // window and can switch desktops, without altering the drawn glyph.
-            // 在横向缓冲区填充，竖排旋转后 alpha 会一并旋转过去。
-            constexpr DWORD kClickBlendAlpha = 0x01u << 24u; // ARGB: A=1, RGB=0 (premultiplied, imperceptible)
-            for (int i = 0; i < symCount; ++i) {
-                const RECT &rc = layer.symbolRects.at(i);
-                LONG        x0 = std::max(rc.left, 0L);
-                LONG        x1 = std::min(rc.right, static_cast<LONG>(bw));
-                LONG        y0 = std::max(rc.top, 0L);
-                LONG        y1 = std::min(rc.bottom, static_cast<LONG>(bh));
-                for (LONG yy = y0; yy < y1; ++yy) {
-                    auto *row = static_cast<DWORD *>(bits) + static_cast<size_t>(yy) * bw;
-                    for (LONG xx = x0; xx < x1; ++xx) {
-                        DWORD &pix = row[xx];
-                        if (((pix >> 24u) & 0xFFu) == 0u) {
-                            pix |= kClickBlendAlpha;
-                        }
-                    }
-                }
-            }
+            DrawSymbolRow(bits, bw, bh, metrics, colors, layer, symbolTop, symStartX);
+            FillSymbolClickAlpha(bits, bw, bh, layer);
         }
     };
 
@@ -1221,8 +1185,7 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
         // 旋转后把符号命中矩形从横向内容坐标转换到最终客户区坐标，供 GetSymbolIndexAt 使用
         if (m_pCfg->displayMode != IndicatorDisplayMode::Name) {
             for (int i = 0; i < static_cast<int>(m_text.size()); ++i) {
-                RECT rc                 = layer.symbolRects.at(i);
-                layer.symbolRects.at(i) = {h0 - rc.bottom, rc.left, h0 - rc.top, rc.right};
+                layer.symbolRects.at(i) = RotateRect90CW(layer.symbolRects.at(i), h0);
             }
         }
     }
@@ -1247,6 +1210,72 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
     SelectObject(hdcMem, hOldBmp);
     if (hTemp != nullptr) { DeleteObject(hTemp); }
     DeleteObject(hFinal);
+}
+
+void DesktopIndicator::DrawNameRow(void *bits, int bw, int bh, const SymbolMetrics &metrics, const ColorArray &colors) {
+    COLORREF               nameColor = (colors.count >= 2)
+                                           ? InterpolateGradientColor(colors.colors.data(), colors.count,
+                                                                      static_cast<float>(m_currentDesktop) / static_cast<float>(std::max(static_cast<int>(m_text.size()) - 1, 1)))
+                                           : colors.colors[0];
+    std::array<wchar_t, 8> colorBuf{};
+    swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X", // NOLINT
+               GetRValue(nameColor), GetGValue(nameColor), GetBValue(nameColor));
+    std::wstring nameColorStr(colorBuf.data());
+    int          nameFont = static_cast<int>(static_cast<float>(metrics.fontSize) * kNameFontScale);
+    int          nameX    = (bw - metrics.nameWidth) / 2;
+    NameRenderer().Render(bits, bw, bh, nameX, kPadding, metrics.nameWidth, metrics.nameHeight,
+                          m_currentName.c_str(), nameColorStr, nameFont);
+}
+
+void DesktopIndicator::DrawSymbolRow(void *bits, int bw, int bh, const SymbolMetrics &metrics, const ColorArray &colors,
+                                     MonitorLayer &layer, int symbolTop, int symStartX) {
+    int  symCount   = static_cast<int>(m_text.size());
+    auto symColorAt = [&](int i) -> COLORREF {
+        return (colors.count >= 2)
+                   ? InterpolateGradientColor(colors.colors.data(), colors.count,
+                                              static_cast<float>(i) / static_cast<float>(std::max(symCount - 1, 1)))
+                   : colors.colors[0];
+    };
+    int curX = symStartX;
+    for (int i = 0; i < symCount; ++i) {
+        int                    symFont = static_cast<int>(static_cast<float>(metrics.fontSize) * layer.symbolScales.at(i));
+        std::array<wchar_t, 8> colorBuf{};
+        swprintf_s(colorBuf.data(), colorBuf.size(), L"#%02X%02X%02X", // NOLINT
+                   GetRValue(symColorAt(i)), GetGValue(symColorAt(i)), GetBValue(symColorAt(i)));
+        std::wstring symColorStr(colorBuf.data());
+        std::wstring sym(1, m_text[i]);
+        int          drawH = bh - symbolTop - kPadding;
+        m_renderer->Render(bits, bw, bh, curX, symbolTop, metrics.widths.at(i), drawH,
+                           sym.c_str(), symColorStr, symFont);
+        // 命中矩形与实际绘制几何一致，字/间距/缩放变化时仍准确。
+        layer.symbolRects.at(i) = {
+            static_cast<LONG>(curX),
+            static_cast<LONG>(symbolTop),
+            static_cast<LONG>(curX + metrics.widths.at(i)),
+            static_cast<LONG>(symbolTop + drawH),
+        };
+        curX += metrics.widths.at(i) + metrics.spacing;
+    }
+}
+
+void DesktopIndicator::FillSymbolClickAlpha(void *bits, int bw, int bh, const MonitorLayer &layer) {
+    // WS_EX_LAYERED 窗口只在非零 alpha 像素接收鼠标；空心符号（○/◌）内部 alpha=0，
+    // 这里把符号矩形内的透明像素 alpha 提到 1/255，使整块图标可点击而不改变外观。
+    constexpr DWORD kClickBlendAlpha = 0x01u << 24u; // ARGB: A=1, RGB=0（预乘，几乎不可见）
+    for (int i = 0; i < static_cast<int>(m_text.size()); ++i) {
+        const RECT &rc = layer.symbolRects.at(i);
+        LONG        x0 = std::max(rc.left, 0L);
+        LONG        x1 = std::min(rc.right, static_cast<LONG>(bw));
+        LONG        y0 = std::max(rc.top, 0L);
+        LONG        y1 = std::min(rc.bottom, static_cast<LONG>(bh));
+        for (LONG yy = y0; yy < y1; ++yy) {
+            auto *row = static_cast<DWORD *>(bits) + static_cast<size_t>(yy) * bw;
+            for (LONG xx = x0; xx < x1; ++xx) {
+                DWORD &pix = row[xx];
+                if (((pix >> 24u) & 0xFFu) == 0u) { pix |= kClickBlendAlpha; }
+            }
+        }
+    }
 }
 
 void DesktopIndicator::RenderLayer(MonitorLayer &layer, HDC hdcScreen, HDC hdcMem) {
@@ -1315,9 +1344,7 @@ void DesktopIndicator::Rebuild() {
     m_isTaskbarEmbedded = false;
     m_dragOverlayActive = false;
     m_editMode          = false;
-    m_dragging          = false;
-    m_ctrlDragPending   = false;
-    m_ctrlArmed         = false;
+    m_dragState         = IndicatorDragState::Idle;
     ReleaseCapture();
 
     EnumerateMonitors(GetModuleHandle(nullptr));
@@ -1355,34 +1382,39 @@ bool DesktopIndicator::HandleRawInput(HWND /*hwnd*/, LPARAM lp) {
 
     auto *raw = reinterpret_cast<RAWINPUT *>(buf.data()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
     if (raw->header.dwType == RIM_TYPEKEYBOARD) {
-        const RAWKEYBOARD &key  = raw->data.keyboard; // NOLINT(cppcoreguidelines-pro-type-union-access)
-        const bool         down = (key.Flags & RI_KEY_BREAK) == 0;
-        if (key.VKey == VK_LCONTROL
-            || (key.VKey == VK_CONTROL && (key.Flags & RI_KEY_E0) == 0)) {
-            m_leftCtrlHeld = down;
-            UpdateClickThroughStyle();
-        } else if (key.VKey == VK_RCONTROL
-                   || (key.VKey == VK_CONTROL && (key.Flags & RI_KEY_E0) != 0)) {
-            m_rightCtrlHeld = down;
+        return HandleKeyboardRawInput(raw->data.keyboard); // NOLINT(cppcoreguidelines-pro-type-union-access)
+    }
+    if (raw->header.dwType == RIM_TYPEMOUSE) {
+        return HandleMouseRawInput(raw->data.mouse); // NOLINT(cppcoreguidelines-pro-type-union-access)
+    }
+    return false;
+}
+
+bool DesktopIndicator::HandleKeyboardRawInput(const RAWKEYBOARD &key) {
+    // 仅跟踪 Ctrl 按下/松开，用于动态切换点击穿透样式。
+    if (key.VKey == VK_LCONTROL || key.VKey == VK_RCONTROL || key.VKey == VK_CONTROL) {
+        const bool down = (key.Flags & RI_KEY_BREAK) == 0;
+        if (m_ctrlHeld != down) {
+            m_ctrlHeld = down;
             UpdateClickThroughStyle();
         }
-        return false;
     }
-    if (raw->header.dwType != RIM_TYPEMOUSE) { return false; }
+    return false;
+}
 
-    const USHORT buttonFlags = raw->data.mouse.usButtonFlags; // NOLINT(cppcoreguidelines-pro-type-union-access)
-    if ((buttonFlags & RI_MOUSE_WHEEL) == 0) { return false; }
+bool DesktopIndicator::HandleMouseRawInput(const RAWMOUSE &mouse) {
+    if ((mouse.usButtonFlags & RI_MOUSE_WHEEL) == 0) { return false; } // NOLINT(cppcoreguidelines-pro-type-union-access)
 
-    auto  delta = static_cast<int16_t>(raw->data.mouse.usButtonData); // NOLINT(cppcoreguidelines-pro-type-union-access)
     POINT cursorPt;
-    if (!GetCursorPos(&cursorPt) || !IsPtOnOverlay(cursorPt)) { return false; }
+    if ((GetCursorPos(&cursorPt) == 0) || !IsPtOnOverlay(cursorPt)) { return false; }
+
+    const auto delta = static_cast<int16_t>(mouse.usButtonData); // NOLINT(cppcoreguidelines-pro-type-union-access)
 
     // 编辑模式或按住 Ctrl 时，滚轮用于缩放字号（Ctrl+滚轮在普通模式也可缩放）。
-    bool ctrlHeld = (static_cast<UINT>(GetAsyncKeyState(VK_CONTROL)) & 0x8000u) != 0;
-    if ((m_editMode || ctrlHeld) && m_pCfg != nullptr) {
+    if ((m_editMode || IsCtrlHeld()) && m_pCfg != nullptr) {
         int oldSize = m_pCfg->fontSize;
         m_pCfg->fontSize += (delta > 0) ? 1 : -1;
-        m_pCfg->fontSize = (std::clamp)(m_pCfg->fontSize, 12, 300);
+        m_pCfg->fontSize = std::clamp(m_pCfg->fontSize, 12, 300);
         if (m_pCfg->fontSize != oldSize) {
             m_pCfg->SaveToIni();
             RebuildText();
@@ -1390,39 +1422,13 @@ bool DesktopIndicator::HandleRawInput(HWND /*hwnd*/, LPARAM lp) {
         return true;
     }
 
-    if (!m_scrollSwitchFn || m_desktopCount <= 0) { return false; }
+    if (!m_switchDesktopFn || m_desktopCount <= 0) { return false; }
     int target = m_currentDesktop + ((delta > 0) ? -1 : 1);
     if (target >= 0 && target < m_desktopCount) {
-        m_scrollSwitchFn(target);
+        m_switchDesktopFn(target);
         return true;
     }
     return false;
-}
-
-bool DesktopIndicator::HandleDragStart(HWND hwnd, LPARAM lp) {
-    if (!m_editMode) { return false; }
-    if (m_isTaskbarEmbedded) { return true; }
-    POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
-    ClientToScreen(hwnd, &pt);
-    auto it = std::ranges::find_if(m_layers,
-                                   [hwnd](const MonitorLayer &l) {
-                                       return l.hwnd == hwnd;
-                                   });
-    if (it == m_layers.end()) { return true; }
-
-    int winLeft    = it->anchorPos.x;
-    int winTop     = it->anchorPos.y;
-    m_dragOffset.x = pt.x - winLeft;
-    m_dragOffset.y = pt.y - winTop;
-    m_dragging     = true;
-    SetCapture(hwnd);
-    return true;
-}
-
-bool DesktopIndicator::HitTestClickSwitch(POINT screenPt, int &outIndex) const {
-    if ((!m_leftCtrlHeld && !m_rightCtrlHeld) || !m_scrollSwitchFn || m_desktopCount <= 0) { return false; }
-    if (!GetSymbolIndexAt(screenPt, outIndex)) { return false; }
-    return outIndex >= 0 && outIndex < m_desktopCount;
 }
 
 LRESULT CALLBACK DesktopIndicator::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -1448,100 +1454,76 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         break;
 
     case WM_LBUTTONDOWN: {
-        if (m_editMode) {
-            if (HandleDragStart(hwnd, lp)) { return 0; }
-            return DefWindowProcW(hwnd, msg, wp, lp);
-        }
-
-        // 非编辑模式：按住 Ctrl 时窗口才可点击。按下先挂起，移动超过阈值判定为拖动，
-        // 否则松手按点击处理（命中符号则切换桌面）。
         POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
         ClientToScreen(hwnd, &pt);
-        m_ctrlArmed = (m_leftCtrlHeld || m_rightCtrlHeld);
-        if (!m_ctrlArmed) { return DefWindowProcW(hwnd, msg, wp, lp); }
-        auto it = std::ranges::find_if(m_layers,
-                                       [hwnd](const MonitorLayer &l) { return l.hwnd == hwnd; });
-        if (it == m_layers.end()) { return DefWindowProcW(hwnd, msg, wp, lp); }
-        m_dragOffset    = {pt.x - it->anchorPos.x, pt.y - it->anchorPos.y};
-        m_ctrlDragStart = pt;
+
+        if (m_editMode) {
+            if (m_isTaskbarEmbedded) { return 0; }
+            MonitorLayer *layer = FindLayer(hwnd);
+            if (layer == nullptr) { return 0; }
+            m_dragGrabOffset  = {pt.x - layer->anchorPos.x, pt.y - layer->anchorPos.y};
+            m_dragStartScreen = pt;
+            m_dragState       = IndicatorDragState::Dragging; // 编辑模式按下即拖动
+            SetCapture(hwnd);
+            return 0;
+        }
+
+        // 非编辑模式：窗口仅按住 Ctrl 时可点击。按下先挂起，超过阈值判定拖动，
+        // 否则松手按点击处理（命中符号则切换桌面）。
+        if (!IsCtrlHeld()) { return DefWindowProcW(hwnd, msg, wp, lp); }
+        MonitorLayer *layer = FindLayer(hwnd);
+        if (layer == nullptr) { return DefWindowProcW(hwnd, msg, wp, lp); }
+        m_dragGrabOffset  = {pt.x - layer->anchorPos.x, pt.y - layer->anchorPos.y};
+        m_dragStartScreen = pt;
+        m_dragState       = IndicatorDragState::Pressed;
         SetCapture(hwnd);
-        m_ctrlDragPending = true;
         return 0;
     }
 
     case WM_MOUSEMOVE: {
-        if (m_ctrlDragPending && ((wp & MK_LBUTTON) != 0u)) {
-            POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
-            ClientToScreen(hwnd, &pt);
-            LONG moveX = pt.x - m_ctrlDragStart.x;
-            LONG moveY = pt.y - m_ctrlDragStart.y;
-            if (moveX < 0) { moveX = -moveX; }
-            if (moveY < 0) { moveY = -moveY; }
-            if (!m_isTaskbarEmbedded && (moveX >= GetSystemMetrics(SM_CXDRAG) || moveY >= GetSystemMetrics(SM_CYDRAG))) {
-                m_ctrlDragPending = false;
-                m_dragging        = true;
+        if ((wp & MK_LBUTTON) == 0u) { return 0; }
+        POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+        ClientToScreen(hwnd, &pt);
+        if (m_dragState == IndicatorDragState::Pressed) {
+            if (!m_isTaskbarEmbedded && ExceedsDragThreshold(m_dragStartScreen, pt)) {
+                m_dragState = IndicatorDragState::Dragging;
             }
         }
-        if (m_dragging && ((wp & MK_LBUTTON) != 0u)) {
-            POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
-            ClientToScreen(hwnd, &pt);
-            SIZE sz0              = MeasureContent(m_layers[0]);
-            int  w0               = sz0.cx;
-            int  h0               = sz0.cy;
-            m_anchorX             = DetectAnchorX(m_layers[0].monitor, pt.x - m_dragOffset.x, w0);
-            m_anchorY             = DetectAnchorY(m_layers[0].work, pt.y - m_dragOffset.y, h0);
-            m_pCfg->windowRatio.x = XToRatio(m_layers[0].monitor, pt.x - m_dragOffset.x, m_anchorX, w0);
-            m_pCfg->windowRatio.y = YToRatio(m_layers[0].work, pt.y - m_dragOffset.y, m_anchorY, h0);
+        if (m_dragState == IndicatorDragState::Dragging) {
+            POINT topLeft = {pt.x - m_dragGrabOffset.x, pt.y - m_dragGrabOffset.y};
+            ApplyIndicatorTopLeft(m_layers[0], topLeft);
             RepositionCustom();
         }
         return 0;
     }
 
     case WM_LBUTTONUP: {
-        if (m_editMode) {
-            if (m_dragging) {
-                m_dragging = false;
-                ReleaseCapture();
-                if (m_pCfg != nullptr) { m_pCfg->positionPreset = PositionPreset::Custom; }
-            }
+        if (m_dragState == IndicatorDragState::Dragging) {
+            EndIndicatorDrag(true);
             return 0;
         }
-        if (m_dragging) {
-            // Ctrl+拖动结束：落盘位置（普通模式没有「退出编辑时保存」的时机）。
-            m_dragging = false;
-            ReleaseCapture();
-            if (m_pCfg != nullptr) {
-                m_pCfg->positionPreset = PositionPreset::Custom;
-                m_pCfg->SaveToIni();
-            }
-            UpdateClickThroughStyle();
-            return 0;
-        }
-        if (m_ctrlDragPending) {
+        if (m_dragState == IndicatorDragState::Pressed) {
             // 未超过阈值＝点击：命中符号则切换桌面。
-            m_ctrlDragPending = false;
+            m_dragState = IndicatorDragState::Idle;
             ReleaseCapture();
             POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             ClientToScreen(hwnd, &pt);
             int idx = -1;
-            if (m_ctrlArmed && HitTestClickSwitch(pt, idx)) {
-                m_scrollSwitchFn(idx);
+            if (m_switchDesktopFn && m_desktopCount > 0 && GetSymbolIndexAt(pt, idx) && idx >= 0 && idx < m_desktopCount) {
+                m_switchDesktopFn(idx);
             }
-            m_ctrlArmed = false;
             UpdateClickThroughStyle();
             return 0;
         }
+        if (m_editMode) { return 0; }
         return DefWindowProcW(hwnd, msg, wp, lp);
     }
 
     case WM_CAPTURECHANGED:
         // Ctrl+拖动/挂起过程中丢失捕获（如 Alt+Tab），复位避免卡在拖动状态。
         // 编辑模式的捕获切换不在此处理，避免误取消编辑拖动。
-        if (!m_editMode && (m_ctrlDragPending || m_dragging)) {
-            m_ctrlDragPending = false;
-            m_ctrlArmed       = false;
-            m_dragging        = false;
-            UpdateClickThroughStyle();
+        if (!m_editMode && m_dragState != IndicatorDragState::Idle) {
+            EndIndicatorDrag(false);
         }
         return 0;
 
@@ -1564,7 +1546,7 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             int delta   = GET_WHEEL_DELTA_WPARAM(wp);
             int oldSize = m_pCfg->fontSize;
             m_pCfg->fontSize += (delta > 0) ? 1 : -1;
-            m_pCfg->fontSize = (std::clamp)(m_pCfg->fontSize, 12, 300);
+            m_pCfg->fontSize = std::clamp(m_pCfg->fontSize, 12, 300);
             if (m_pCfg->fontSize != oldSize) {
                 m_pCfg->SaveToIni();
                 RebuildText();
@@ -1575,7 +1557,7 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
 
     case WM_KEYDOWN:
         if (m_editMode) {
-            int step = ((static_cast<UINT>(GetKeyState(VK_CONTROL)) & 0x8000u) != 0) ? 10 : 1;
+            int step = IsCtrlHeld() ? 10 : 1;
             switch (wp) {
             case VK_UP: MoveByDelta(0, -step); return 0;
             case VK_DOWN: MoveByDelta(0, step); return 0;

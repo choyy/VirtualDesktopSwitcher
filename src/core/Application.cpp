@@ -306,7 +306,8 @@ void Application::SetupTrayCallbacks() {
             .fontName      = m_indicatorCfg.fontName,
             .charSpacing   = m_indicatorCfg.charSpacing,
             .modMask       = m_modMask,
-            .pinByApp      = m_pinByApp};
+            .pinByApp      = m_pinByApp,
+        };
 
         SettingsDialog::Result res = SettingsDialog::Show(m_hwnd, cur,
                                                           [this](const SettingsDialog::Result &preview) {
@@ -341,10 +342,10 @@ void Application::SetupTrayCallbacks() {
         if (m_pOverlay) { m_pOverlay->SetShowMode(static_cast<ShowMode>(mode)); }
     });
     m_pTrayIcon->SetDragSwitchModeCallback([this](int mode) {
-        auto m = static_cast<DragSwitchMode>(mode);
-        m_dragHandler->SetDragSwitchMode(m);
-        // 保持配置与运行时一致：点击切换桌面复用了该模式，需要读到最新值。
-        m_indicatorCfg.dragSwitchMode = m;
+        auto dragMode = static_cast<DragSwitchMode>(mode);
+        m_dragHandler->SetDragSwitchMode(dragMode);
+        // 同步内存配置，避免后续 SaveToIni() 把托盘刚设置的模式覆盖回旧值。
+        m_indicatorCfg.dragSwitchMode = dragMode;
     });
     m_pTrayIcon->SetAnimModeCallback([this](bool on) {
         if (m_pOverlay) { m_pOverlay->SetAnimMode(on); }
@@ -384,7 +385,7 @@ bool Application::Initialize() {
     if (overlayOk) {
         if (m_indicatorCfg.animMode != 0) { m_pOverlay->SetAnimMode(true); }
         if (m_indicatorCfg.autoContrast) { m_pOverlay->SetAutoContrast(true); }
-        m_pOverlay->SetScrollSwitchCallback([this](int target) {
+        m_pOverlay->SetSwitchDesktopCallback([this](int target) {
             OnDesktopSwitch(target);
         });
         m_dragHandler = std::make_unique<WindowDragHandler>(m_pOverlay.get());

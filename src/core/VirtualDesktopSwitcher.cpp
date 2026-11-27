@@ -84,8 +84,12 @@ LRESULT CALLBACK VirtualDesktopSwitcher::LowLevelKeyboardProc(int nCode, WPARAM 
     const bool shift = (static_cast<UINT>(GetAsyncKeyState(VK_SHIFT)) & 0x8000u) != 0;
     const bool win   = (static_cast<UINT>(GetAsyncKeyState(VK_LWIN)) & 0x8000u) != 0 || (static_cast<UINT>(GetAsyncKeyState(VK_RWIN)) & 0x8000u) != 0;
 
-    uint8_t held  = (alt ? ModMask::Alt : 0u) | (ctrl ? ModMask::Ctrl : 0u) | (shift ? ModMask::Shift : 0u) | (win ? ModMask::Win : 0u);
-    bool    match = held != 0 && held == s_modMask;
+    ModMask held = ModMask::None;
+    if (alt) { held |= ModMask::Alt; }
+    if (ctrl) { held |= ModMask::Ctrl; }
+    if (shift) { held |= ModMask::Shift; }
+    if (win) { held |= ModMask::Win; }
+    bool match = held != ModMask::None && held == s_modMask;
 
     if (match) {
         for (int i = 0; i < kMaxDesktops; ++i) {
@@ -196,8 +200,10 @@ bool VirtualDesktopSwitcher::ActivateTopWindowOnMonitor(HMONITOR hMon) {
         }
     }
 
-    INPUT input{.type = INPUT_MOUSE,
-                .mi   = {.dwFlags = MOUSEEVENTF_MOVE}};
+    INPUT input{
+        .type = INPUT_MOUSE,
+        .mi   = {.dwFlags = MOUSEEVENTF_MOVE},
+    };
     SendInput(1, &input, sizeof(input));
 
     HWND hwnd = FindTopWindowOnMonitor(hMon);

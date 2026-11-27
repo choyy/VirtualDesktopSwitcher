@@ -3,7 +3,8 @@
 #include <cstdint>
 
 enum class LangType : std::uint8_t { Chinese,
-                                     English };
+                                     English,
+};
 
 namespace Lang {
 

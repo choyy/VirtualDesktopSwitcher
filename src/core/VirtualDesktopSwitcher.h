@@ -10,12 +10,23 @@
 constexpr UINT WM_SWITCH_DESKTOP          = WM_USER + 1;
 constexpr UINT WM_TOGGLE_PIN_ALL_DESKTOPS = WM_USER + 20;
 
-enum ModMask : uint8_t {
+enum class ModMask : uint8_t {
+    None  = 0,
     Alt   = 1,
     Ctrl  = 2,
     Shift = 4,
     Win   = 8,
 };
+
+[[nodiscard]] constexpr bool HasMod(ModMask value, ModMask flag) {
+    return (static_cast<uint8_t>(value) & static_cast<uint8_t>(flag)) != 0;
+}
+
+constexpr ModMask operator|(ModMask a, ModMask b) {
+    return static_cast<ModMask>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+
+constexpr ModMask &operator|=(ModMask &a, ModMask b) { return a = a | b; }
 
 class VirtualDesktopSwitcher {
 public:

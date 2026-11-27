@@ -89,8 +89,12 @@ constexpr std::array kSymbolList = {
 };
 
 constexpr std::array kFontList = {
-    L"Arial Black", L"Lucida Sans Unicode", L"MS Gothic",
-    L"Segoe Script", L"Segoe UI Symbol"};
+    L"Arial Black",
+    L"Lucida Sans Unicode",
+    L"MS Gothic",
+    L"Segoe Script",
+    L"Segoe UI Symbol",
+};
 
 struct FontEnumData {
     HWND                      hCmb;
@@ -185,12 +189,12 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SetDlgItemTextW(hwnd, IDOK, Lang::Get(L"Settings.BtnOK"));
         SetDlgItemTextW(hwnd, IDCANCEL, Lang::Get(L"Settings.BtnCancel"));
 
-        uint8_t mask = data->result.modMask;
+        const ModMask mask = static_cast<ModMask>(data->result.modMask);
         SendDlgItemMessageW(hwnd, data->result.pinByApp ? IDC_PIN_APP : IDC_PIN_WINDOW, BM_SETCHECK, BST_CHECKED, 0);
-        SendDlgItemMessageW(hwnd, IDC_MODKEY_ALT, BM_SETCHECK, ((mask & ModMask::Alt) != 0) ? BST_CHECKED : BST_UNCHECKED, 0);
-        SendDlgItemMessageW(hwnd, IDC_MODKEY_CTRL, BM_SETCHECK, ((mask & ModMask::Ctrl) != 0) ? BST_CHECKED : BST_UNCHECKED, 0);
-        SendDlgItemMessageW(hwnd, IDC_MODKEY_SHIFT, BM_SETCHECK, ((mask & ModMask::Shift) != 0) ? BST_CHECKED : BST_UNCHECKED, 0);
-        SendDlgItemMessageW(hwnd, IDC_MODKEY_WIN, BM_SETCHECK, ((mask & ModMask::Win) != 0) ? BST_CHECKED : BST_UNCHECKED, 0);
+        SendDlgItemMessageW(hwnd, IDC_MODKEY_ALT, BM_SETCHECK, HasMod(mask, ModMask::Alt) ? BST_CHECKED : BST_UNCHECKED, 0);
+        SendDlgItemMessageW(hwnd, IDC_MODKEY_CTRL, BM_SETCHECK, HasMod(mask, ModMask::Ctrl) ? BST_CHECKED : BST_UNCHECKED, 0);
+        SendDlgItemMessageW(hwnd, IDC_MODKEY_SHIFT, BM_SETCHECK, HasMod(mask, ModMask::Shift) ? BST_CHECKED : BST_UNCHECKED, 0);
+        SendDlgItemMessageW(hwnd, IDC_MODKEY_WIN, BM_SETCHECK, HasMod(mask, ModMask::Win) ? BST_CHECKED : BST_UNCHECKED, 0);
 
         FillCombo(GetDlgItem(hwnd, IDC_CUR_SYM), kSymbolList.data(), kSymbolList.size(), data->result.currentSymbol, false, true);
         FillCombo(GetDlgItem(hwnd, IDC_OTH_SYM), kSymbolList.data(), kSymbolList.size(), data->result.otherSymbol, false, true);
@@ -306,12 +310,12 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             data->result.charSpacing = ReadSpacing();
             data->result.accepted    = true;
             data->result.pinByApp    = SendDlgItemMessageW(hwnd, IDC_PIN_APP, BM_GETCHECK, 0, 0) == BST_CHECKED;
-            uint8_t mask             = 0;
+            ModMask mask             = ModMask::None;
             if (SendDlgItemMessageW(hwnd, IDC_MODKEY_ALT, BM_GETCHECK, 0, 0) == BST_CHECKED) { mask |= ModMask::Alt; }
             if (SendDlgItemMessageW(hwnd, IDC_MODKEY_CTRL, BM_GETCHECK, 0, 0) == BST_CHECKED) { mask |= ModMask::Ctrl; }
             if (SendDlgItemMessageW(hwnd, IDC_MODKEY_SHIFT, BM_GETCHECK, 0, 0) == BST_CHECKED) { mask |= ModMask::Shift; }
             if (SendDlgItemMessageW(hwnd, IDC_MODKEY_WIN, BM_GETCHECK, 0, 0) == BST_CHECKED) { mask |= ModMask::Win; }
-            data->result.modMask = (mask != 0) ? mask : ModMask::Alt;
+            data->result.modMask = static_cast<uint8_t>((mask != ModMask::None) ? mask : ModMask::Alt);
             EndDialog(hwnd, id);
             break;
         }
