@@ -37,10 +37,10 @@ private:
 
     // 第三方拖拽工具（如 AltSnap）不进入原生 GUI_INMOVESIZE 循环，
     // 通过 EVENT_SYSTEM_MOVESIZESTART / EVENT_SYSTEM_MOVESIZEEND 跟踪
-    bool              m_eventMoveSize    = false;
-    HWND              m_eventHwnd        = nullptr;
-    RECT              m_eventLastRect    = {};
-    bool              m_hasEventLastRect = false;
+    bool m_eventMoveSize    = false;
+    HWND m_eventHwnd        = nullptr;
+    RECT m_eventLastRect    = {};
+    bool m_hasEventLastRect = false;
 
     static WindowDragHandler *s_instance;
     static LRESULT CALLBACK   DragHookProc(int nCode, WPARAM wParam, LPARAM lParam);

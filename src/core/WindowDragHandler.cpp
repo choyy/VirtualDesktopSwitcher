@@ -12,8 +12,7 @@ const HCURSOR s_hSizeNS   = LoadCursor(nullptr, IDC_SIZENS);
 const HCURSOR s_hSizeWE   = LoadCursor(nullptr, IDC_SIZEWE);
 
 bool IsResizeCursor(HCURSOR hCursor) {
-    return hCursor == s_hSizeNWSE || hCursor == s_hSizeNESW ||
-           hCursor == s_hSizeNS || hCursor == s_hSizeWE;
+    return hCursor == s_hSizeNWSE || hCursor == s_hSizeNESW || hCursor == s_hSizeNS || hCursor == s_hSizeWE;
 }
 
 HCURSOR GetCurrentCursor() {
@@ -22,8 +21,7 @@ HCURSOR GetCurrentCursor() {
 }
 
 bool SameRectSize(const RECT &a, const RECT &b) {
-    return (a.right - a.left) == (b.right - b.left) &&
-           (a.bottom - a.top) == (b.bottom - b.top);
+    return (a.right - a.left) == (b.right - b.left) && (a.bottom - a.top) == (b.bottom - b.top);
 }
 
 } // namespace
@@ -157,16 +155,13 @@ WindowDragHandler::MoveSizeEventProc(HWINEVENTHOOK /*hWinEventHook*/,
                                      LONG  idChild,
                                      DWORD /*dwEventThread*/,
                                      DWORD /*dwmsEventTime*/) {
-    if (s_instance == nullptr || idObject != OBJID_WINDOW ||
-        idChild != CHILDID_SELF || hwnd == nullptr) {
+    if (s_instance == nullptr || idObject != OBJID_WINDOW || idChild != CHILDID_SELF || hwnd == nullptr) {
         return;
     }
 
     if (event == EVENT_SYSTEM_MOVESIZESTART) {
         s_instance->OnMoveSizeStart(hwnd);
-    } else if (event == EVENT_SYSTEM_MOVESIZEEND &&
-               (hwnd == s_instance->m_eventHwnd ||
-                hwnd == s_instance->m_dragHwnd)) {
+    } else if (event == EVENT_SYSTEM_MOVESIZEEND && (hwnd == s_instance->m_eventHwnd || hwnd == s_instance->m_dragHwnd)) {
         s_instance->OnMoveSizeEnd();
     }
 }
@@ -175,8 +170,7 @@ bool WindowDragHandler::IsDragStillActive(bool inNativeMoveSize) const {
     if (m_isNativeDrag) {
         return inNativeMoveSize;
     }
-    return m_eventMoveSize && m_dragHwnd != nullptr &&
-           IsWindow(m_dragHwnd) != 0 && IsIconic(m_dragHwnd) == 0;
+    return m_eventMoveSize && m_dragHwnd != nullptr && IsWindow(m_dragHwnd) != 0 && IsIconic(m_dragHwnd) == 0;
 }
 
 void WindowDragHandler::TryBeginEventDrag() {
@@ -199,8 +193,7 @@ void WindowDragHandler::TryBeginEventDrag() {
         return;
     }
 
-    const bool moved =
-        (rc.left != m_eventLastRect.left || rc.top != m_eventLastRect.top);
+    const bool moved    = (rc.left != m_eventLastRect.left || rc.top != m_eventLastRect.top);
     const bool sameSize = SameRectSize(rc, m_eventLastRect);
     m_eventLastRect     = rc;
 
@@ -214,9 +207,8 @@ void WindowDragHandler::OnMouseMove(POINT pt) {
         return;
     }
 
-    GUITHREADINFO info = {.cbSize = sizeof(info)};
-    const bool    inMoveSize =
-        GetGUIThreadInfo(0, &info) != 0 && (info.flags & GUI_INMOVESIZE) != 0;
+    GUITHREADINFO info       = {.cbSize = sizeof(info)};
+    const bool    inMoveSize = GetGUIThreadInfo(0, &info) != 0 && (info.flags & GUI_INMOVESIZE) != 0;
 
     if (m_isDraggingWindow) {
         if (!IsDragStillActive(inMoveSize)) {

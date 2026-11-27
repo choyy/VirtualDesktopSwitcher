@@ -428,15 +428,36 @@ DesktopIndicator::~DesktopIndicator() {
     }
 }
 
-void DesktopIndicator::RegisterMouseWheelInput() {
+void DesktopIndicator::RegisterRawInput() {
     if (m_layers.empty()) { return; }
-    RAWINPUTDEVICE rid = {};
-    rid.usUsagePage    = 0x01;
-    rid.usUsage        = 0x02;
-    rid.dwFlags        = RIDEV_INPUTSINK;
-    rid.hwndTarget     = m_layers[0].hwnd;
-    if (RegisterRawInputDevices(&rid, 1, sizeof(rid)) == 0) {
+    RAWINPUTDEVICE devices[2] = {};
+    devices[0].usUsagePage    = 0x01;
+    devices[0].usUsage        = 0x02;
+    devices[0].dwFlags        = RIDEV_INPUTSINK;
+    devices[0].hwndTarget     = m_layers[0].hwnd;
+    devices[1].usUsagePage    = 0x01;
+    devices[1].usUsage        = 0x06;
+    devices[1].dwFlags        = RIDEV_INPUTSINK;
+    devices[1].hwndTarget     = m_layers[0].hwnd;
+    if (RegisterRawInputDevices(devices, 2, sizeof(devices[0])) == 0) {
         Log(L"[ERROR] RegisterRawInputDevices failed");
+    }
+}
+
+void DesktopIndicator::UpdateClickThroughStyle() {
+    const bool clickThrough = !m_editMode && !m_leftCtrlHeld && !m_rightCtrlHeld && !m_dragging && !m_ctrlDragPending;
+    for (auto &l : m_layers) {
+        auto  ex        = static_cast<DWORD>(GetWindowLong(l.hwnd, GWL_EXSTYLE));
+        DWORD updatedEx = ex;
+        if (clickThrough) {
+            updatedEx |= WS_EX_TRANSPARENT;
+        } else {
+            updatedEx &= ~static_cast<DWORD>(WS_EX_TRANSPARENT);
+        }
+        if (updatedEx == ex) { continue; }
+        SetWindowLong(l.hwnd, GWL_EXSTYLE, static_cast<LONG>(updatedEx));
+        SetWindowPos(l.hwnd, nullptr, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
     }
 }
 
@@ -446,12 +467,11 @@ bool DesktopIndicator::GetSymbolIndexAt(POINT screenPt, int &outIndex) const {
         GetWindowRect(l.hwnd, &wr);
         if (PtInRect(&wr, screenPt) == 0) { continue; }
 
-        if (static_cast<int>(screenPt.y - wr.top) < l.symbolRowTop) { continue; } // 名字区不参与命中
-
-        auto clientX = static_cast<float>(screenPt.x - wr.left);
+        POINT clientPt = {screenPt.x - wr.left, screenPt.y - wr.top};
         for (int i = 0; i < static_cast<int>(m_text.size()); ++i) {
-            if (l.symbolHalfWidths.at(i) <= 0.0f) { continue; }
-            if (std::fabs(clientX - l.symbolCenters.at(i)) <= l.symbolHalfWidths.at(i) + 3.0f) {
+            const RECT &rc = l.symbolRects.at(i);
+            if (rc.right <= rc.left || rc.bottom <= rc.top) { continue; }
+            if (PtInRect(&rc, clientPt) != 0) {
                 outIndex = i;
                 return true;
             }
@@ -484,10 +504,10 @@ void DesktopIndicator::UpdateTopmost() {
 }
 
 HWND DesktopIndicator::CreateMonitorWindow(HINSTANCE hInst) {
-    HWND hwnd = CreateWindowExW(
-        WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
-        L"DesktopIndicatorClass", L"DesktopIndicator",
-        WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, hInst, this);
+    DWORD exStyle = WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+    if (!m_editMode && !m_leftCtrlHeld && !m_rightCtrlHeld) { exStyle |= WS_EX_TRANSPARENT; }
+    HWND hwnd = CreateWindowExW(exStyle, L"DesktopIndicatorClass", L"DesktopIndicator",
+                                WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, hInst, this);
     if (hwnd != nullptr) {
         SetWndUserData(hwnd, this);
         SetWindowPos(hwnd, WantTopmost() ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
@@ -498,6 +518,9 @@ HWND DesktopIndicator::CreateMonitorWindow(HINSTANCE hInst) {
 
 bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
     if (m_pCfg == nullptr) { return false; }
+
+    m_leftCtrlHeld  = (GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0;
+    m_rightCtrlHeld = (GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0;
 
     // 1. Register window class
     WNDCLASSW wc = {};
@@ -530,22 +553,14 @@ bool DesktopIndicator::Initialize(HINSTANCE hInstance) {
     if (m_pCfg->positionPreset < PositionPreset::Count) {
         SetPositionPreset(m_pCfg->positionPreset);
     } else {
-        for (auto &l : m_layers) {
-            SIZE sz     = MeasureContent(l);
-            int  w      = sz.cx;
-            int  h      = sz.cy;
-            l.anchorPos = {RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),
-                           RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, h)};
-            SetWindowPos(l.hwnd, nullptr, l.anchorPos.x, l.anchorPos.y, 0, 0,
-                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        }
+        RepositionCustom();
     }
 
     // 5. Build initial text and apply display mode
     ApplyShowMode(m_pCfg->showMode);
 
-    // 6. Register Raw Input for mouse wheel
-    RegisterMouseWheelInput();
+    // 6. Register Raw Input for mouse input
+    RegisterRawInput();
 
     return !m_layers.empty();
 }
@@ -771,18 +786,11 @@ void DesktopIndicator::ToggleEditMode() {
 }
 
 void DesktopIndicator::SetEditMode(bool edit) {
-    m_editMode = edit;
+    m_editMode        = edit;
+    m_ctrlDragPending = false;
+    m_ctrlArmed       = false;
     if (m_pCfg != nullptr && m_editMode && !m_isTaskbarEmbedded) { m_pCfg->positionPreset = PositionPreset::Custom; }
-    for (auto &l : m_layers) {
-        auto ex = static_cast<DWORD>(GetWindowLong(l.hwnd, GWL_EXSTYLE));
-        if (m_editMode) {
-            SetWindowLong(l.hwnd, GWL_EXSTYLE, static_cast<LONG>(ex & ~static_cast<DWORD>(WS_EX_TRANSPARENT)));
-        } else {
-            SetWindowLong(l.hwnd, GWL_EXSTYLE, static_cast<LONG>(ex | WS_EX_TRANSPARENT));
-        }
-        SetWindowPos(l.hwnd, nullptr, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
-    }
+    UpdateClickThroughStyle();
     if (m_editMode && !m_isTaskbarEmbedded && !m_layers.empty()) {
         SetCapture(m_layers[0].hwnd);
     } else {
@@ -858,22 +866,22 @@ void DesktopIndicator::ApplyPresetPosition(PositionPreset preset) {
     Render();
 }
 
-void DesktopIndicator::RefreshWorkAreas()
-{
+void DesktopIndicator::RefreshWorkAreas() {
     if (m_pCfg == nullptr || m_layers.empty()) {
         return;
     }
 
     bool changed = false;
-    for (auto& l : m_layers) {
-        HMONITOR hMon = MonitorFromRect(&l.monitor, MONITOR_DEFAULTTONEAREST);
+    for (auto &l : m_layers) {
+        // 此处仅处理工作区变化；显示器拓扑变化走 WM_DISPLAYCHANGE→Rebuild，
+        // 故沿用旧 rcMonitor 定位对应显示器是安全的
+        HMONITOR    hMon = MonitorFromRect(&l.monitor, MONITOR_DEFAULTTONEAREST);
         MONITORINFO mi{};
         mi.cbSize = sizeof(mi);
         if (GetMonitorInfoW(hMon, &mi) == 0) {
             continue;
         }
-        if (EqualRect(&l.monitor, &mi.rcMonitor) == 0 ||
-            EqualRect(&l.work, &mi.rcWork) == 0) {
+        if (EqualRect(&l.monitor, &mi.rcMonitor) == 0 || EqualRect(&l.work, &mi.rcWork) == 0) {
             l.monitor = mi.rcMonitor;
             l.work    = mi.rcWork;
             changed   = true;
@@ -886,15 +894,20 @@ void DesktopIndicator::RefreshWorkAreas()
         ApplyPresetPosition(m_pCfg->positionPreset);
         return;
     }
-    for (auto& l : m_layers) {
+    RepositionCustom();
+    Render();
+}
+
+void DesktopIndicator::RepositionCustom() {
+    for (auto &l : m_layers) {
         SIZE sz     = MeasureContent(l);
-        l.anchorPos = {
-            RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, sz.cx),
-            RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, sz.cy)};
+        int  w      = sz.cx;
+        int  h      = sz.cy;
+        l.anchorPos = {RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),
+                       RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, h)};
         SetWindowPos(l.hwnd, nullptr, l.anchorPos.x, l.anchorPos.y, 0, 0,
                      SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
-    Render();
 }
 
 void DesktopIndicator::RebuildToPreset(PositionPreset preset) {
@@ -907,7 +920,7 @@ void DesktopIndicator::RebuildToPreset(PositionPreset preset) {
     if (m_layers.empty()) { return; }
 
     ApplyPresetPosition(preset);
-    RegisterMouseWheelInput();
+    RegisterRawInput();
     UpdateRenderTimer();
     if (m_pCfg != nullptr && m_pCfg->autoContrast && m_pCfg->showMode != ShowMode::AlwaysHide) {
         StartBgSampleTimer();
@@ -1127,11 +1140,51 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
                            GetRValue(symColorAt(i)), GetGValue(symColorAt(i)), GetBValue(symColorAt(i)));
                 std::wstring symColorStr(colorBuf.data());
                 std::wstring sym(1, m_text[i]);
-                m_renderer->Render(bits, bw, bh, curX, symbolTop, metrics.widths.at(i), bh - symbolTop - kPadding,
+                float        left    = static_cast<float>(curX);
+                float        right   = left + static_cast<float>(metrics.widths.at(i));
+                int          drawTop = symbolTop;
+                int          drawH   = bh - symbolTop - kPadding;
+                m_renderer->Render(bits, bw, bh, curX, drawTop, metrics.widths.at(i), drawH,
                                    sym.c_str(), symColorStr, symFont);
-                layer.symbolCenters.at(i)    = static_cast<float>(curX) + static_cast<float>(metrics.widths.at(i)) * 0.5f;
-                layer.symbolHalfWidths.at(i) = static_cast<float>(metrics.widths.at(i)) * 0.5f;
+
+                // Use the same geometry as the actual rendered symbol, so the click area matches the
+                // visible icon exactly even when font size, spacing, or scaling changes dynamically.
+                layer.symbolLefts.at(i)      = left;
+                layer.symbolRights.at(i)     = right;
+                layer.symbolCenters.at(i)    = (left + right) * 0.5f;
+                layer.symbolHalfWidths.at(i) = (right - left) * 0.5f;
+                layer.symbolRects.at(i)      = {
+                    static_cast<LONG>(left),
+                    static_cast<LONG>(drawTop),
+                    static_cast<LONG>(right),
+                    static_cast<LONG>(drawTop + drawH),
+                };
                 curX += metrics.widths.at(i) + metrics.spacing;
+            }
+
+            // Make the whole symbol box hit-testable. A WS_EX_LAYERED window only
+            // receives mouse input over pixels with non-zero alpha, so hollow glyphs
+            // (e.g. ○/◌) whose interior has alpha=0 would only be clickable on their
+            // outline. Nudge transparent pixels inside each symbol rect to a barely
+            // visible alpha (1/255) so a left-click anywhere on the icon reaches the
+            // window and can switch desktops, without altering the drawn glyph.
+            // 在横向缓冲区填充，竖排旋转后 alpha 会一并旋转过去。
+            constexpr DWORD kClickBlendAlpha = 0x01u << 24u; // ARGB: A=1, RGB=0 (premultiplied, imperceptible)
+            for (int i = 0; i < symCount; ++i) {
+                const RECT &rc = layer.symbolRects.at(i);
+                LONG        x0 = std::max(rc.left, 0L);
+                LONG        x1 = std::min(rc.right, static_cast<LONG>(bw));
+                LONG        y0 = std::max(rc.top, 0L);
+                LONG        y1 = std::min(rc.bottom, static_cast<LONG>(bh));
+                for (LONG yy = y0; yy < y1; ++yy) {
+                    auto *row = static_cast<DWORD *>(bits) + static_cast<size_t>(yy) * bw;
+                    for (LONG xx = x0; xx < x1; ++xx) {
+                        DWORD &pix = row[xx];
+                        if (((pix >> 24u) & 0xFFu) == 0u) {
+                            pix |= kClickBlendAlpha;
+                        }
+                    }
+                }
             }
         }
     };
@@ -1163,6 +1216,13 @@ void DesktopIndicator::PresentLayer(MonitorLayer        &layer,
         for (int dy = 0; dy < w0; ++dy) {
             for (int dx = 0; dx < h0; ++dx) {
                 d[dy * h0 + dx] = s[(h0 - 1 - dx) * w0 + dy];
+            }
+        }
+        // 旋转后把符号命中矩形从横向内容坐标转换到最终客户区坐标，供 GetSymbolIndexAt 使用
+        if (m_pCfg->displayMode != IndicatorDisplayMode::Name) {
+            for (int i = 0; i < static_cast<int>(m_text.size()); ++i) {
+                RECT rc                 = layer.symbolRects.at(i);
+                layer.symbolRects.at(i) = {h0 - rc.bottom, rc.left, h0 - rc.top, rc.right};
             }
         }
     }
@@ -1256,6 +1316,8 @@ void DesktopIndicator::Rebuild() {
     m_dragOverlayActive = false;
     m_editMode          = false;
     m_dragging          = false;
+    m_ctrlDragPending   = false;
+    m_ctrlArmed         = false;
     ReleaseCapture();
 
     EnumerateMonitors(GetModuleHandle(nullptr));
@@ -1265,15 +1327,7 @@ void DesktopIndicator::Rebuild() {
         if (m_pCfg != nullptr) { m_pCfg->positionPreset = savedPreset; }
         ApplyPresetPosition(savedPreset);
     } else {
-        for (auto &l : m_layers) {
-            SIZE sz     = MeasureContent(l);
-            int  w      = sz.cx;
-            int  h      = sz.cy;
-            l.anchorPos = {RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),
-                           RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, h)};
-            SetWindowPos(l.hwnd, nullptr, l.anchorPos.x, l.anchorPos.y, 0, 0,
-                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        }
+        RepositionCustom();
         if (wasVisible) {
             for (auto &l : m_layers) { ShowWindow(l.hwnd, SW_SHOW); }
             if (IsTimedMode(m_pCfg->showMode)) { ShowTemporarily(); }
@@ -1281,7 +1335,7 @@ void DesktopIndicator::Rebuild() {
         Render();
     }
 
-    RegisterMouseWheelInput();
+    RegisterRawInput();
     UpdateRenderTimer();
     if (m_pCfg != nullptr && m_pCfg->autoContrast && m_pCfg->showMode != ShowMode::AlwaysHide) {
         StartBgSampleTimer();
@@ -1300,28 +1354,32 @@ bool DesktopIndicator::HandleRawInput(HWND /*hwnd*/, LPARAM lp) {
         != sz) { return false; }
 
     auto *raw = reinterpret_cast<RAWINPUT *>(buf.data()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    if (raw->header.dwType != RIM_TYPEMOUSE
-        || (raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL) == 0) { // NOLINT(cppcoreguidelines-pro-type-union-access)
+    if (raw->header.dwType == RIM_TYPEKEYBOARD) {
+        const RAWKEYBOARD &key  = raw->data.keyboard; // NOLINT(cppcoreguidelines-pro-type-union-access)
+        const bool         down = (key.Flags & RI_KEY_BREAK) == 0;
+        if (key.VKey == VK_LCONTROL
+            || (key.VKey == VK_CONTROL && (key.Flags & RI_KEY_E0) == 0)) {
+            m_leftCtrlHeld = down;
+            UpdateClickThroughStyle();
+        } else if (key.VKey == VK_RCONTROL
+                   || (key.VKey == VK_CONTROL && (key.Flags & RI_KEY_E0) != 0)) {
+            m_rightCtrlHeld = down;
+            UpdateClickThroughStyle();
+        }
         return false;
     }
+    if (raw->header.dwType != RIM_TYPEMOUSE) { return false; }
 
+    const USHORT buttonFlags = raw->data.mouse.usButtonFlags; // NOLINT(cppcoreguidelines-pro-type-union-access)
+    if ((buttonFlags & RI_MOUSE_WHEEL) == 0) { return false; }
+
+    auto  delta = static_cast<int16_t>(raw->data.mouse.usButtonData); // NOLINT(cppcoreguidelines-pro-type-union-access)
     POINT cursorPt;
-    GetCursorPos(&cursorPt);
-    bool overIndicator = false;
-    for (const auto &l : m_layers) {
-        RECT wr;
-        GetWindowRect(l.hwnd, &wr);
-        if (PtInRect(&wr, cursorPt) != 0) {
-            overIndicator = true;
-            break;
-        }
-    }
+    if (!GetCursorPos(&cursorPt) || !IsPtOnOverlay(cursorPt)) { return false; }
 
-    if (!overIndicator) { return false; }
-
-    auto delta = static_cast<int16_t>(raw->data.mouse.usButtonData); // NOLINT(cppcoreguidelines-pro-type-union-access)
-
-    if (m_editMode && m_pCfg != nullptr) {
+    // 编辑模式或按住 Ctrl 时，滚轮用于缩放字号（Ctrl+滚轮在普通模式也可缩放）。
+    bool ctrlHeld = (static_cast<UINT>(GetAsyncKeyState(VK_CONTROL)) & 0x8000u) != 0;
+    if ((m_editMode || ctrlHeld) && m_pCfg != nullptr) {
         int oldSize = m_pCfg->fontSize;
         m_pCfg->fontSize += (delta > 0) ? 1 : -1;
         m_pCfg->fontSize = (std::clamp)(m_pCfg->fontSize, 12, 300);
@@ -1361,6 +1419,12 @@ bool DesktopIndicator::HandleDragStart(HWND hwnd, LPARAM lp) {
     return true;
 }
 
+bool DesktopIndicator::HitTestClickSwitch(POINT screenPt, int &outIndex) const {
+    if ((!m_leftCtrlHeld && !m_rightCtrlHeld) || !m_scrollSwitchFn || m_desktopCount <= 0) { return false; }
+    if (!GetSymbolIndexAt(screenPt, outIndex)) { return false; }
+    return outIndex >= 0 && outIndex < m_desktopCount;
+}
+
 LRESULT CALLBACK DesktopIndicator::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     auto *overlay = GetWndUserData<DesktopIndicator>(hwnd);
     if (overlay != nullptr) {
@@ -1383,11 +1447,41 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         if (HandleRawInput(hwnd, lp)) { return 0; }
         break;
 
-    case WM_LBUTTONDOWN:
-        if (HandleDragStart(hwnd, lp)) { return 0; }
-        return DefWindowProcW(hwnd, msg, wp, lp);
+    case WM_LBUTTONDOWN: {
+        if (m_editMode) {
+            if (HandleDragStart(hwnd, lp)) { return 0; }
+            return DefWindowProcW(hwnd, msg, wp, lp);
+        }
 
-    case WM_MOUSEMOVE:
+        // 非编辑模式：按住 Ctrl 时窗口才可点击。按下先挂起，移动超过阈值判定为拖动，
+        // 否则松手按点击处理（命中符号则切换桌面）。
+        POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+        ClientToScreen(hwnd, &pt);
+        m_ctrlArmed = (m_leftCtrlHeld || m_rightCtrlHeld);
+        if (!m_ctrlArmed) { return DefWindowProcW(hwnd, msg, wp, lp); }
+        auto it = std::ranges::find_if(m_layers,
+                                       [hwnd](const MonitorLayer &l) { return l.hwnd == hwnd; });
+        if (it == m_layers.end()) { return DefWindowProcW(hwnd, msg, wp, lp); }
+        m_dragOffset    = {pt.x - it->anchorPos.x, pt.y - it->anchorPos.y};
+        m_ctrlDragStart = pt;
+        SetCapture(hwnd);
+        m_ctrlDragPending = true;
+        return 0;
+    }
+
+    case WM_MOUSEMOVE: {
+        if (m_ctrlDragPending && ((wp & MK_LBUTTON) != 0u)) {
+            POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            ClientToScreen(hwnd, &pt);
+            LONG moveX = pt.x - m_ctrlDragStart.x;
+            LONG moveY = pt.y - m_ctrlDragStart.y;
+            if (moveX < 0) { moveX = -moveX; }
+            if (moveY < 0) { moveY = -moveY; }
+            if (!m_isTaskbarEmbedded && (moveX >= GetSystemMetrics(SM_CXDRAG) || moveY >= GetSystemMetrics(SM_CYDRAG))) {
+                m_ctrlDragPending = false;
+                m_dragging        = true;
+            }
+        }
         if (m_dragging && ((wp & MK_LBUTTON) != 0u)) {
             POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             ClientToScreen(hwnd, &pt);
@@ -1398,24 +1492,56 @@ LRESULT DesktopIndicator::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             m_anchorY             = DetectAnchorY(m_layers[0].work, pt.y - m_dragOffset.y, h0);
             m_pCfg->windowRatio.x = XToRatio(m_layers[0].monitor, pt.x - m_dragOffset.x, m_anchorX, w0);
             m_pCfg->windowRatio.y = YToRatio(m_layers[0].work, pt.y - m_dragOffset.y, m_anchorY, h0);
-            for (auto &l : m_layers) {
-                SIZE sz     = MeasureContent(l);
-                int  w      = sz.cx;
-                int  h      = sz.cy;
-                l.anchorPos = {RatioToX(l.monitor, m_pCfg->windowRatio.x, m_anchorX, w),
-                               RatioToY(l.work, m_pCfg->windowRatio.y, m_anchorY, h)};
-                SetWindowPos(l.hwnd, nullptr, l.anchorPos.x, l.anchorPos.y, 0, 0,
-                             SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-            }
+            RepositionCustom();
         }
         return 0;
+    }
 
-    case WM_LBUTTONUP:
-        if (!m_editMode) { return DefWindowProcW(hwnd, msg, wp, lp); }
+    case WM_LBUTTONUP: {
+        if (m_editMode) {
+            if (m_dragging) {
+                m_dragging = false;
+                ReleaseCapture();
+                if (m_pCfg != nullptr) { m_pCfg->positionPreset = PositionPreset::Custom; }
+            }
+            return 0;
+        }
         if (m_dragging) {
+            // Ctrl+拖动结束：落盘位置（普通模式没有「退出编辑时保存」的时机）。
             m_dragging = false;
             ReleaseCapture();
-            if (m_pCfg != nullptr) { m_pCfg->positionPreset = PositionPreset::Custom; }
+            if (m_pCfg != nullptr) {
+                m_pCfg->positionPreset = PositionPreset::Custom;
+                m_pCfg->SaveToIni();
+            }
+            UpdateClickThroughStyle();
+            return 0;
+        }
+        if (m_ctrlDragPending) {
+            // 未超过阈值＝点击：命中符号则切换桌面。
+            m_ctrlDragPending = false;
+            ReleaseCapture();
+            POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            ClientToScreen(hwnd, &pt);
+            int idx = -1;
+            if (m_ctrlArmed && HitTestClickSwitch(pt, idx)) {
+                m_scrollSwitchFn(idx);
+            }
+            m_ctrlArmed = false;
+            UpdateClickThroughStyle();
+            return 0;
+        }
+        return DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    case WM_CAPTURECHANGED:
+        // Ctrl+拖动/挂起过程中丢失捕获（如 Alt+Tab），复位避免卡在拖动状态。
+        // 编辑模式的捕获切换不在此处理，避免误取消编辑拖动。
+        if (!m_editMode && (m_ctrlDragPending || m_dragging)) {
+            m_ctrlDragPending = false;
+            m_ctrlArmed       = false;
+            m_dragging        = false;
+            UpdateClickThroughStyle();
         }
         return 0;
 
