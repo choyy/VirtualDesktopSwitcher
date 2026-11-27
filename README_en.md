@@ -52,8 +52,7 @@ To build from source, see [Building from Source](#building-from-source) below.
   - Toggle **cross-monitor focus**, auto-start, and run as administrator
 - Double-click the tray icon to quickly **show/hide the indicator**
 - Hold **Ctrl** and left-click an indicator symbol to switch to that virtual desktop; the indicator does not pass clicks through while Ctrl is held, and clicks pass through when it is not held
-- hold down Ctrl and mouse wheel to adjust the indicator symbol size
-- Hold **Ctrl** and left-drag the indicator to move it (dragging past a small threshold moves it; a simple click on a symbol switches desktops)
+- hold down Ctrl and mouse wheel to adjust the indicator symbol size. Hold **Ctrl** and left-drag the indicator to move it 
 
 ## 📝 INI Configuration
 
